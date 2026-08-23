@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 1 课：理解 SSE · ResearchFlow</title>
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body><main>
+<p class="eyebrow">Lesson 0001 · 约 15 分钟</p>
+<h1>SSE 如何把后端进度实时送到网页</h1>
+<p class="lead">学完这一课，你应该能解释 ResearchFlow 为什么需要 SSE、一条 SSE 事件长什么样，以及前后端分别做了什么。</p>
+<div class="callout"><strong>先记住一句话：</strong>SSE 是浏览器发起一次 HTTP 连接后，后端不立即结束响应，而是沿着这条连接持续发送事件。</div>
+
+<h2>1. 从一个具体问题开始</h2>
+<p>用户创建研究任务后，后端可能需要几十秒甚至几分钟完成规划、检索、分析和写作。如果前端只发送一个普通请求并一直等待，用户会看到一个没有变化的页面，不知道程序是在工作、卡住了，还是已经失败。</p>
+<p>我们希望后端每完成一点工作，就告诉前端“正在检索资料”“分析完成 60%”“报告生成完毕”。这是从后端到前端的连续、单向更新，正适合 SSE。</p>
+<div class="flow"><span>浏览器发起连接</span><b>→</b><span>FastAPI 保持响应</span><b>→</b><span>持续发送事件</span></div>
+
+<h2>2. 它与普通 HTTP 有什么不同</h2>
+<table><thead><tr><th>普通 REST 请求</th><th>SSE 连接</th></tr></thead><tbody>
+<tr><td>前端请求一次，后端返回一个完整结果</td><td>前端请求一次，后端分多次发送事件</td></tr>
+<tr><td>响应返回后连接结束</td><td>任务运行期间连接保持打开</td></tr>
+<tr><td>适合创建任务、读取报告</td><td>适合进度、日志和通知</td></tr>
+</tbody></table>
+<p>因此 ResearchFlow 同时使用两种方式：先通过 REST 创建任务，再通过 SSE 订阅该任务的进度。</p>
+
+<h2>3. 一条 SSE 消息长什么样</h2>
+<pre><code>id: 12
+event: stage.progress
+data: {"stage":"retrieving","message":"正在检索资料","progress":35}
+
+</code></pre>
+<ul>
+<li><code>id</code>：事件序号。断线重连后可以从下一条继续。</li>
+<li><code>event</code>：事件类型。前端可以针对不同类型注册处理函数。</li>
+<li><code>data</code>：实际数据。SSE 传的是文本，ResearchFlow 把 JSON 放在这里。</li>
+<li>最后的空行：表示这一条事件结束；没有它，浏览器可能继续等待。</li>
+</ul>
+<p>服务端响应类型必须是 <code>text/event-stream</code>，事件流使用 UTF-8。完整规则来自 <a href="https://html.spec.whatwg.org/dev/server-sent-events.html">WHATWG HTML 标准</a>。</p>
+
+<h2>4. ResearchFlow 后端做了什么</h2>
+<p>后端入口在 <a href="../../../apps/api/src/researchflow/api/routes.py"><code>apps/api/src/researchflow/api/routes.py</code></a>。阅读时先只找下面四件事：</p>
+<ol>
+<li>路由 <code>/research-runs/{run_id}/events</code> 接受浏览器连接。</li>
+<li>异步生成器 <code>generate()</code> 从数据库读取尚未发送的事件。</li>
+<li><code>yield</code> 每执行一次，就向响应流交出一段文本。</li>
+<li><code>StreamingResponse</code> 使用 <code>text/event-stream</code> 返回持续响应。</li>
+</ol>
+<pre><code>return StreamingResponse(
+    generate(),
+    media_type="text/event-stream",
+)</code></pre>
+<p>当暂时没有新事件时，后端会发送 <code>: heartbeat</code>。冒号开头是 SSE 注释，浏览器不会把它当业务事件，但它能让连接保持活跃。</p>
+
+<h2>5. ResearchFlow 前端做了什么</h2>
+<p>前端页面在 <a href="../../../apps/web/src/app/research/%5BrunId%5D/page.tsx"><code>apps/web/src/app/research/[runId]/page.tsx</code></a>，核心是浏览器原生的 <code>EventSource</code>：</p>
+<pre><code>const source = new EventSource(".../events");
+
+source.addEventListener("stage.completed", handleEvent);
+source.onerror = () => setConnection("连接中断");
+
+// 页面离开或任务结束时释放连接
+source.close();</code></pre>
+<p>每收到一个事件，前端解析 <code>data</code> 中的 JSON，更新 React 状态；React 再根据新状态重新显示进度条和实时日志。浏览器端标准用法可参考 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events">MDN SSE 指南</a>。</p>
+
+<h2>6. 为什么不直接使用 WebSocket</h2>
+<p>WebSocket 支持前端和后端随时双向发消息，但 ResearchFlow 当前只需要后端推送任务进度。SSE 基于普通 HTTP，浏览器自带 <code>EventSource</code> 和自动重连语义，模型更简单。技术不是越强越好，而是要和问题匹配。</p>
+<p>如果未来加入多人协作编辑或高频双向控制，WebSocket 才可能更合适。可对照 <a href="../reference/web-communication-cheatsheet.html">Web 通信方式速查表</a>。</p>
+
+<h2>7. 断线意味着任务失败吗</h2>
+<p>不意味着。SSE 连接只是“看进度的窗口”，研究任务本身运行在后端。关闭网页可能会让前端看不到新消息，但不应该自动把研究任务判定为失败。</p>
+<p>ResearchFlow 为事件保存递增序号。浏览器重连时可以使用 <code>Last-Event-ID</code> 告诉后端最后收到哪一条，后端再补发后续事件。这也是为什么事件需要持久化，而不能只存在内存中。</p>
+
+<h2>8. 用三个问题检查理解</h2>
+<div class="card"><ol>
+<li>为什么创建研究任务使用普通 REST，而显示进度使用 SSE？</li>
+<li>如果一条事件末尾没有空行，可能发生什么？</li>
+<li>网页断线后，为什么研究任务不应该自动失败？</li>
+</ol></div>
+<details><summary>完成后再查看参考答案</summary><ol>
+<li>创建操作只需要一次明确响应；进度是后端在一段时间内产生的多次单向更新。</li>
+<li>空行是事件边界；缺少它时，浏览器可能认为事件还没结束而不触发处理函数。</li>
+<li>连接只是进度展示通道，工作流运行状态属于后端，两者生命周期不应绑定。</li>
+</ol></details>
+
+<div class="callout success"><strong>实践任务：</strong>启动前后端并创建研究任务，然后在浏览器开发者工具的 Network 面板中找到 <code>/events</code> 请求，观察它是否保持连接以及收到的事件内容。完成后，把你看到的一条事件解释给我；这会成为你真正掌握 SSE 的证据。</div>
+<p class="footer">继续阅读：<a href="../../architecture/sse-events.md">ResearchFlow SSE 事件契约</a> · <a href="../reference/web-communication-cheatsheet.html">通信方式速查表</a>。遇到任何不清楚的地方，请直接问我，我们可以结合代码逐行解释。</p>
+</main></body></html>

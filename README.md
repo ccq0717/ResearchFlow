@@ -113,6 +113,7 @@ npm run build --prefix apps/web
 
 ## 项目文档
 
+- [从零学习 ResearchFlow：前后端与 AI 工程课程](docs/learning/README.md)
 - [项目讨论记录](docs/product/project-discussion.md)
 - [MVP 技术规格](docs/product/mvp-spec.md)
 - [核心数据模型](docs/architecture/domain-model.md)

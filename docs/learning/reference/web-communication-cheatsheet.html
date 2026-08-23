@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web 通信方式速查表 · ResearchFlow</title>
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body><main>
+<p class="eyebrow">ResearchFlow Reference</p>
+<h1>Web 通信方式速查表</h1>
+<p class="lead">先问“数据由谁发起、需要往几个方向流动、更新频率多高”，再选择通信方式。</p>
+<table>
+<thead><tr><th>方式</th><th>方向</th><th>适合场景</th><th>ResearchFlow 示例</th></tr></thead>
+<tbody>
+<tr><td>普通 HTTP / REST</td><td>前端请求，后端一次响应</td><td>创建、读取、修改、删除数据</td><td>创建研究任务；读取最终报告</td></tr>
+<tr><td>轮询 Polling</td><td>前端定时重复请求</td><td>更新不频繁，实现优先简单</td><td>每两秒查询任务状态（当前未采用）</td></tr>
+<tr><td>SSE</td><td>连接建立后，后端持续推送</td><td>进度、日志、通知、文本流</td><td>实时推送研究阶段和进度</td></tr>
+<tr><td>WebSocket</td><td>前后端都可随时发送</td><td>聊天、协作编辑、实时游戏</td><td>未来需要双向实时协作时才考虑</td></tr>
+</tbody></table>
+<div class="callout success"><strong>当前选择：</strong>ResearchFlow 使用普通 REST 创建和读取任务，使用 SSE 接收执行进度。这不是二选一，而是各自处理适合的问题。</div>
+<h2>SSE 四个关键字段</h2>
+<table><tbody>
+<tr><th><code>event</code></th><td>事件名称，例如 <code>stage.progress</code></td></tr>
+<tr><th><code>data</code></th><td>事件携带的数据；项目中使用 JSON 字符串</td></tr>
+<tr><th><code>id</code></th><td>事件序号；断线重连和去重时使用</td></tr>
+<tr><th><code>retry</code></th><td>建议浏览器断线后等待多久再重连，单位为毫秒</td></tr>
+</tbody></table>
+<p class="footer"><a href="../lessons/0001-understand-sse.html">返回 SSE 第一课</a> · <a href="../../architecture/sse-events.md">查看项目 SSE 契约</a></p>
+</main></body></html>
