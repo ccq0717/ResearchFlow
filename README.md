@@ -80,7 +80,7 @@ Python 虚拟环境默认创建在 `.venv`，本地数据库和日志等运行�
 
 ```powershell
 Set-Location apps/web
-npm run dev
+npm run dev -- --hostname 127.0.0.1
 ```
 
 启动后访问：
@@ -113,6 +113,7 @@ npm run build --prefix apps/web
 
 ## 项目文档
 
+- [使用、开发与运维手册](docs/guides/development-and-operations.md)
 - [从零学习 ResearchFlow：前后端与 AI 工程课程](docs/learning/README.md)
 - [项目讨论记录](docs/product/project-discussion.md)
 - [MVP 技术规格](docs/product/mvp-spec.md)
