@@ -1,96 +1,122 @@
 # ResearchFlow
 
-ResearchFlow is an evidence-first AI research workspace that turns an open-ended research goal into a traceable plan, gathers information from the web, academic sources, and a private knowledge base, and produces a structured report with verifiable citations.
+ResearchFlow 是一个以证据为核心的 AI 深度研究工作台。它将开放式研究目标拆解为可执行计划，从网页、学术资料和个人知识库中收集信息，并生成带有可验证引用的结构化报告。
 
-The initial demonstration scenario is researching evaluation methods for AI code-generation tools and producing an actionable evaluation plan.
+项目的首个演示场景是：调研 AI 代码生成工具的现有评测方法，并产出一份可以实际执行的评测方案。
 
-## Current milestone
+## 当前进度
 
-The repository currently contains a runnable simulated vertical slice:
+仓库目前已经完成第一条可运行的模拟纵向闭环：
 
-- create a research run from the Next.js Dashboard;
-- persist runs and events in SQLite;
-- stream workflow progress with Server-Sent Events;
-- display planning, retrieval, analysis, writing, and finalization stages;
-- reopen completed work from research history;
-- generate a placeholder Markdown report without calling an external model.
+- 在 Next.js Dashboard 中创建研究任务；
+- 使用 SQLite 保存研究任务和工作流事件；
+- 通过 SSE 实时推送工作流进度；
+- 展示规划、检索、分析、写作和最终检查阶段；
+- 从研究历史中重新打开已完成的任务；
+- 在不调用外部模型的情况下生成模拟 Markdown 报告。
 
-Real LLM, academic search, web retrieval, evidence extraction, RAG, and citation validation will be added in later milestones.
+真实 LLM、学术搜索、网页检索、证据提取、RAG 和引用验证将在后续里程碑中逐步加入。
 
-## Stack
+## 技术栈
 
-- Next.js 16, React 19, TypeScript, Tailwind CSS
-- FastAPI, Python 3.12, SQLAlchemy
-- SQLite for the local MVP
-- REST and Server-Sent Events
-- LangGraph planned behind a ResearchFlow-owned workflow interface
+- Next.js 16、React 19、TypeScript、Tailwind CSS
+- FastAPI、Python 3.12、SQLAlchemy
+- 本地 MVP 使用 SQLite
+- REST API 与 Server-Sent Events（SSE）
+- 计划在 ResearchFlow 自有工作流接口后使用 LangGraph
 
-## Repository layout
+## 仓库结构
 
-    apps/web       Next.js frontend
-    apps/api       FastAPI backend
-    docs           Product, architecture, decisions, and research notes
-    examples       Public demonstration inputs
-    infra          Optional deployment configuration
-    scripts        Local development helpers
-    var            Local runtime data (not committed)
+```text
+apps/web       Next.js 前端
+apps/api       FastAPI 后端
+docs           产品、架构、技术决策和调研文档
+examples       可公开使用的演示输入
+infra          可选部署配置
+scripts        本地开发辅助脚本
+var            本地运行数据（不提交到 Git）
+```
 
-Start with the [MVP specification](docs/product/mvp-spec.md), [domain model](docs/architecture/domain-model.md), [SSE contract](docs/architecture/sse-events.md), and [repository structure](docs/architecture/repository-structure.md).
+建议先阅读 [MVP 技术规格](docs/product/mvp-spec.md)、[核心数据模型](docs/architecture/domain-model.md)、[SSE 事件契约](docs/architecture/sse-events.md)和[仓库结构设计](docs/architecture/repository-structure.md)。
 
-## Prerequisites
+## 环境要求
 
-- Windows 10 or 11
+- Windows 10 或 Windows 11
 - Git
-- Node.js 20.9 or newer
+- Node.js 20.9 或更高版本
 - npm
 - uv
+- Python 3.12（也可以由 uv 管理）
 
-Docker, Redis, a GPU, and a local LLM are not required.
+本地开发不需要 Docker、Redis、GPU 或本地大模型。
 
-## Setup
+## 初始化项目
 
-From the repository root:
+在仓库根目录打开 PowerShell：
 
-    uv sync --package researchflow-api
-    Copy-Item .env.example .env
-    npm install --prefix apps/web
+```powershell
+uv sync --package researchflow-api
+Copy-Item .env.example .env
+npm install --prefix apps/web
+```
 
-The Python environment is created at .venv. Runtime data is created under var/.
+Python 虚拟环境默认创建在 `.venv`，本地数据库和日志等运行数据创建在 `var/`。
 
-## Run locally
+## 本地运行
 
-Open two PowerShell terminals from the repository root.
+从仓库根目录打开两个 PowerShell 终端。
 
-Backend:
+后端：
 
-    .\.venv\Scripts\python.exe -m uvicorn researchflow.main:app --app-dir apps/api/src --host 127.0.0.1 --port 8000 --reload
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn researchflow.main:app `
+  --app-dir apps/api/src `
+  --host 127.0.0.1 `
+  --port 8000 `
+  --reload
+```
 
-Frontend:
+前端：
 
-    Set-Location apps/web
-    npm run dev
+```powershell
+Set-Location apps/web
+npm run dev
+```
 
-Open [http://localhost:3000](http://localhost:3000). FastAPI health is available at [http://localhost:8000/health](http://localhost:8000/health), and interactive API documentation is at [http://localhost:8000/docs](http://localhost:8000/docs).
+启动后访问：
 
-## Verify
+- 前端：[http://localhost:3000](http://localhost:3000)
+- 后端健康检查：[http://localhost:8000/health](http://localhost:8000/health)
+- 后端接口文档：[http://localhost:8000/docs](http://localhost:8000/docs)
 
-Backend:
+## 运行检查
 
-    .\.venv\Scripts\python.exe -m pytest apps/api/tests -q
-    .\.venv\Scripts\ruff.exe check apps/api
+后端测试与代码检查：
 
-Frontend:
+```powershell
+.\.venv\Scripts\python.exe -m pytest apps/api/tests
+.\.venv\Scripts\ruff.exe check apps/api
+```
 
-    Set-Location apps/web
-    npm run lint
-    npm run build
+前端代码检查与生产构建：
 
-## Configuration and security
+```powershell
+npm run lint --prefix apps/web
+npm run build --prefix apps/web
+```
 
-Copy .env.example to .env for local configuration. Never commit API keys, private research documents, local databases, uploads, indexes, or generated reports. Local secrets and runtime files are ignored by Git.
+## 配置与安全
 
-## Project documentation
+请从 `.env.example` 复制本地配置，不要提交真实 API Key、访问令牌或个人资料。
 
-- [Project discussion](docs/product/project-discussion.md)
-- [Hello-Agents reference analysis](docs/research/hello-agents-analysis.md)
-- [LangGraph architecture decision](docs/decisions/0001-use-langgraph-behind-workflow-interface.md)
+当前模拟闭环不需要任何外部 API Key。后续接入模型和检索服务时，会继续使用环境变量管理敏感配置。
+
+## 项目文档
+
+- [项目讨论记录](docs/product/project-discussion.md)
+- [MVP 技术规格](docs/product/mvp-spec.md)
+- [核心数据模型](docs/architecture/domain-model.md)
+- [SSE 事件契约](docs/architecture/sse-events.md)
+- [仓库结构设计](docs/architecture/repository-structure.md)
+- [LangGraph 架构决策](docs/decisions/0001-use-langgraph-behind-workflow-interface.md)
+- [Hello-Agents 调研](docs/research/hello-agents-analysis.md)
