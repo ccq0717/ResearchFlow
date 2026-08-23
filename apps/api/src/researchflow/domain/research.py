@@ -1,0 +1,54 @@
+from dataclasses import dataclass
+from datetime import datetime
+from enum import StrEnum
+from typing import Any
+from uuid import UUID
+
+
+class ResearchRunStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {self.COMPLETED, self.FAILED, self.CANCELLED}
+
+
+class ResearchStage(StrEnum):
+    PLANNING = "planning"
+    RETRIEVING = "retrieving"
+    ANALYZING = "analyzing"
+    WRITING = "writing"
+    FINALIZING = "finalizing"
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchRun:
+    id: UUID
+    goal: str
+    title: str
+    status: ResearchRunStatus
+    current_stage: ResearchStage | None
+    progress: int
+    report_markdown: str | None
+    error_code: str | None
+    error_message: str | None
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchEvent:
+    sequence: int
+    run_id: UUID
+    type: str
+    stage: ResearchStage | None
+    message: str
+    progress: int | None
+    payload: dict[str, Any] | None
+    created_at: datetime
