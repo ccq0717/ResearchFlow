@@ -12,18 +12,24 @@
 ## 当前课程
 
 - [第 1 课：SSE 如何把后端进度实时送到网页](lessons/0001-understand-sse.html)
+- [第 2 课：一次研究任务如何穿过前端、后端和数据库](lessons/0002-follow-a-research-request.html)
+- [第 3 课：SQLite、SQLAlchemy 和 aiosqlite 分别做什么](lessons/0003-understand-sqlite-persistence.html)
+
+## 速查资料
+
 - [Web 通信方式速查表](reference/web-communication-cheatsheet.html)
+- [当前全栈实现地图](reference/current-full-stack-map.html)
 
 ## 后续学习路线
 
 课程会跟随 ResearchFlow 的开发进度逐步补充，而不是脱离项目一次性讲完。
 
-1. 浏览器、前端、后端和数据库分别负责什么
+1. 浏览器、前端、后端和数据库分别负责什么（已有入门课）
 2. HTTP 请求与响应、JSON 和 REST API
 3. React 组件、状态与副作用
 4. FastAPI 路由、数据校验与异步函数
-5. SQLite、SQLAlchemy 和数据持久化
-6. SSE、任务进度和断线重连
+5. SQLite、SQLAlchemy 和数据持久化（已有入门课）
+6. SSE、任务进度和断线重连（已有入门课）
 7. Agent 工作流、LangGraph 与状态管理
 8. RAG、向量检索、证据和引用
 9. 测试、日志、Docker 与部署

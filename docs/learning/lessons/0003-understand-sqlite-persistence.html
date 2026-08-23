@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 3 课：理解 SQLite 与数据持久化 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0003 · 约 15 分钟</p>
+  <h1>SQLite、SQLAlchemy 和 aiosqlite 分别做什么</h1>
+  <p class="lead">学完这一课，你应该能解释为什么 ResearchFlow 不需要启动数据库服务，以及一个研究任务怎样从 Python 对象变成磁盘中的记录。</p>
+
+  <div class="callout">
+    <strong>最重要的结论：</strong>我没有为项目安装独立 SQLite 服务。SQLite 是嵌入应用进程的数据库引擎，ResearchFlow 后端直接读写一个数据库文件。
+  </div>
+
+  <h2>1. SQLite 与 PostgreSQL 的直观区别</h2>
+  <table>
+    <thead><tr><th>SQLite</th><th>PostgreSQL 等数据库服务器</th></tr></thead>
+    <tbody>
+      <tr><td>应用进程直接读写数据库文件</td><td>应用通过网络连接独立数据库进程</td></tr>
+      <tr><td>不需要单独启动数据库服务</td><td>需要安装、启动和维护服务</td></tr>
+      <tr><td>适合本地、单机和原型</td><td>适合多用户、并发和生产部署</td></tr>
+    </tbody>
+  </table>
+  <p>SQLite 官方将这种模式称为 <a href="https://www.sqlite.org/serverless.html">serverless</a>：这里不是指云函数，而是指没有独立数据库服务器进程。</p>
+
+  <h2>2. 五层不要混在一起</h2>
+  <table>
+    <thead><tr><th>层</th><th>ResearchFlow 中的角色</th></tr></thead>
+    <tbody>
+      <tr><td>数据库文件</td><td><code>var/researchflow.db</code>，真正保存字节</td></tr>
+      <tr><td>SQLite 引擎</td><td>理解 SQL 和数据库文件格式，通常随 Python 的 <code>sqlite3</code> 支持一起提供</td></tr>
+      <tr><td>aiosqlite</td><td>给同步 SQLite 操作提供适合 <code>async/await</code> 的接口</td></tr>
+      <tr><td>SQLAlchemy</td><td>把 Python 类、查询和事务映射到数据库操作</td></tr>
+      <tr><td>Repository</td><td>ResearchFlow 自己定义的数据访问边界，隐藏具体存储细节</td></tr>
+    </tbody>
+  </table>
+  <p>Python 官方提供 <a href="https://docs.python.org/3.12/library/sqlite3.html"><code>sqlite3</code> 标准库接口</a>；项目另外安装的是 <a href="https://github.com/omnilib/aiosqlite">aiosqlite 异步桥接包</a>和 SQLAlchemy，而不是一个需要常驻运行的 SQLite 服务。</p>
+
+  <h2>3. 读懂数据库连接地址</h2>
+  <pre><code>sqlite+aiosqlite:///./var/researchflow.db
+│      │          └─ 数据库文件路径
+│      └──────────── 异步驱动
+└─────────────────── 数据库类型</code></pre>
+  <p>这个地址来自后端配置。三个斜杠后的相对路径以启动后端时的当前目录为基准，所以项目统一要求从仓库根目录启动。</p>
+
+  <h2>4. 数据库何时出现</h2>
+  <p>后端启动时，<a href="../../../apps/api/src/researchflow/main.py"><code>main.py</code></a> 的生命周期函数调用 <code>create_schema(engine)</code>。<a href="../../../apps/api/src/researchflow/persistence/database.py"><code>database.py</code></a> 随后执行：</p>
+  <pre><code>await connection.run_sync(Base.metadata.create_all)</code></pre>
+  <p>如果数据库文件或表不存在，SQLAlchemy 会根据模型创建它们；已经存在时则保留原数据。因此首次启动会自动生成文件，重启后历史记录仍然存在。</p>
+
+  <h2>5. 当前两张表怎样分工</h2>
+  <table>
+    <thead><tr><th>表</th><th>保存什么</th><th>关系</th></tr></thead>
+    <tbody>
+      <tr><td><code>research_runs</code></td><td>目标、状态、阶段、进度、报告和时间</td><td>一个任务一行</td></tr>
+      <tr><td><code>research_events</code></td><td>事件类型、序号、消息、阶段和进度</td><td>一个任务对应多行</td></tr>
+    </tbody>
+  </table>
+  <p><code>research_events.run_id</code> 指向所属任务。事件序号和任务 ID 共同构成主键，使每个任务的事件能按顺序补发。</p>
+
+  <h2>6. SQLAlchemy 帮了什么忙</h2>
+  <p>没有 ORM 时，代码需要手写大量 SQL，并手动把查询结果转换成 Python 对象。当前项目用 <code>ResearchRunRow</code> 和 <code>ResearchEventRow</code> 描述表结构，再通过异步 Session 执行查询与提交。SQLAlchemy 的异步接口由官方 <a href="https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html">Asyncio 文档</a>定义。</p>
+  <p>ORM 不等于数据库，也不会替数据库保存数据。它只是应用代码与数据库之间的翻译和管理层。</p>
+
+  <h2>7. 两种 commit 不要混淆</h2>
+  <ul>
+    <li><code>await session.commit()</code>：提交数据库事务，让本次数据修改生效；</li>
+    <li><code>git commit</code>：记录源代码和文档版本。</li>
+  </ul>
+  <p>它们只有英文单词相同，处理的是完全不同的系统。</p>
+
+  <h2>8. 用只读命令观察数据库</h2>
+  <p>停止后端不是只读查询的硬性要求，但初学阶段先停止后端更容易排除并发干扰。在仓库根目录执行：</p>
+  <pre><code>.\.venv\Scripts\python.exe -c 'import sqlite3; db=sqlite3.connect("file:var/researchflow.db?mode=ro", uri=True); print(db.execute("SELECT name FROM sqlite_master WHERE type=? ORDER BY name", ("table",)).fetchall()); db.close()'</code></pre>
+  <p>它使用 Python 自带的 <code>sqlite3</code> 接口以只读模式打开文件并列出表，不需要安装 SQLite CLI。详细备份和重置步骤见 <a href="../../guides/development-and-operations.md">开发与运维手册</a>。</p>
+
+  <h2>9. 为什么 MVP 先用 SQLite</h2>
+  <p>它占用资源少、没有独立服务、备份就是复制文件，非常适合 Windows 本地演示。代价是高并发、多实例部署和复杂运维能力有限。未来正式部署时可以迁移到 PostgreSQL；Repository 边界会降低业务层受到的影响，但数据库模型、迁移和部署配置仍需修改。</p>
+
+  <h2>10. 检查理解</h2>
+  <div class="card"><ol>
+    <li>为什么不需要为当前项目启动 SQLite 服务？</li>
+    <li>aiosqlite 和 SQLAlchemy 各解决什么问题？</li>
+    <li>为什么关闭后端再启动，研究历史仍然存在？</li>
+  </ol></div>
+  <details><summary>完成后查看参考答案</summary><ol>
+    <li>SQLite 嵌入后端进程，后端直接读写数据库文件，没有独立服务器。</li>
+    <li>aiosqlite 提供异步桥接；SQLAlchemy 管理映射、查询、Session 和事务。</li>
+    <li>任务已经提交到磁盘中的数据库文件，进程退出不会删除该文件。</li>
+  </ol></details>
+
+  <div class="callout success"><strong>实践任务：</strong>创建一个研究任务，记住标题；停止前后端并重新启动；确认历史记录仍在。然后用自己的话解释“进程内存消失了，为什么数据没有消失”。把解释发给我后，我们再判断是否真正掌握了持久化。</div>
+  <p class="footer">上一课：<a href="0002-follow-a-research-request.html">一次研究任务如何穿过前后端</a> · 速查：<a href="../reference/current-full-stack-map.html">当前全栈实现地图</a>。有任何概念不清楚，请直接问我。</p>
+</main>
+</body>
+</html>

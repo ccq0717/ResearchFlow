@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>当前全栈实现地图 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">ResearchFlow Reference</p>
+  <h1>当前全栈实现地图</h1>
+  <p class="lead">从现象出发，快速定位负责的层、核心文件和调试入口。</p>
+
+  <table>
+    <thead><tr><th>层</th><th>负责什么</th><th>核心文件</th><th>首先在哪里观察</th></tr></thead>
+    <tbody>
+      <tr><td>Dashboard</td><td>目标输入、创建按钮、历史列表</td><td><code>apps/web/src/app/page.tsx</code></td><td>浏览器页面和 Console</td></tr>
+      <tr><td>前端 API 客户端</td><td>组织 HTTP 请求、解析 JSON</td><td><code>apps/web/src/lib/api.ts</code></td><td>Network 面板</td></tr>
+      <tr><td>Research Workspace</td><td>显示任务、SSE 进度和报告</td><td><code>apps/web/src/app/research/[runId]/page.tsx</code></td><td>Network 中的 <code>/events</code></td></tr>
+      <tr><td>FastAPI 路由</td><td>HTTP 与应用用例之间的转换</td><td><code>apps/api/src/researchflow/api/routes.py</code></td><td>后端终端和 API Docs</td></tr>
+      <tr><td>应用层</td><td>创建任务、安排工作流</td><td><code>application/research_runs.py</code></td><td>任务状态与单元测试</td></tr>
+      <tr><td>模拟工作流</td><td>推进阶段、生成事件和报告</td><td><code>workflows/simulated.py</code></td><td>SSE 日志和任务进度</td></tr>
+      <tr><td>Repository</td><td>保存、查询、更新任务和事件</td><td><code>persistence/repository.py</code></td><td>数据库记录和测试</td></tr>
+      <tr><td>数据库连接</td><td>创建 Engine、Session 和表</td><td><code>persistence/database.py</code></td><td>后端启动和数据库文件</td></tr>
+      <tr><td>SQLite 文件</td><td>持久保存任务、事件和报告</td><td><code>var/researchflow.db</code></td><td>文件存在性和只读查询</td></tr>
+    </tbody>
+  </table>
+
+  <h2>创建任务的主路径</h2>
+  <pre><code>page.tsx 表单
+  → lib/api.ts 发送 POST
+  → api/routes.py 接收
+  → ResearchRunApplication.create_run()
+  → SqliteResearchRepository.create()
+  → var/researchflow.db
+  → HTTP 201 + run.id 返回前端</code></pre>
+
+  <h2>实时进度的主路径</h2>
+  <pre><code>SimulatedResearchWorkflow
+  → Repository 保存 research_events
+  → FastAPI StreamingResponse
+  → 浏览器 EventSource
+  → React 状态更新
+  → 进度条和实时日志重绘</code></pre>
+
+  <div class="callout success"><strong>定位原则：</strong>页面样式先看组件；请求失败先看 Network 和路由；状态错误看应用层与工作流；刷新后数据错误看 Repository 和 SQLite；实时更新错误看事件表与 SSE。</div>
+  <p class="footer"><a href="../lessons/0002-follow-a-research-request.html">学习完整请求链路</a> · <a href="../lessons/0003-understand-sqlite-persistence.html">学习 SQLite 持久化</a> · <a href="../../guides/development-and-operations.md">查看运维手册</a></p>
+</main>
+</body>
+</html>

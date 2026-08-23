@@ -14,6 +14,14 @@
   React 官方入门课程。用于组件、状态、事件处理和副作用等前端基础。
 - [FastAPI Tutorial](https://fastapi.tiangolo.com/tutorial/)
   FastAPI 官方教程。用于路由、请求模型、依赖注入、错误处理和异步接口。
+- [SQLite Is Serverless — SQLite](https://www.sqlite.org/serverless.html)
+  SQLite 官方对无独立服务器进程和零配置模式的解释。用于区分嵌入式数据库与数据库服务器。
+- [sqlite3 — Python 3.12](https://docs.python.org/3.12/library/sqlite3.html)
+  Python 标准库的 SQLite 接口文档。用于理解 Python 如何直接打开和查询本地数据库文件。
+- [Asynchronous I/O — SQLAlchemy 2.0](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
+  SQLAlchemy 官方异步 Engine、Connection 和 Session 文档。用于理解项目的数据访问基础。
+- [aiosqlite — OmniLib](https://github.com/omnilib/aiosqlite)
+  aiosqlite 官方项目说明。用于理解它如何把标准 sqlite3 操作桥接到 asyncio，而不是提供独立数据库服务。
 
 ## Wisdom (Communities)
 

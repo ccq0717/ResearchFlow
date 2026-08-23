@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 2 课：一次研究任务如何穿过前后端 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0002 · 约 15 分钟</p>
+  <h1>一次研究任务如何穿过前端、后端和数据库</h1>
+  <p class="lead">学完这一课，你应该能从用户点击“开始研究”讲到 SQLite 写入记录，再讲到网页为什么跳转到研究工作区。</p>
+
+  <div class="callout">
+    <strong>先建立全局视角：</strong>前端负责收集和展示，后端负责规则与流程，数据库负责持久保存。每一层只做自己的工作，通过明确接口协作。
+  </div>
+
+  <h2>1. 四个参与者</h2>
+  <table>
+    <thead><tr><th>参与者</th><th>当前技术</th><th>主要职责</th></tr></thead>
+    <tbody>
+      <tr><td>浏览器</td><td>Chrome / Edge</td><td>显示页面、发起 HTTP 请求、接收 SSE</td></tr>
+      <tr><td>前端应用</td><td>Next.js + React</td><td>管理输入和页面状态，调用后端 API</td></tr>
+      <tr><td>后端应用</td><td>FastAPI + Python</td><td>校验请求、执行业务流程、读写数据</td></tr>
+      <tr><td>数据库</td><td>SQLite</td><td>把任务、事件和报告保存到磁盘</td></tr>
+    </tbody>
+  </table>
+  <p>“前端”和“浏览器”不是完全相同的概念：前端是我们编写的程序，浏览器是运行它的环境。“后端”和“数据库”也不是同一个东西：后端决定做什么，数据库负责可靠地保存数据。</p>
+
+  <h2>2. 第一步：用户点击按钮</h2>
+  <p>入口页面位于 <a href="../../../apps/web/src/app/page.tsx"><code>apps/web/src/app/page.tsx</code></a>。React 把文本框内容保存在 <code>goal</code> 状态中；表单提交时调用：</p>
+  <pre><code>const run = await createResearchRun(goal);
+router.push("/research/" + run.id);</code></pre>
+  <p>第一行等待后端创建任务，第二行在成功后跳转到该任务的工作区。前端不会自己生成任务 ID，也不会直接打开数据库。</p>
+
+  <h2>3. 第二步：前端发送 HTTP 请求</h2>
+  <p>API 客户端位于 <a href="../../../apps/web/src/lib/api.ts"><code>apps/web/src/lib/api.ts</code></a>。它把 JavaScript 对象转换为 JSON，并发出请求：</p>
+  <pre><code>POST /api/research-runs
+Content-Type: application/json
+
+{"goal":"调研 AI 代码生成工具的评测方案"}</code></pre>
+  <p>HTTP 是传输方式，JSON 是数据格式，REST API 是项目约定的接口风格。三者相关，但不是同一个概念。HTTP 的基础模型可参考 <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Overview">MDN HTTP Overview</a>。</p>
+
+  <h2>4. 第三步：FastAPI 接住请求</h2>
+  <p>后端路由位于 <a href="../../../apps/api/src/researchflow/api/routes.py"><code>apps/api/src/researchflow/api/routes.py</code></a>：</p>
+  <pre><code>@router.post("/research-runs", status_code=201)
+async def create_research_run(body, request):
+    run = await application.create_run(body.goal)
+    return ResearchRunResponse.from_domain(run)</code></pre>
+  <p>路由的职责是把 HTTP 世界翻译成应用调用，再把应用结果翻译成 HTTP 响应。输入长度等结构规则由 Pydantic Schema 校验，真正的创建流程交给应用层。</p>
+
+  <h2>5. 第四步：应用层组织一次用例</h2>
+  <p><a href="../../../apps/api/src/researchflow/application/research_runs.py"><code>ResearchRunApplication.create_run()</code></a> 按顺序完成：</p>
+  <ol>
+    <li>整理用户目标并生成 UUID；</li>
+    <li>构造状态为 <code>queued</code> 的领域对象；</li>
+    <li>通过 Repository 保存研究任务；</li>
+    <li>保存第一条 <code>run.queued</code> 事件；</li>
+    <li>创建后台异步任务执行模拟工作流；</li>
+    <li>立即把已创建任务返回给前端。</li>
+  </ol>
+  <p>这里的关键是：创建接口不需要等待整份报告完成。它先返回任务 ID，耗时工作继续在后端执行，前端随后通过 SSE 查看进度。</p>
+
+  <h2>6. 第五步：Repository 写入 SQLite</h2>
+  <p><a href="../../../apps/api/src/researchflow/persistence/repository.py"><code>SqliteResearchRepository</code></a> 隔离了业务代码和数据库代码。它把 Python 领域对象转换为 SQLAlchemy Row，然后执行提交：</p>
+  <pre><code>session.add(row)
+await session.commit()</code></pre>
+  <p>当前主要有两张表：</p>
+  <ul>
+    <li><code>research_runs</code>：一行代表一个研究任务及其当前状态和报告；</li>
+    <li><code>research_events</code>：多行代表任务运行过程中按序产生的事件。</li>
+  </ul>
+  <p>这两个表最终保存在 <code>var/researchflow.db</code> 文件中。</p>
+
+  <h2>7. 第六步：响应回到前端</h2>
+  <p>后端返回 HTTP 201 和任务 JSON。前端拿到 <code>run.id</code> 后跳转到 <code>/research/{id}</code>。工作区先通过普通 REST 读取任务快照，再建立 SSE 连接接收后续事件。</p>
+  <div class="flow"><span>点击开始研究</span><b>→</b><span>POST 到 FastAPI</span><b>→</b><span>返回任务 ID</span></div>
+  <div class="flow"><span>写入 SQLite</span><b>→</b><span>后台工作流运行</span><b>→</b><span>SSE 更新网页</span></div>
+
+  <h2>8. 出错时从哪里查</h2>
+  <table>
+    <thead><tr><th>看到的现象</th><th>第一检查点</th></tr></thead>
+    <tbody>
+      <tr><td>按钮没有提交</td><td>浏览器 Console、表单长度和前端状态</td></tr>
+      <tr><td>提示创建失败</td><td>Network 中 POST 请求及后端终端</td></tr>
+      <tr><td>刷新后任务消失</td><td>SQLite 文件和 Repository 写入</td></tr>
+      <tr><td>任务存在但进度不动</td><td>模拟工作流、事件表和 SSE 请求</td></tr>
+    </tbody>
+  </table>
+
+  <h2>9. 用路径复述检查理解</h2>
+  <div class="card">
+    <p>不要看上文，尝试按顺序说出下列六个词，并用一句话解释每一步：</p>
+    <p><strong>表单 → API 客户端 → FastAPI 路由 → 应用层 → Repository → SQLite</strong></p>
+  </div>
+  <details><summary>完成后查看参考路径</summary><p>表单收集目标；API 客户端发送 JSON；路由接收 HTTP；应用层组织创建用例；Repository 转换并提交数据；SQLite 把记录写进本地文件。</p></details>
+
+  <div class="callout success"><strong>实践任务：</strong>打开浏览器开发者工具的 Network 面板，创建一个任务，找到 <code>POST /api/research-runs</code>。记录 Request Payload、Status Code 和 Response 中的 <code>id</code>，再用这个 ID 对照浏览器地址栏。把观察结果讲给我，我可以检查你的理解。</div>
+
+  <p class="footer">下一课：<a href="0003-understand-sqlite-persistence.html">SQLite 和数据持久化</a> · 速查：<a href="../reference/current-full-stack-map.html">当前全栈实现地图</a>。遇到任何不清楚的地方，请直接问我。</p>
+</main>
+</body>
+</html>

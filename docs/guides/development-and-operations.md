@@ -242,7 +242,35 @@ var/researchflow.db
 
 `var/` 被 Git 忽略，不会上传到 GitHub。
 
-### 7.2 备份
+### 7.2 当前数据库技术分层与只读检查
+
+当前不需要安装或启动独立的 SQLite 服务，也没有安装 `sqlite3.exe` 命令行工具。项目使用以下几层协作：
+
+| 层 | 当前来源 | 作用 |
+| --- | --- | --- |
+| SQLite 引擎与 `sqlite3` 接口 | 本机已有的 Python 3.12 | 直接打开和读写数据库文件 |
+| aiosqlite | 项目 `.venv` | 为 SQLite 提供适合 `async/await` 的桥接接口 |
+| SQLAlchemy | 项目 `.venv` | 管理表映射、查询、Session 和事务 |
+| `SqliteResearchRepository` | ResearchFlow 源代码 | 向业务层提供创建、查询、更新和事件保存能力 |
+| 数据库文件 | `var/researchflow.db` | 持久保存任务、事件和报告 |
+
+后端启动时会自动创建数据库目录、文件和当前所需的表。SQLite 没有独立端口；关闭后端后也就没有 ResearchFlow 进程在使用它，但数据库文件仍然存在。
+
+需要确认数据库包含哪些表时，可以先停止后端，再从仓库根目录执行只读查询：
+
+```powershell
+.\.venv\Scripts\python.exe -c 'import sqlite3; db=sqlite3.connect("file:var/researchflow.db?mode=ro", uri=True); print(db.execute("SELECT name FROM sqlite_master WHERE type=? ORDER BY name", ("table",)).fetchall()); db.close()'
+```
+
+查看当前研究任务数量：
+
+```powershell
+.\.venv\Scripts\python.exe -c 'import sqlite3; db=sqlite3.connect("file:var/researchflow.db?mode=ro", uri=True); print(db.execute("SELECT COUNT(*) FROM research_runs").fetchone()[0]); db.close()'
+```
+
+两个命令都使用 Python 自带的 `sqlite3` 接口和只读模式，不会修改数据库。概念解释见 [SQLite 与数据持久化课程](../learning/lessons/0003-understand-sqlite-persistence.html)。
+
+### 7.3 备份
 
 先停止后端，再执行：
 
@@ -253,7 +281,7 @@ Copy-Item .\var\researchflow.db .\backups\researchflow.db
 
 如需保留多份备份，可以在文件名中加入日期。`backups/` 当前没有被默认忽略；若实际使用该目录，应先将它加入 `.gitignore`，避免提交包含个人研究内容的数据库。
 
-### 7.3 重置本地数据
+### 7.4 重置本地数据
 
 先停止后端。为了可恢复，优先移动而不是直接删除：
 
@@ -335,7 +363,7 @@ npm run build --prefix apps/web
 2. 停止全部后端；
 3. 备份 `var/`；
 4. 再启动单个后端验证；
-5. 只有确认数据可舍弃时才按第 7.3 节重置。
+5. 只有确认数据可舍弃时才按第 7.4 节重置。
 
 ## 10. Git 与敏感信息
 
