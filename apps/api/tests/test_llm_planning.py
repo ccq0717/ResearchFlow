@@ -7,11 +7,11 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
+from researchflow.app_factory import create_app
 from researchflow.core.config import Settings
 from researchflow.integrations.llm.base import LLMClientError, LLMPlanResult
 from researchflow.integrations.llm.fake import FakeLLMClient
 from researchflow.integrations.llm.openai_compatible import OpenAICompatibleLLMClient
-from researchflow.main import create_app
 
 
 class FailingLLMClient:

@@ -1,7 +1,8 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic_core import PydanticCustomError
 
 from researchflow.domain.research import (
     ResearchEvent,
@@ -14,7 +15,17 @@ from researchflow.domain.research import (
 
 
 class CreateResearchRunRequest(BaseModel):
-    goal: str = Field(min_length=10, max_length=4000)
+    goal: str = Field(max_length=4000)
+
+    @field_validator("goal", mode="before")
+    @classmethod
+    def normalize_goal(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = " ".join(value.split())
+        if len(normalized) < 10:
+            raise PydanticCustomError("goal_too_short", "研究目标至少需要 10 个字符")
+        return normalized
 
 
 class ResearchRunResponse(BaseModel):

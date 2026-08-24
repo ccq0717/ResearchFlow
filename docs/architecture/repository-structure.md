@@ -115,7 +115,7 @@ Planner / Retrieval / Evidence / Writer modules
 - `SearchProvider`：网页搜索适配器 / 固定结果假实现；
 - `PaperProvider`：学术资料适配器 / 固定论文假实现；
 - `KnowledgeRetriever`：本地向量检索 / 内存测试实现；
-- `ResearchRepository`：SQLite 实现 / 内存测试实现。
+- `SqliteResearchRepository` 当前只有一个真实 adapter，因此暂不提取假想的 Repository Protocol；测试使用临时 SQLite。出现第二种存储后再建立 seam。
 
 这些接口由工作流和应用用例接收，而不是在模块内部临时创建真实客户端。测试通过相同 seam 运行完整流程。
 

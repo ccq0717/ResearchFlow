@@ -3,8 +3,8 @@ from pathlib import Path
 
 from httpx import ASGITransport, AsyncClient
 
+from researchflow.app_factory import create_app
 from researchflow.core.config import Settings
-from researchflow.main import create_app
 
 
 async def test_research_run_completes_and_persists(tmp_path: Path) -> None:
@@ -54,3 +54,48 @@ async def test_short_goal_is_rejected(tmp_path: Path) -> None:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/research-runs", json={"goal": "太短"})
             assert response.status_code == 422
+
+
+async def test_blank_goal_uses_stable_validation_error(tmp_path: Path) -> None:
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_url=f"sqlite+aiosqlite:///{(tmp_path / 'blank.db').as_posix()}",
+            simulation_step_delay=0,
+        )
+    )
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/research-runs", json={"goal": "          "})
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "VALIDATION_ERROR",
+        "message": "请求数据不符合要求",
+        "details": [
+            {
+                "field": "goal",
+                "message": "研究目标至少需要 10 个字符",
+            }
+        ],
+    }
+
+
+async def test_missing_run_uses_stable_not_found_error(tmp_path: Path) -> None:
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_url=f"sqlite+aiosqlite:///{(tmp_path / 'missing.db').as_posix()}",
+            simulation_step_delay=0,
+        )
+    )
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/research-runs/00000000-0000-0000-0000-000000000000")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "code": "RUN_NOT_FOUND",
+        "message": "研究任务不存在",
+        "details": None,
+    }

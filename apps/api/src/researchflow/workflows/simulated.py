@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -9,104 +9,82 @@ from researchflow.domain.research import (
     ResearchRunStatus,
     ResearchStage,
 )
-from researchflow.persistence.repository import SqliteResearchRepository
-
-logger = logging.getLogger(__name__)
+from researchflow.workflows.base import ResearchWorkflowUpdate
 
 
 class SimulatedResearchWorkflow:
-    def __init__(self, repository: SqliteResearchRepository, step_delay: float) -> None:
-        self._repository = repository
+    def __init__(self, step_delay: float) -> None:
         self._step_delay = step_delay
 
-    async def execute(self, run_id: UUID, goal: str) -> None:
-        try:
-            await self._repository.update(
-                run_id,
-                status=ResearchRunStatus.RUNNING,
-                progress=2,
-                started_at=datetime.now(UTC),
-            )
-            await self._repository.append_event(
-                run_id,
-                event_type="run.started",
-                message="研究工作流开始执行",
-                progress=2,
-            )
-
-            stages = [
-                (ResearchStage.PLANNING, 15, "正在拆解研究目标并生成研究计划"),
-                (ResearchStage.RETRIEVING, 38, "正在检索学术资料和工业界实践"),
-                (ResearchStage.ANALYZING, 62, "正在提取证据并比较评测方法"),
-                (ResearchStage.WRITING, 84, "正在撰写结构化评测方案"),
-                (ResearchStage.FINALIZING, 96, "正在检查报告结构和引用"),
-            ]
-            for stage, progress, message in stages:
-                await self._repository.update(run_id, stage=stage, progress=progress)
-                await self._repository.append_event(
-                    run_id,
-                    event_type="stage.started",
-                    stage=stage,
-                    message=message,
-                    progress=progress,
-                )
-                await asyncio.sleep(self._step_delay)
-                await self._repository.append_event(
-                    run_id,
-                    event_type="stage.completed",
-                    stage=stage,
-                    message=f"{message}：已完成",
-                    progress=progress,
-                )
-
-            await self._repository.finalize(
-                run_id,
-                ResearchRunOutcome(
-                    status=ResearchRunStatus.COMPLETED,
-                    progress=100,
-                    stage=ResearchStage.FINALIZING,
-                    report_markdown=self._build_report(goal),
-                    error_code=None,
-                    error_message=None,
-                    events=(
-                        ResearchEventDraft(
-                            type="report.completed",
-                            stage=ResearchStage.FINALIZING,
-                            message="模拟研究报告已经生成",
-                            progress=100,
-                        ),
-                        ResearchEventDraft(
-                            type="run.completed",
-                            stage=ResearchStage.FINALIZING,
-                            message="研究任务已完成",
-                            progress=100,
-                        ),
-                    ),
-                ),
-            )
-        except Exception:
-            logger.exception("模拟研究工作流执行失败，run_id=%s", run_id)
-            await self._fail_run(run_id)
-
-    async def _fail_run(self, run_id: UUID) -> None:
-        message = "模拟研究工作流执行失败"
-        await self._repository.finalize(
-            run_id,
-            ResearchRunOutcome(
-                status=ResearchRunStatus.FAILED,
-                progress=None,
-                stage=None,
-                report_markdown=None,
-                error_code="SIMULATION_FAILED",
-                error_message=message,
-                events=(
-                    ResearchEventDraft(
-                        type="run.failed",
-                        message=message,
-                        payload={"code": "SIMULATION_FAILED"},
-                    ),
+    async def execute(self, run_id: UUID, goal: str) -> AsyncIterator[ResearchWorkflowUpdate]:
+        yield ResearchWorkflowUpdate(
+            status=ResearchRunStatus.RUNNING,
+            progress=2,
+            started_at=datetime.now(UTC),
+            events=(
+                ResearchEventDraft(
+                    type="run.started",
+                    message="研究工作流开始执行",
+                    progress=2,
                 ),
             ),
+        )
+
+        stages = [
+            (ResearchStage.PLANNING, 15, "正在拆解研究目标并生成研究计划"),
+            (ResearchStage.RETRIEVING, 38, "正在检索学术资料和工业界实践"),
+            (ResearchStage.ANALYZING, 62, "正在提取证据并比较评测方法"),
+            (ResearchStage.WRITING, 84, "正在撰写结构化评测方案"),
+            (ResearchStage.FINALIZING, 96, "正在检查报告结构和引用"),
+        ]
+        for stage, progress, message in stages:
+            yield ResearchWorkflowUpdate(
+                stage=stage,
+                progress=progress,
+                events=(
+                    ResearchEventDraft(
+                        type="stage.started",
+                        stage=stage,
+                        message=message,
+                        progress=progress,
+                    ),
+                ),
+            )
+            await asyncio.sleep(self._step_delay)
+            yield ResearchWorkflowUpdate(
+                events=(
+                    ResearchEventDraft(
+                        type="stage.completed",
+                        stage=stage,
+                        message=f"{message}：已完成",
+                        progress=progress,
+                    ),
+                ),
+            )
+
+        yield ResearchWorkflowUpdate(
+            outcome=ResearchRunOutcome(
+                status=ResearchRunStatus.COMPLETED,
+                progress=100,
+                stage=ResearchStage.FINALIZING,
+                report_markdown=self._build_report(goal),
+                error_code=None,
+                error_message=None,
+                events=(
+                    ResearchEventDraft(
+                        type="report.completed",
+                        stage=ResearchStage.FINALIZING,
+                        message="模拟研究报告已经生成",
+                        progress=100,
+                    ),
+                    ResearchEventDraft(
+                        type="run.completed",
+                        stage=ResearchStage.FINALIZING,
+                        message="研究任务已完成",
+                        progress=100,
+                    ),
+                ),
+            )
         )
 
     @staticmethod

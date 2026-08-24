@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -12,69 +12,48 @@ from researchflow.domain.research import (
     ResearchStage,
 )
 from researchflow.integrations.llm.base import LLMClient, LLMClientError
-from researchflow.persistence.repository import SqliteResearchRepository
-
-logger = logging.getLogger(__name__)
+from researchflow.workflows.base import ResearchWorkflowUpdate
 
 
 class LLMResearchWorkflow:
     """使用真实模型生成计划，后续阶段暂用轻量模拟实现。"""
 
-    def __init__(
-        self,
-        repository: SqliteResearchRepository,
-        llm_client: LLMClient,
-        step_delay: float,
-    ) -> None:
-        self._repository = repository
+    def __init__(self, llm_client: LLMClient, step_delay: float) -> None:
         self._llm_client = llm_client
         self._step_delay = step_delay
 
-    async def execute(self, run_id: UUID, goal: str) -> None:
-        try:
-            await self._start_run(run_id)
-            plan = await self._create_plan(run_id, goal)
-            await self._simulate_remaining_stages(run_id)
-            await self._complete_run(run_id, goal, plan)
-        except LLMClientError as error:
-            await self._fail_run(run_id, error.code, error.public_message)
-        except Exception:
-            logger.exception("研究工作流执行失败，run_id=%s", run_id)
-            await self._fail_run(
-                run_id,
-                "WORKFLOW_FAILED",
-                "研究工作流执行失败，请稍后重试",
-            )
-
-    async def _start_run(self, run_id: UUID) -> None:
-        await self._repository.update(
-            run_id,
+    async def execute(self, run_id: UUID, goal: str) -> AsyncIterator[ResearchWorkflowUpdate]:
+        yield ResearchWorkflowUpdate(
             status=ResearchRunStatus.RUNNING,
             progress=2,
             started_at=datetime.now(UTC),
+            events=(
+                ResearchEventDraft(
+                    type="run.started",
+                    message="研究工作流开始执行",
+                    progress=2,
+                ),
+            ),
         )
-        await self._repository.append_event(
-            run_id,
-            event_type="run.started",
-            message="研究工作流开始执行",
-            progress=2,
-        )
-
-    async def _create_plan(self, run_id: UUID, goal: str) -> ResearchPlan:
-        await self._repository.update(
-            run_id,
+        yield ResearchWorkflowUpdate(
             stage=ResearchStage.PLANNING,
             progress=10,
-        )
-        await self._repository.append_event(
-            run_id,
-            event_type="stage.started",
-            stage=ResearchStage.PLANNING,
-            message="正在调用模型拆解研究目标",
-            progress=10,
+            events=(
+                ResearchEventDraft(
+                    type="stage.started",
+                    stage=ResearchStage.PLANNING,
+                    message="正在调用模型拆解研究目标",
+                    progress=10,
+                ),
+            ),
         )
 
-        result = await self._llm_client.create_research_plan(goal)
+        try:
+            result = await self._llm_client.create_research_plan(goal)
+        except LLMClientError as error:
+            yield self._failure(error.code, error.public_message)
+            return
+
         plan = ResearchPlan(
             run_id=run_id,
             summary=result.plan.summary,
@@ -95,31 +74,31 @@ class LLMResearchWorkflow:
             duration_ms=result.duration_ms,
             created_at=datetime.now(UTC),
         )
-        await self._repository.save_plan(plan)
-        await self._repository.update(run_id, progress=25)
-        await self._repository.append_event(
-            run_id,
-            event_type="research.plan.completed",
-            stage=ResearchStage.PLANNING,
-            message="结构化研究计划已经生成",
+        yield ResearchWorkflowUpdate(
             progress=25,
-            payload={
-                "provider": plan.provider,
-                "model": plan.model,
-                "duration_ms": plan.duration_ms,
-                "total_tokens": plan.total_tokens,
-            },
+            plan=plan,
+            events=(
+                ResearchEventDraft(
+                    type="research.plan.completed",
+                    stage=ResearchStage.PLANNING,
+                    message="结构化研究计划已经生成",
+                    progress=25,
+                    payload={
+                        "provider": plan.provider,
+                        "model": plan.model,
+                        "duration_ms": plan.duration_ms,
+                        "total_tokens": plan.total_tokens,
+                    },
+                ),
+                ResearchEventDraft(
+                    type="stage.completed",
+                    stage=ResearchStage.PLANNING,
+                    message="研究目标拆解与计划生成：已完成",
+                    progress=25,
+                ),
+            ),
         )
-        await self._repository.append_event(
-            run_id,
-            event_type="stage.completed",
-            stage=ResearchStage.PLANNING,
-            message="研究目标拆解与计划生成：已完成",
-            progress=25,
-        )
-        return plan
 
-    async def _simulate_remaining_stages(self, run_id: UUID) -> None:
         stages = [
             (ResearchStage.RETRIEVING, 42, "正在模拟检索学术资料和工业界实践"),
             (ResearchStage.ANALYZING, 64, "正在模拟提取证据并比较评测方法"),
@@ -127,27 +106,32 @@ class LLMResearchWorkflow:
             (ResearchStage.FINALIZING, 96, "正在检查报告结构"),
         ]
         for stage, progress, message in stages:
-            await self._repository.update(run_id, stage=stage, progress=progress)
-            await self._repository.append_event(
-                run_id,
-                event_type="stage.started",
+            yield ResearchWorkflowUpdate(
                 stage=stage,
-                message=message,
                 progress=progress,
+                events=(
+                    ResearchEventDraft(
+                        type="stage.started",
+                        stage=stage,
+                        message=message,
+                        progress=progress,
+                    ),
+                ),
             )
             await asyncio.sleep(self._step_delay)
-            await self._repository.append_event(
-                run_id,
-                event_type="stage.completed",
-                stage=stage,
-                message=f"{message}：已完成",
-                progress=progress,
+            yield ResearchWorkflowUpdate(
+                events=(
+                    ResearchEventDraft(
+                        type="stage.completed",
+                        stage=stage,
+                        message=f"{message}：已完成",
+                        progress=progress,
+                    ),
+                ),
             )
 
-    async def _complete_run(self, run_id: UUID, goal: str, plan: ResearchPlan) -> None:
-        await self._repository.finalize(
-            run_id,
-            ResearchRunOutcome(
+        yield ResearchWorkflowUpdate(
+            outcome=ResearchRunOutcome(
                 status=ResearchRunStatus.COMPLETED,
                 progress=100,
                 stage=ResearchStage.FINALIZING,
@@ -168,13 +152,13 @@ class LLMResearchWorkflow:
                         progress=100,
                     ),
                 ),
-            ),
+            )
         )
 
-    async def _fail_run(self, run_id: UUID, code: str, message: str) -> None:
-        await self._repository.finalize(
-            run_id,
-            ResearchRunOutcome(
+    @staticmethod
+    def _failure(code: str, message: str) -> ResearchWorkflowUpdate:
+        return ResearchWorkflowUpdate(
+            outcome=ResearchRunOutcome(
                 status=ResearchRunStatus.FAILED,
                 progress=None,
                 stage=None,
@@ -188,7 +172,7 @@ class LLMResearchWorkflow:
                         payload={"code": code},
                     ),
                 ),
-            ),
+            )
         )
 
     @staticmethod

@@ -36,8 +36,8 @@
 2. 打开 http://localhost:3000。
 3. 在“你想研究什么？”文本框输入至少 10 个字符的研究目标。
 4. 点击“开始研究”。
-5. 在 Research Workspace 查看阶段、进度、实时日志和最终报告。
-6. 返回 Dashboard，可从“研究记录”查看完成/更新时间并重新打开已保存任务；重新进入后会恢复完整工作日志。
+5. 在 Research Workspace 查看阶段、进度、研究事件和最终报告。
+6. 返回 Dashboard，可从“研究记录”查看完成/更新时间并重新打开已保存任务；重新进入后会恢复完整研究事件。
 
 推荐演示输入：
 
@@ -338,6 +338,13 @@ Move-Item .\var\researchflow.db .\var\researchflow.db.bak
 
 ```powershell
 .\.venv\Scripts\ruff.exe check apps/api
+.\.venv\Scripts\ruff.exe format --check apps/api
+```
+
+前端基础测试：
+
+```powershell
+npm test --prefix apps/web
 ```
 
 前端代码检查：
@@ -352,9 +359,23 @@ npm run lint --prefix apps/web
 npm run build --prefix apps/web
 ```
 
-一个完整功能改动在提交前至少应运行与该改动相关的检查；跨越前后端的改动建议运行全部四项。
+一个完整功能改动在提交前至少应运行与该改动相关的检查；跨越前后端的改动建议运行后端测试、Ruff、前端测试、ESLint 和生产构建。GitHub Actions 会在推送和 Pull Request 时重复执行这些检查，其中后端运行在 Windows。
 
-自动化测试通过 `_env_file=None` 明确禁止读取仓库根目录 `.env`，并使用 Fake 或 Mock，因而不会使用本机真实 API Key、访问外部模型或产生费用。真实供应商检查是单独执行、需要明确授权的冒烟测试，不能混入常规测试套件。
+测试从无副作用的 `researchflow.app_factory` 导入应用工厂，并通过 `_env_file=None` 明确禁止读取仓库根目录 `.env`；Fake 或 Mock 负责替代外部模型，因而不会使用本机真实 API Key、访问外部模型或产生费用。真实供应商检查是单独执行、需要明确授权的冒烟测试，不能混入常规测试套件。
+
+### 8.1 API 错误响应
+
+业务错误和请求校验错误统一返回：
+
+```json
+{
+  "code": "RUN_NOT_FOUND",
+  "message": "研究任务不存在",
+  "details": null
+}
+```
+
+`code` 供程序稳定判断，`message` 可以安全展示，`details` 在字段校验失败时给出字段与原因。原始供应商响应、堆栈和密钥不得进入该结构。
 
 ## 9. 常见问题排查
 
@@ -381,7 +402,7 @@ npm run build --prefix apps/web
 
 1. 检查 `/api/research-runs/{id}/events` 请求是否仍处于连接状态；
 2. 检查后端是否仍在运行；
-3. 刷新或重新进入任务页面；前端会先读取 `/events/history` 恢复已保存日志，再从最后事件序号继续 SSE；
+3. 刷新或重新进入任务页面；前端会先读取 `/events/history` 恢复已保存研究事件，再从最后事件序号继续 SSE；
 4. 区分“SSE 连接中断”和“研究任务失败”，两者不是同一件事。
 
 详细协议见 [SSE 事件契约](../architecture/sse-events.md)，入门解释见 [SSE 第一课](../learning/lessons/0001-understand-sse.html)。SQLite 取回的时间可能没有时区信息，Repository 会将其恢复为 UTC；API 输出 `Z`/`+00:00`，前端再按浏览器本地时区展示。

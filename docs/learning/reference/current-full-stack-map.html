@@ -45,11 +45,11 @@
   → 前端读取 /plan 并展示
 
 SimulatedResearchWorkflow 或 LLMResearchWorkflow
-  → Repository 保存 research_events
+  → Application 持久化 ResearchWorkflowUpdate 到 research_events
   → FastAPI StreamingResponse
   → 浏览器 EventSource
   → React 状态更新
-  → 进度条和实时日志重绘</code></pre>
+  → 进度条和研究事件重绘</code></pre>
 
   <div class="callout success"><strong>定位原则：</strong>页面样式先看组件；请求失败先看 Network 和路由；状态错误看应用层与工作流；刷新后数据错误看 Repository 和 SQLite；实时更新错误看事件表与 SSE。</div>
   <p class="footer"><a href="../lessons/0002-follow-a-research-request.html">学习完整请求链路</a> · <a href="../lessons/0003-understand-sqlite-persistence.html">学习 SQLite 持久化</a> · <a href="../lessons/0004-understand-llm-adapters.html">学习 LLM 适配器</a> · <a href="../../guides/development-and-operations.md">查看运维手册</a></p>

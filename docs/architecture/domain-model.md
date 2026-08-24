@@ -94,7 +94,11 @@ finalizing
 
 事件只能追加，不能覆盖。客户端可通过最后收到的事件序号继续订阅。终结事件与对应 Research Outcome 原子提交；`research.plan.completed` 只携带模型元数据和读取提示，完整计划通过独立 REST API 获取。
 
-## 5. 当前持久化
+## 5. ResearchWorkflowUpdate
+
+`ResearchWorkflow` 不直接写数据库，而是以异步迭代器产生 `ResearchWorkflowUpdate`。更新可以携带运行状态、研究阶段、进度、结构化计划、领域事件或不可变终态；Application 是唯一消费方，并负责调用 Repository 持久化。这个小接口是 M2 `LangGraphResearchWorkflow` 的框架隔离 seam。
+
+## 6. 当前持久化
 
 SQLite 当前包含三张业务表：
 
@@ -104,14 +108,14 @@ SQLite 当前包含三张业务表：
 
 `SqliteResearchRepository` 是当前具体的数据访问模块。应用层仍直接依赖这个具体类，因此文档不把它误称为已经具有两个适配器验证的 Repository seam；后续引入第二种存储或内存实现时再提取 Protocol。
 
-## 6. 已验证的替换 seam
+## 7. 已验证的替换 seam
 
 - `ResearchWorkflow`：`SimulatedResearchWorkflow` 与 `LLMResearchWorkflow`；
 - `LLMClient`：`FakeLLMClient` 与 `OpenAICompatibleLLMClient`。
 
-两处接口都至少有两个实际实现。FastAPI 路由只调用应用服务，应用服务不依赖具体工作流；LLM 工作流不依赖厂商 HTTP 响应类型。详细说明见 [LLM 接入架构](llm-integration.md)。
+两处接口都至少有两个实际 adapter。FastAPI 路由只调用 Application；Application 消费工作流更新并依赖当前 SQLite Repository；工作流不导入 Repository，LLM 工作流也不依赖厂商 HTTP 响应类型。详细说明见 [LLM 接入架构](llm-integration.md)。
 
-## 7. 后续模型
+## 8. 后续模型
 
 以下模型在真实研究工作流阶段加入，不提前建立空表：
 

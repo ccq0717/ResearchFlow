@@ -68,7 +68,7 @@ export default function Dashboard() {
               从研究目标到可追溯的方案文档
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/70">
-              将开放问题拆成研究任务，整合网页、论文与知识库证据，并实时展示研究过程。
+              从研究目标生成结构化计划并展示研究过程；网页、论文与知识库证据将在后续里程碑接入。
             </p>
           </div>
         </div>

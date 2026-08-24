@@ -5,9 +5,9 @@ from uuid import UUID, uuid4
 
 from httpx import ASGITransport, AsyncClient
 
+from researchflow.app_factory import create_app
 from researchflow.core.config import Settings
 from researchflow.domain.research import ResearchRun, ResearchRunStatus
-from researchflow.main import create_app
 from researchflow.persistence.database import (
     create_engine,
     create_schema,
@@ -40,8 +40,9 @@ async def test_sse_stream_contains_terminal_events(tmp_path: Path) -> None:
                 body = (await response.aread()).decode("utf-8")
 
             assert response.status_code == 200
-            assert "event: report.completed" in body
-            assert "event: run.completed" in body
+            assert body.count("event: research.event") >= 2
+            assert '"type": "report.completed"' in body
+            assert '"type": "run.completed"' in body
 
 
 async def test_event_history_survives_reopen_and_keeps_utc_offset(tmp_path: Path) -> None:
@@ -139,7 +140,7 @@ async def test_startup_recovers_orphaned_run(tmp_path: Path) -> None:
     app = create_app(settings)
     async with app.router.lifespan_context(app):
         recovered = await app.state.research_runs.get_run(UUID(str(run.id)))
-        events = await app.state.research_runs.repository.events_after(run.id, 0)
+        events = await app.state.research_runs.list_events(run.id)
 
     assert recovered is not None
     assert recovered.status == ResearchRunStatus.FAILED

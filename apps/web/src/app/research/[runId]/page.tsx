@@ -15,6 +15,10 @@ import {
   type ResearchRun,
   type ResearchStage,
 } from "@/lib/api";
+import {
+  hasTerminalResearchEvent,
+  mergeResearchEvents,
+} from "@/lib/event-stream";
 import { formatEventTime } from "@/lib/format";
 
 const stages: Array<{ id: ResearchStage; label: string }> = [
@@ -25,17 +29,6 @@ const stages: Array<{ id: ResearchStage; label: string }> = [
   { id: "finalizing", label: "检查结果" },
 ];
 
-const eventTypes = [
-  "run.queued",
-  "run.started",
-  "stage.started",
-  "stage.completed",
-  "research.plan.completed",
-  "report.completed",
-  "run.completed",
-  "run.failed",
-  "stream.ready",
-];
 
 export default function ResearchWorkspace() {
   const params = useParams<{ runId: string }>();
@@ -60,16 +53,33 @@ export default function ResearchWorkspace() {
 
     async function start() {
       try {
-        const [initial, initialPlan, initialEvents] = await Promise.all([
+        const [initial, initialPlan] = await Promise.all([
           getResearchRun(runId),
           getResearchPlan(runId),
-          listResearchEvents(runId),
+        ]);
+        // 状态先于历史读取：若状态已经终结，原子提交的终结事件随后一定可见。
+        const initialEvents = await listResearchEvents(runId);
+        const historyIsTerminal = hasTerminalResearchEvent(initialEvents);
+        const historyHasPlan = initialEvents.some(
+          (event) => event.type === "research.plan.completed",
+        );
+        const [latestRun, latestPlan] = await Promise.all([
+          historyIsTerminal &&
+          !["completed", "failed", "cancelled"].includes(initial.status)
+            ? getResearchRun(runId)
+            : initial,
+          historyHasPlan && initialPlan === null
+            ? getResearchPlan(runId)
+            : initialPlan,
         ]);
         if (cancelled) return;
-        setRun(initial);
-        setPlan(initialPlan);
+        setRun(latestRun);
+        setPlan(latestPlan);
         setEvents(initialEvents);
-        if (["completed", "failed", "cancelled"].includes(initial.status)) {
+        if (
+          historyIsTerminal ||
+          ["completed", "failed", "cancelled"].includes(latestRun.status)
+        ) {
           setConnection("已结束");
           return;
         }
@@ -87,14 +97,10 @@ export default function ResearchWorkspace() {
         const handleEvent = (raw: Event) => {
           const message = raw as MessageEvent<string>;
           const data = JSON.parse(message.data) as ResearchEventData;
-          if (data.message !== "事件流已连接") {
-            setEvents((current) =>
-              current.some((event) => event.sequence === data.sequence)
-                ? current
-                : [...current, data],
-            );
+          if (data.type !== "stream.ready") {
+            setEvents((current) => mergeResearchEvents(current, [data]));
           }
-          if (message.type === "research.plan.completed") {
+          if (data.type === "research.plan.completed") {
             void getResearchPlan(runId).then(setPlan);
           }
           setRun((current) =>
@@ -108,8 +114,9 @@ export default function ResearchWorkspace() {
           );
 
           if (
-            message.type === "run.completed" ||
-            message.type === "run.failed"
+            data.type === "run.completed" ||
+            data.type === "run.failed" ||
+            data.type === "run.cancelled"
           ) {
             void Promise.all([
               getResearchRun(runId),
@@ -123,9 +130,8 @@ export default function ResearchWorkspace() {
           }
         };
 
-        for (const eventType of eventTypes) {
-          source.addEventListener(eventType, handleEvent);
-        }
+        source.addEventListener("research.event", handleEvent);
+        source.addEventListener("stream.ready", handleEvent);
         source.onerror = () => setConnection("连接中断");
       } catch {
         setError("无法读取研究任务，请确认后端已经启动。");
@@ -244,10 +250,10 @@ export default function ResearchWorkspace() {
             <ResearchPlanPanel plan={plan} />
 
             <section className="rounded-3xl border border-[#d8d3c7] bg-[#ebe5d9] p-6">
-              <h2 className="font-semibold">实时日志</h2>
+              <h2 className="font-semibold">研究事件</h2>
               <div className="mt-4 max-h-72 space-y-3 overflow-auto">
                 {events.length === 0 && (
-                  <p className="text-sm text-[#6d746f]">等待工作流事件…</p>
+                  <p className="text-sm text-[#6d746f]">等待研究事件…</p>
                 )}
                 {events.map((event) => (
                   <div

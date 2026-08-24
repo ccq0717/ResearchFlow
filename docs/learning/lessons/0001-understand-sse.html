@@ -26,8 +26,8 @@
 
 <h2>3. 一条 SSE 消息长什么样</h2>
 <pre><code>id: 12
-event: stage.progress
-data: {"stage":"retrieving","message":"正在检索资料","progress":35}
+event: research.event
+data: {"type":"stage.progress","stage":"retrieving","message":"正在检索资料","progress":35}
 
 </code></pre>
 <ul>
@@ -61,7 +61,7 @@ source.onerror = () => setConnection("连接中断");
 
 // 页面离开或任务结束时释放连接
 source.close();</code></pre>
-<p>每收到一个事件，前端解析 <code>data</code> 中的 JSON，更新 React 状态；React 再根据新状态重新显示进度条和实时日志。浏览器端标准用法可参考 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events">MDN SSE 指南</a>。</p>
+<p>每收到一个事件，前端解析 <code>data</code> 中的 JSON，更新 React 状态；React 再根据新状态重新显示进度条和研究事件。浏览器端标准用法可参考 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events">MDN SSE 指南</a>。</p>
 
 <h2>6. 为什么不直接使用 WebSocket</h2>
 <p>WebSocket 支持前端和后端随时双向发消息，但 ResearchFlow 当前只需要后端推送任务进度。SSE 基于普通 HTTP，浏览器自带 <code>EventSource</code> 和自动重连语义，模型更简单。技术不是越强越好，而是要和问题匹配。</p>

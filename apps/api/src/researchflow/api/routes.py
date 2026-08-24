@@ -105,11 +105,13 @@ async def stream_research_events(
         )
         idle_cycles = 0
         while not await request.is_disconnected():
-            events = await application.repository.events_after(run_id, sequence)
+            # 先读取状态、再读取事件。若状态已终结，对应终结事件已经在同一事务中提交，
+            # 因此随后的事件查询一定能补齐终结事件后再关闭连接。
+            current = await application.get_run(run_id)
+            events = await application.events_after(run_id, sequence)
             for event in events:
                 sequence = event.sequence
                 yield _format_event(event)
-            current = await application.get_run(run_id)
             if current is None or current.status.is_terminal:
                 return
             if not events:
@@ -131,7 +133,7 @@ async def stream_research_events(
 def _format_event(event: ResearchEvent) -> str:
     return _format_sse(
         event_id=event.sequence,
-        event_type=event.type,
+        event_type="research.event",
         data={
             "sequence": event.sequence,
             "run_id": str(event.run_id),
