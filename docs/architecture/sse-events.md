@@ -1,7 +1,7 @@
 # ResearchFlow SSE 事件契约
 
-> 状态：第一阶段实现基线
-> 更新日期：2026-08-23
+> 状态：M1 实现基线
+> 更新日期：2026-08-24
 
 ## 1. 目标
 
@@ -32,12 +32,13 @@ data: {"run_id":"...","stage":"retrieving","message":"正在检索资料","progr
 | `stage.started` | 进入新的研究阶段 |
 | `stage.progress` | 当前阶段产生进度或日志 |
 | `stage.completed` | 当前阶段完成 |
+| `research.plan.completed` | 结构化研究计划已保存，payload 含模型、耗时和 Token 摘要 |
 | `report.completed` | 报告已生成，payload 含报告摘要或读取提示 |
 | `run.completed` | 整个运行成功完成 |
 | `run.failed` | 运行失败，payload 含稳定错误代码 |
 | `stream.ready` | 订阅建立，包含当前快照信息 |
 
-第一阶段不发送 Token 级模型文本流；报告完成后统一读取。后续如确有体验需求，再增加独立的 `report.delta` 事件。
+当前不发送 Token 级模型文本流；研究计划完成后通过 `/plan` API 读取，报告完成后通过任务详情读取。后续如确有体验需求，再增加独立的 `report.delta` 事件。
 
 ## 4. 通用 data 字段
 

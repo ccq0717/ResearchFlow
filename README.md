@@ -6,23 +6,23 @@ ResearchFlow 是一个以证据为核心的 AI 深度研究工作台。它将开
 
 ## 当前进度
 
-仓库目前已经完成第一条可运行的模拟纵向闭环：
+仓库目前已完成 M0 全栈闭环和 M1 真实 LLM 最小接入：
 
-- 在 Next.js Dashboard 中创建研究任务；
-- 使用 SQLite 保存研究任务和工作流事件；
-- 通过 SSE 实时推送工作流进度；
-- 展示规划、检索、分析、写作和最终检查阶段；
-- 从研究历史中重新打开已完成的任务；
-- 在不调用外部模型的情况下生成模拟 Markdown 报告。
+- 在 Next.js Dashboard 中创建任务，并在 Research Workspace 查看 SSE 实时进度；
+- 使用 SQLite 持久化研究任务、事件、结构化研究计划和演示报告；
+- 默认模拟模式无需 API Key、外部服务、Docker 或 GPU；
+- LLM 模式可通过 OpenAI-compatible HTTP 服务生成结构化研究计划；
+- 前端展示计划摘要、核心研究问题、交付物、模型、耗时和 Token 用量；
+- Fake LLM 与 Mock HTTP 测试保证自动化测试不联网、不产生 API 费用。
 
-真实 LLM、学术搜索、网页检索、证据提取、RAG 和引用验证将在后续里程碑中逐步加入。
+当前真实 LLM 只负责规划，检索、分析和报告生成仍为轻量演示。学术搜索、网页检索、证据提取、RAG 和引用验证将在 M2～M4 逐步加入。
 
 ## 开发路线图
 
-当前已完成 M0“模拟全栈纵向闭环”，下一步是 M1“真实 LLM 最小接入”。
+当前已完成 M0“模拟全栈纵向闭环”和 M1“真实 LLM 最小接入”，下一步是 M2“LangGraph 与真实网页研究闭环”。
 
 - [x] M0：模拟全栈纵向闭环；
-- [ ] M1：真实 LLM 最小接入；
+- [x] M1：真实 LLM 最小接入；
 - [ ] M2：LangGraph 与真实网页研究闭环；
 - [ ] M3：学术检索、引用和黄金演示场景；
 - [ ] M4：本地知识库与 RAG；
@@ -36,7 +36,8 @@ ResearchFlow 是一个以证据为核心的 AI 深度研究工作台。它将开
 - FastAPI、Python 3.12、SQLAlchemy
 - 本地 MVP 使用 SQLite
 - REST API 与 Server-Sent Events（SSE）
-- 计划在 ResearchFlow 自有工作流接口后使用 LangGraph
+- HTTPX、OpenAI-compatible JSON Schema 结构化输出
+- ResearchFlow 自有 `ResearchWorkflow` / `LLMClient` 接口，计划在其后使用 LangGraph
 
 ## 仓库结构
 
@@ -50,7 +51,7 @@ scripts        本地开发辅助脚本
 var            本地运行数据（不提交到 Git）
 ```
 
-建议先阅读 [MVP 技术规格](docs/product/mvp-spec.md)、[核心数据模型](docs/architecture/domain-model.md)、[SSE 事件契约](docs/architecture/sse-events.md)和[仓库结构设计](docs/architecture/repository-structure.md)。
+建议先阅读 [MVP 技术规格](docs/product/mvp-spec.md)、[核心数据模型](docs/architecture/domain-model.md)、[LLM 接入架构](docs/architecture/llm-integration.md)、[SSE 事件契约](docs/architecture/sse-events.md)和[仓库结构设计](docs/architecture/repository-structure.md)。
 
 ## 环境要求
 
@@ -122,7 +123,16 @@ npm run build --prefix apps/web
 
 请从 `.env.example` 复制本地配置，不要提交真实 API Key、访问令牌或个人资料。
 
-当前模拟闭环不需要任何外部 API Key。后续接入模型和检索服务时，会继续使用环境变量管理敏感配置。
+默认 `simulation` 模式不需要任何外部 API Key。若要启用真实规划，在本地 `.env` 中设置：
+
+```dotenv
+RESEARCHFLOW_WORKFLOW_MODE=llm
+RESEARCHFLOW_LLM_MODEL=你的模型名
+RESEARCHFLOW_LLM_API_KEY=你的密钥
+RESEARCHFLOW_LLM_BASE_URL=https://你的兼容服务/v1
+```
+
+目标服务需支持 Chat Completions 和 JSON Schema 结构化输出。本地兼容服务若不要求鉴权，可将 API Key 留空。修改配置后重启后端；真实密钥不得提交到 Git。完整说明见[使用、开发与运维手册](docs/guides/development-and-operations.md)。
 
 ## 项目文档
 
@@ -131,7 +141,9 @@ npm run build --prefix apps/web
 - [项目讨论记录](docs/product/project-discussion.md)
 - [项目路线图](docs/product/roadmap.md)
 - [MVP 技术规格](docs/product/mvp-spec.md)
+- [领域词汇表](CONTEXT.md)
 - [核心数据模型](docs/architecture/domain-model.md)
+- [LLM 接入架构](docs/architecture/llm-integration.md)
 - [SSE 事件契约](docs/architecture/sse-events.md)
 - [仓库结构设计](docs/architecture/repository-structure.md)
 - [LangGraph 架构决策](docs/decisions/0001-use-langgraph-behind-workflow-interface.md)

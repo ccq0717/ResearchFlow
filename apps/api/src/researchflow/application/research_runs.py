@@ -2,16 +2,16 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from researchflow.domain.research import ResearchRun, ResearchRunStatus
+from researchflow.domain.research import ResearchPlan, ResearchRun, ResearchRunStatus
 from researchflow.persistence.repository import SqliteResearchRepository
-from researchflow.workflows.simulated import SimulatedResearchWorkflow
+from researchflow.workflows.base import ResearchWorkflow
 
 
 class ResearchRunApplication:
     def __init__(
         self,
         repository: SqliteResearchRepository,
-        workflow: SimulatedResearchWorkflow,
+        workflow: ResearchWorkflow,
     ) -> None:
         self.repository = repository
         self.workflow = workflow
@@ -53,6 +53,9 @@ class ResearchRunApplication:
 
     async def get_run(self, run_id: UUID) -> ResearchRun | None:
         return await self.repository.get(run_id)
+
+    async def get_plan(self, run_id: UUID) -> ResearchPlan | None:
+        return await self.repository.get_plan(run_id)
 
     async def list_runs(self) -> list[ResearchRun]:
         return await self.repository.list_runs()

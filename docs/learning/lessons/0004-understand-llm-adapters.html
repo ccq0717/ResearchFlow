@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 4 课：理解 LLM 接口与适配器 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0004 · 约 18 分钟</p>
+  <h1>真实 LLM 是怎样接入后端的</h1>
+  <p class="lead">学完这一课，你应该能解释模型 API、接口、适配器、Fake、结构化输出和环境变量分别解决什么问题。</p>
+
+  <div class="callout">
+    <strong>先记结论：</strong>LLM 不是直接“装进网页”。浏览器把研究目标交给后端，后端通过 HTTP 调用模型服务，再把经过校验的研究计划保存到数据库。
+  </div>
+
+  <h2>1. 当前有两种工作流模式</h2>
+  <table>
+    <thead><tr><th>模式</th><th>是否联网调用模型</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td><code>simulation</code></td><td>否</td><td>默认演示、低资源运行、没有 API Key 时开发</td></tr>
+      <tr><td><code>llm</code></td><td>是</td><td>让兼容服务真实生成结构化研究计划</td></tr>
+    </tbody>
+  </table>
+  <p>模式由 <code>RESEARCHFLOW_WORKFLOW_MODE</code> 决定。默认值是 <code>simulation</code>，所以拉取仓库后不会意外产生模型费用。</p>
+
+  <h2>2. 接口和适配器是什么</h2>
+  <p><code>LLMClient</code> 接口只承诺一件事：根据研究目标返回研究计划。调用方不需要知道 URL、Authorization Header、提示词和厂商 JSON。</p>
+  <pre><code>研究工作流 → LLMClient → 研究计划
+                    ├─ FakeLLMClient
+                    └─ OpenAICompatibleLLMClient</code></pre>
+  <p>适配器是接口的具体实现。Fake 返回固定但合理的数据；远程适配器发送真实 HTTP 请求。两者返回相同的 <code>LLMPlanResult</code>，因此工作流不需要写两套业务逻辑。</p>
+
+  <h2>3. 为什么测试使用 Fake</h2>
+  <ul>
+    <li>不需要 API Key，不产生费用；</li>
+    <li>不会因网络或供应商故障随机失败；</li>
+    <li>输出确定，测试可以精确断言问题数量、模型名和 Token 数据；</li>
+    <li>仍会穿过工作流、数据库和 API，能验证真实业务边界。</li>
+  </ul>
+  <p>Fake 不是“假装测试全部真实能力”。远程 HTTP 格式另有 <code>MockTransport</code> 测试，而真实供应商的线上兼容性仍需在配置服务后单独验证。</p>
+
+  <h2>4. 什么是结构化输出</h2>
+  <p>普通模型回复是一段自由文本，程序很难稳定地提取字段。ResearchFlow 给模型一个 JSON Schema，要求返回摘要、3～8 个研究问题和交付物。Pydantic 再对返回内容做第二次校验。</p>
+  <pre><code>{
+  "summary": "计划摘要",
+  "questions": [
+    {"question": "要调查什么？", "rationale": "为什么要调查？"}
+  ],
+  "deliverables": ["最终交付物"]
+}</code></pre>
+  <p>“模型说它会遵守格式”不是保证；只有程序验证通过的数据才会成为 <code>ResearchPlan</code>。</p>
+
+  <h2>5. 一次真实规划请求经过哪里</h2>
+  <div class="flow">
+    <span>网页</span><b>→</b><span>FastAPI</span><b>→</b><span>Workflow</span>
+    <b>→</b><span>LLM API</span><b>→</b><span>SQLite</span>
+  </div>
+  <ol>
+    <li>前端 POST 一个研究目标；</li>
+    <li>后端创建 Research Run；</li>
+    <li>工作流调用 <code>LLMClient.create_research_plan</code>；</li>
+    <li>远程服务返回 JSON，Pydantic 校验；</li>
+    <li>计划写入 <code>research_plans</code>；</li>
+    <li>SSE 通知前端，前端再读取计划 API。</li>
+  </ol>
+
+  <h2>6. Base URL、模型名和 API Key</h2>
+  <table>
+    <thead><tr><th>配置</th><th>含义</th></tr></thead>
+    <tbody>
+      <tr><td>Base URL</td><td>模型服务 API 的根地址，例如包含 <code>/v1</code></td></tr>
+      <tr><td>Model</td><td>供应商识别具体模型的名称</td></tr>
+      <tr><td>API Key</td><td>证明调用者权限的秘密凭证；本地兼容服务可能不需要</td></tr>
+    </tbody>
+  </table>
+  <p>密钥只放在被 Git 忽略的 <code>.env</code>，不能写进 Python、README、截图或提交记录。前端也绝不能接收模型密钥。</p>
+
+  <h2>7. 为什么记录耗时和 Token</h2>
+  <p>耗时帮助判断用户等待发生在哪里；Token 是很多模型服务计费和上下文容量的基础单位。当前保存输入、输出和总 Token（若供应商返回），后续可计算单次运行成本和建立预算。</p>
+
+  <h2>8. 失败时会发生什么</h2>
+  <p>超时、连接失败、HTTP 错误和格式错误会转换成稳定错误代码。前端得到的是安全、可理解的消息，而不是可能包含内部地址、响应正文或密钥的异常堆栈。Research Run 会进入 <code>failed</code> 终态。</p>
+
+  <h2>9. 当前能力边界</h2>
+  <p>真实 LLM 目前只生成计划。后面的检索、分析和写作仍是演示逻辑，所以不能把 M1 报告描述为经过真实论文调研的结论。下一里程碑才会把计划送入 LangGraph 和网页检索。</p>
+
+  <h2>10. 检查理解</h2>
+  <div class="card"><ol>
+    <li>为什么不让工作流直接调用某一家模型 SDK？</li>
+    <li>Fake LLM 能证明什么，不能证明什么？</li>
+    <li>为什么模型返回 HTTP 200 后仍要做 Pydantic 校验？</li>
+  </ol></div>
+  <details><summary>完成后查看参考答案</summary><ol>
+    <li>用稳定接口隔离厂商细节，替换服务时不修改业务流程。</li>
+    <li>它能确定性验证应用、工作流、持久化和 API 契约；不能证明真实供应商在线或完全兼容。</li>
+    <li>HTTP 成功只说明服务器处理了请求，不保证内容满足业务需要的字段、类型和数量限制。</li>
+  </ol></details>
+
+  <div class="callout success"><strong>实践任务：</strong>先保持 <code>simulation</code> 创建任务，再阅读 <code>main.py</code> 找出程序在哪一处分支选择工作流。不要填写真实 Key，也能先解释整个装配过程。</div>
+  <p class="footer">上一课：<a href="0003-understand-sqlite-persistence.html">SQLite 与数据持久化</a> · 架构说明：<a href="../../architecture/llm-integration.md">LLM 接入架构</a>。</p>
+</main>
+</body>
+</html>

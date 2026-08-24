@@ -8,6 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from researchflow.domain.research import (
     ResearchEvent,
+    ResearchPlan,
+    ResearchQuestion,
     ResearchRun,
     ResearchRunStatus,
     ResearchStage,
@@ -31,6 +33,24 @@ class ResearchRunRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ResearchPlanRow(Base):
+    __tablename__ = "research_plans"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("research_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    summary: Mapped[str] = mapped_column(Text)
+    questions: Mapped[list[dict[str, str]]] = mapped_column(JSON)
+    deliverables: Mapped[list[str]] = mapped_column(JSON)
+    provider: Mapped[str] = mapped_column(String(80))
+    model: Mapped[str] = mapped_column(String(160))
+    input_tokens: Mapped[int | None] = mapped_column(Integer)
+    output_tokens: Mapped[int | None] = mapped_column(Integer)
+    total_tokens: Mapped[int | None] = mapped_column(Integer)
+    duration_ms: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class ResearchEventRow(Base):
@@ -107,6 +127,37 @@ class SqliteResearchRepository:
             await session.commit()
             await session.refresh(row)
             return self._row_to_run(row)
+
+    async def save_plan(self, plan: ResearchPlan) -> ResearchPlan:
+        row = ResearchPlanRow(
+            run_id=str(plan.run_id),
+            summary=plan.summary,
+            questions=[
+                {
+                    "id": question.id,
+                    "question": question.question,
+                    "rationale": question.rationale,
+                }
+                for question in plan.questions
+            ],
+            deliverables=list(plan.deliverables),
+            provider=plan.provider,
+            model=plan.model,
+            input_tokens=plan.input_tokens,
+            output_tokens=plan.output_tokens,
+            total_tokens=plan.total_tokens,
+            duration_ms=plan.duration_ms,
+            created_at=plan.created_at,
+        )
+        async with self._sessions() as session:
+            await session.merge(row)
+            await session.commit()
+        return plan
+
+    async def get_plan(self, run_id: UUID) -> ResearchPlan | None:
+        async with self._sessions() as session:
+            row = await session.get(ResearchPlanRow, str(run_id))
+            return self._row_to_plan(row) if row else None
 
     async def append_event(
         self,
@@ -185,6 +236,29 @@ class SqliteResearchRepository:
             updated_at=row.updated_at,
             started_at=row.started_at,
             completed_at=row.completed_at,
+        )
+
+    @staticmethod
+    def _row_to_plan(row: ResearchPlanRow) -> ResearchPlan:
+        return ResearchPlan(
+            run_id=UUID(row.run_id),
+            summary=row.summary,
+            questions=tuple(
+                ResearchQuestion(
+                    id=question["id"],
+                    question=question["question"],
+                    rationale=question["rationale"],
+                )
+                for question in row.questions
+            ),
+            deliverables=tuple(row.deliverables),
+            provider=row.provider,
+            model=row.model,
+            input_tokens=row.input_tokens,
+            output_tokens=row.output_tokens,
+            total_tokens=row.total_tokens,
+            duration_ms=row.duration_ms,
+            created_at=row.created_at,
         )
 
     @staticmethod

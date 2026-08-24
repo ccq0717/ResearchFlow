@@ -28,6 +28,26 @@ export interface ResearchRun {
   completed_at: string | null;
 }
 
+export interface ResearchQuestion {
+  id: string;
+  question: string;
+  rationale: string;
+}
+
+export interface ResearchPlan {
+  run_id: string;
+  summary: string;
+  questions: ResearchQuestion[];
+  deliverables: string[];
+  provider: string;
+  model: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  total_tokens: number | null;
+  duration_ms: number;
+  created_at: string;
+}
+
 export interface ResearchEventData {
   run_id: string;
   stage: ResearchStage | null;
@@ -70,4 +90,13 @@ export async function listResearchRuns(): Promise<ResearchRun[]> {
 
 export function getResearchRun(runId: string): Promise<ResearchRun> {
   return request<ResearchRun>("/api/research-runs/" + runId);
+}
+
+export async function getResearchPlan(
+  runId: string,
+): Promise<ResearchPlan | null> {
+  const response = await request<{ plan: ResearchPlan | null }>(
+    "/api/research-runs/" + runId + "/plan",
+  );
+  return response.plan;
 }

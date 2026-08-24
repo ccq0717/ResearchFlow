@@ -8,6 +8,8 @@ from fastapi.responses import StreamingResponse
 
 from researchflow.api.schemas import (
     CreateResearchRunRequest,
+    ResearchPlanEnvelope,
+    ResearchPlanResponse,
     ResearchRunListResponse,
     ResearchRunResponse,
 )
@@ -45,6 +47,17 @@ async def get_research_run(run_id: UUID, request: Request) -> ResearchRunRespons
     if run is None:
         raise HTTPException(status_code=404, detail={"code": "RUN_NOT_FOUND"})
     return ResearchRunResponse.from_domain(run)
+
+
+@router.get("/research-runs/{run_id}/plan", response_model=ResearchPlanEnvelope)
+async def get_research_plan(run_id: UUID, request: Request) -> ResearchPlanEnvelope:
+    application = _application(request)
+    if await application.get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail={"code": "RUN_NOT_FOUND"})
+    plan = await application.get_plan(run_id)
+    return ResearchPlanEnvelope(
+        plan=ResearchPlanResponse.from_domain(plan) if plan is not None else None
+    )
 
 
 @router.get("/research-runs/{run_id}/events")

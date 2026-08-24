@@ -5,8 +5,10 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   apiBaseUrl,
+  getResearchPlan,
   getResearchRun,
   type ResearchEventData,
+  type ResearchPlan,
   type ResearchRun,
   type ResearchStage,
 } from "@/lib/api";
@@ -24,6 +26,7 @@ const eventTypes = [
   "run.started",
   "stage.started",
   "stage.completed",
+  "research.plan.completed",
   "report.completed",
   "run.completed",
   "run.failed",
@@ -34,6 +37,7 @@ export default function ResearchWorkspace() {
   const params = useParams<{ runId: string }>();
   const runId = params.runId;
   const [run, setRun] = useState<ResearchRun | null>(null);
+  const [plan, setPlan] = useState<ResearchPlan | null>(null);
   const [events, setEvents] = useState<ResearchEventData[]>([]);
   const [connection, setConnection] = useState("正在连接");
   const [error, setError] = useState<string | null>(null);
@@ -52,9 +56,13 @@ export default function ResearchWorkspace() {
 
     async function start() {
       try {
-        const initial = await getResearchRun(runId);
+        const [initial, initialPlan] = await Promise.all([
+          getResearchRun(runId),
+          getResearchPlan(runId),
+        ]);
         if (cancelled) return;
         setRun(initial);
+        setPlan(initialPlan);
         if (["completed", "failed", "cancelled"].includes(initial.status)) {
           setConnection("已结束");
           return;
@@ -71,6 +79,9 @@ export default function ResearchWorkspace() {
           if (data.message !== "事件流已连接") {
             setEvents((current) => [...current, data]);
           }
+          if (message.type === "research.plan.completed") {
+            void getResearchPlan(runId).then(setPlan);
+          }
           setRun((current) =>
             current
               ? {
@@ -85,7 +96,13 @@ export default function ResearchWorkspace() {
             message.type === "run.completed" ||
             message.type === "run.failed"
           ) {
-            getResearchRun(runId).then(setRun);
+            void Promise.all([
+              getResearchRun(runId),
+              getResearchPlan(runId),
+            ]).then(([latestRun, latestPlan]) => {
+              setRun(latestRun);
+              setPlan(latestPlan);
+            });
             source?.close();
             setConnection("已结束");
           }
@@ -207,6 +224,56 @@ export default function ResearchWorkspace() {
                   );
                 })}
               </div>
+            </section>
+
+            <section className="rounded-3xl border border-[#d8d3c7] bg-white p-6">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-semibold">结构化研究计划</h2>
+                {plan && (
+                  <span className="rounded-full bg-[#edf3ef] px-2.5 py-1 text-xs text-[#2f6f5e]">
+                    {plan.model}
+                  </span>
+                )}
+              </div>
+              {plan ? (
+                <div className="mt-4 space-y-5 text-sm">
+                  <p className="leading-6 text-[#4f5953]">{plan.summary}</p>
+                  <div>
+                    <h3 className="font-semibold text-[#7b4f2f]">核心问题</h3>
+                    <ol className="mt-2 space-y-3">
+                      {plan.questions.map((question, index) => (
+                        <li
+                          className="rounded-2xl bg-[#f6f3ec] p-3"
+                          key={question.id}
+                        >
+                          <p className="font-medium">
+                            {index + 1}. {question.question}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-[#737a75]">
+                            {question.rationale}
+                          </p>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-[#7b4f2f]">预期交付物</h3>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-[#4f5953]">
+                      {plan.deliverables.map((deliverable) => (
+                        <li key={deliverable}>{deliverable}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <p className="border-t border-[#e5e0d6] pt-3 text-xs text-[#777c78]">
+                    {plan.provider} · {plan.duration_ms} ms ·{" "}
+                    {plan.total_tokens ?? "—"} tokens
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-[#737a75]">
+                  等待真实 LLM 规划结果。默认模拟模式不会生成这部分数据。
+                </p>
+              )}
             </section>
 
             <section className="rounded-3xl border border-[#d8d3c7] bg-[#ebe5d9] p-6">

@@ -1,8 +1,8 @@
 # ResearchFlow 使用、开发与运维手册
 
-> 适用阶段：模拟 MVP 纵向闭环
+> 适用阶段：M1 真实 LLM 最小接入
 > 主要平台：Windows 10 / 11 + PowerShell
-> 最后更新：2026-08-23
+> 最后更新：2026-08-24
 
 本文是 ResearchFlow 的统一运行手册，回答以下问题：
 
@@ -11,9 +11,10 @@
 - 日常开发时如何启动、检查、停止和重启服务；
 - 数据放在哪里，如何备份与重置；
 - 常见故障如何定位；
-- 未来接入真实 LLM、搜索、RAG 等服务后，运行方式会如何扩展。
+- 如何在默认模拟模式和真实 LLM 规划模式之间切换；
+- 未来接入搜索、RAG 等服务后，运行方式会如何扩展。
 
-项目当前仍是本地模拟 MVP。文中标注为“未来”的操作是维护预案，不代表对应能力已经实现。
+项目已完成 M1：真实 LLM 可以生成结构化研究计划；检索、证据与引用仍未实现。文中标注为“未来”的操作是维护预案，不代表对应能力已经实现。
 
 ## 1. 当前产品由什么组成
 
@@ -22,8 +23,8 @@
 | Web 前端 | Next.js | http://127.0.0.1:3000 | 是 |
 | API 后端 | FastAPI | http://127.0.0.1:8000 | 是 |
 | 本地数据库 | SQLite | `var/researchflow.db` | 由后端自动使用 |
-| 研究工作流 | Python 模拟工作流 | 后端进程内 | 由后端自动运行 |
-| LLM | 尚未接入 | 无 | 否 |
+| 研究工作流 | 模拟或 LLM 规划工作流 | 后端进程内 | 由后端自动运行 |
+| LLM | OpenAI-compatible HTTP 适配器 | 远程或本地兼容服务 | 仅 `llm` 模式需要 |
 | 网页/论文搜索 | 尚未接入 | 无 | 否 |
 | 向量数据库 / RAG | 尚未接入 | 无 | 否 |
 
@@ -44,7 +45,7 @@
 调研学术界和工业界对 AI 代码生成工具的评测方法，并设计一份覆盖代码质量、安全性和开发效率的评测方案。
 ```
 
-当前输出是模拟报告，不会访问互联网、论文数据库或真实模型。演示时应主动说明这一边界。
+默认 `simulation` 模式输出模拟报告，不访问互联网、论文数据库或真实模型。`llm` 模式会真实生成并展示研究计划，但后续检索、分析和报告仍是演示逻辑。演示时应主动说明这一边界。
 
 ## 3. 第一次初始化开发环境
 
@@ -99,13 +100,15 @@ npm install --prefix apps/web
 Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
-预期返回：
+预期返回中包含：
 
 ```text
-status
-------
-ok
+status workflow_mode
+------ -------------
+ok     simulation
 ```
+
+切换为真实规划后，`workflow_mode` 显示 `llm`。
 
 也可以打开 http://localhost:8000/docs 查看 FastAPI 自动生成的接口文档。
 
@@ -193,9 +196,15 @@ Get-NetTCPConnection -State Listen |
 | `RESEARCHFLOW_ENVIRONMENT` | 环境名称 | `development` |
 | `RESEARCHFLOW_DATABASE_URL` | 数据库连接地址 | SQLite 文件 |
 | `RESEARCHFLOW_CORS_ORIGINS` | 允许访问 API 的前端来源 | `http://localhost:3000` |
-| `RESEARCHFLOW_SIMULATION_STEP_DELAY` | 模拟阶段之间的等待秒数 | `0.7` |
+| `RESEARCHFLOW_SIMULATION_STEP_DELAY` | 演示阶段之间的等待秒数 | `0.7` |
+| `RESEARCHFLOW_WORKFLOW_MODE` | `simulation` 或 `llm` | `simulation` |
+| `RESEARCHFLOW_LLM_PROVIDER` | 计划记录中的供应商标识 | `openai-compatible` |
+| `RESEARCHFLOW_LLM_MODEL` | 模型服务识别的模型名 | 空 |
+| `RESEARCHFLOW_LLM_API_KEY` | 模型鉴权密钥；本地服务可留空 | 空 |
+| `RESEARCHFLOW_LLM_BASE_URL` | 兼容 API 根地址 | `https://api.openai.com/v1` |
+| `RESEARCHFLOW_LLM_TIMEOUT_SECONDS` | 单次模型请求超时秒数 | `60` |
 
-修改 `.env` 后应重启后端。
+修改 `.env` 后应重启后端。`llm` 模式必须配置非空模型名；API Key 使用 `SecretStr` 读取，不会出现在正常配置打印中。
 
 ### 6.2 前端 API 地址
 
@@ -215,26 +224,38 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 修改后应重启前端。`.env.local` 已被仓库的忽略规则覆盖，不应提交。
 
-### 6.3 当前预留但尚未生效的配置
+### 6.3 启用真实 LLM 规划
 
-`.env.example` 中的以下变量是未来占位符，当前代码还没有读取它们：
+先确认服务支持 Chat Completions 的 `/chat/completions` 路径和 `response_format.type=json_schema`。把仓库根目录 `.env` 中相关配置改为：
 
-- `LLM_PROVIDER`
-- `LLM_MODEL`
-- `OPENAI_API_KEY`
-- `OPENAI_BASE_URL`
-- `SEARCH_PROVIDER`
-- `TAVILY_API_KEY`
-- `RESEARCHFLOW_LOG_LEVEL`
-- `RESEARCHFLOW_DATA_DIR`
+```dotenv
+RESEARCHFLOW_WORKFLOW_MODE=llm
+RESEARCHFLOW_LLM_PROVIDER=openai-compatible
+RESEARCHFLOW_LLM_MODEL=供应商提供的模型名
+RESEARCHFLOW_LLM_API_KEY=本机真实密钥
+RESEARCHFLOW_LLM_BASE_URL=https://供应商地址/v1
+RESEARCHFLOW_LLM_TIMEOUT_SECONDS=60
+```
 
-现在填写这些变量不会让模拟工作流自动变成真实研究工作流。接入对应适配器时，需要同时更新代码、`.env.example` 和本文。
+重启后端并访问 `/health`，确认 `workflow_mode` 为 `llm`。创建任务后，规划阶段会访问模型服务；成功时工作区出现结构化计划，失败时任务进入 `failed` 并显示安全错误。
+
+要回到完全离线、无费用的模式，只需设置：
+
+```dotenv
+RESEARCHFLOW_WORKFLOW_MODE=simulation
+```
+
+然后重启后端。不要把真实密钥复制回 `.env.example`、README、聊天截图或 Git Commit。
+
+### 6.4 当前仍未生效的搜索配置
+
+`SEARCH_PROVIDER` 和 `TAVILY_API_KEY` 只是未来占位符，当前代码不会读取，也不会执行真实网页或论文搜索。
 
 ## 7. 本地数据、备份与重置
 
 ### 7.1 数据位置
 
-当前研究任务、事件和报告保存在：
+当前研究任务、结构化计划、事件和报告保存在：
 
 ```text
 var/researchflow.db
@@ -251,8 +272,8 @@ var/researchflow.db
 | SQLite 引擎与 `sqlite3` 接口 | 本机已有的 Python 3.12 | 直接打开和读写数据库文件 |
 | aiosqlite | 项目 `.venv` | 为 SQLite 提供适合 `async/await` 的桥接接口 |
 | SQLAlchemy | 项目 `.venv` | 管理表映射、查询、Session 和事务 |
-| `SqliteResearchRepository` | ResearchFlow 源代码 | 向业务层提供创建、查询、更新和事件保存能力 |
-| 数据库文件 | `var/researchflow.db` | 持久保存任务、事件和报告 |
+| `SqliteResearchRepository` | ResearchFlow 源代码 | 保存任务、结构化计划、状态和事件 |
+| 数据库文件 | `var/researchflow.db` | 持久保存任务、结构化计划、事件和报告 |
 
 后端启动时会自动创建数据库目录、文件和当前所需的表。SQLite 没有独立端口；关闭后端后也就没有 ResearchFlow 进程在使用它，但数据库文件仍然存在。
 
@@ -268,7 +289,7 @@ var/researchflow.db
 .\.venv\Scripts\python.exe -c 'import sqlite3; db=sqlite3.connect("file:var/researchflow.db?mode=ro", uri=True); print(db.execute("SELECT COUNT(*) FROM research_runs").fetchone()[0]); db.close()'
 ```
 
-两个命令都使用 Python 自带的 `sqlite3` 接口和只读模式，不会修改数据库。概念解释见 [SQLite 与数据持久化课程](../learning/lessons/0003-understand-sqlite-persistence.html)。
+两个命令都使用 Python 自带的 `sqlite3` 接口和只读模式，不会修改数据库。当前业务表包括 `research_runs`、`research_plans` 和 `research_events`。概念解释见 [SQLite 与数据持久化课程](../learning/lessons/0003-understand-sqlite-persistence.html)。
 
 ### 7.3 备份
 
@@ -365,6 +386,17 @@ npm run build --prefix apps/web
 4. 再启动单个后端验证；
 5. 只有确认数据可舍弃时才按第 7.4 节重置。
 
+### 9.6 LLM 模式启动或运行失败
+
+1. `/health` 仍显示 `simulation`：确认修改的是仓库根目录 `.env`，然后完整重启后端；
+2. 启动时报模型名缺失：设置 `RESEARCHFLOW_LLM_MODEL`；
+3. `LLM_CONNECTION_ERROR`：检查 Base URL、网络或本地模型服务是否启动；
+4. `LLM_HTTP_ERROR`：检查状态码、模型名、权限和余额，但不要把完整 Key 发到聊天或日志；
+5. `LLM_INVALID_RESPONSE`：服务可能不支持严格 JSON Schema，或所选模型没有按 Schema 返回；
+6. `LLM_TIMEOUT`：确认服务状态，必要时谨慎提高超时。
+
+模型错误事件不会包含密钥或原始响应正文。真实服务兼容性与费用需要使用者根据供应商文档自行确认。
+
 ## 10. Git 与敏感信息
 
 提交前检查：
@@ -411,15 +443,15 @@ npm run start --prefix apps/web -- --hostname 127.0.0.1
 
 这只是本地生产模式预览，不等于已经可以安全公开部署。当前项目尚未加入用户鉴权、HTTPS、限流、正式数据库迁移、生产日志与备份策略。
 
-## 12. 未来接入 LLM、搜索和 RAG 后
+## 12. 当前 LLM 接入与未来搜索、RAG
 
-### 12.1 两种 LLM 运行方式
+### 12.1 两种已支持的 LLM 连接方式
 
-**远程模型 API：**模型运行在提供商服务器上，本机不需要启动 LLM 服务。后端通过 HTTPS 调用模型；需要配置 Provider、模型名、Base URL 和 API Key。
+**远程模型 API：**模型运行在提供商服务器上，本机不需要启动 LLM 服务。后端通过 HTTPS 调用模型；通常需要模型名、Base URL 和 API Key。
 
-**本地模型服务：**模型运行在本机独立进程中，并向 ResearchFlow 提供 HTTP API。它可能需要较多内存、显存和磁盘。具体启动命令取决于未来选择的运行器，在技术选型确定前不在本文虚构命令。
+**本地兼容服务：**模型运行在本机独立进程中，并向 ResearchFlow 提供 OpenAI-compatible HTTP API。本项目不自动安装或启动模型运行器；内存、显存、磁盘和启动命令取决于你选择的运行器。若服务不要求鉴权，可将 API Key 留空。
 
-无论选择哪种方式，ResearchFlow 都应通过自己的 LLM 适配器调用模型，不能让工作流直接依赖某一家 SDK。
+两种方式都经过 `OpenAICompatibleLLMClient`，工作流不直接依赖某一家 SDK。当前要求服务支持 Chat Completions 和 JSON Schema 结构化输出。
 
 ### 12.2 未来推荐启动顺序
 
@@ -444,7 +476,7 @@ npm run start --prefix apps/web -- --hostname 127.0.0.1
 - 向量库是否可查询；
 - 后台任务执行器是否在线。
 
-当前 `/health` 只表示 FastAPI 进程能够响应，不代表未来所有外部依赖都健康。
+当前 `/health` 表示 FastAPI 进程能够响应，并返回所选工作流模式；它不会主动请求 LLM，也不代表外部依赖健康。
 
 ### 12.4 未来配置原则
 
@@ -459,7 +491,7 @@ npm run start --prefix apps/web -- --hostname 127.0.0.1
 1. `git status` 确认没有意外文件；
 2. 运行后端测试、Ruff、前端 ESLint 和生产构建；
 3. 备份需要保留的本地数据库；
-4. 启动后端并检查 `/health`；
+4. 确认 `.env` 使用预期演示模式，启动后端并检查 `/health`；
 5. 启动前端并刷新 Dashboard；
 6. 创建一次演示任务并确认 SSE 进度、报告和历史记录；
 7. 确认屏幕和日志中没有 API Key、个人路径或敏感数据；

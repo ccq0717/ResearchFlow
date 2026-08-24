@@ -6,21 +6,51 @@ from fastapi.middleware.cors import CORSMiddleware
 from researchflow.api.routes import router
 from researchflow.application.research_runs import ResearchRunApplication
 from researchflow.core.config import Settings, get_settings
+from researchflow.integrations.llm.base import LLMClient
+from researchflow.integrations.llm.openai_compatible import OpenAICompatibleLLMClient
 from researchflow.persistence.database import (
     create_engine,
     create_schema,
     create_session_factory,
 )
 from researchflow.persistence.repository import SqliteResearchRepository
+from researchflow.workflows.llm_research import LLMResearchWorkflow
 from researchflow.workflows.simulated import SimulatedResearchWorkflow
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    llm_client: LLMClient | None = None,
+) -> FastAPI:
     resolved_settings = settings or get_settings()
     resolved_settings.ensure_runtime_directories()
     engine = create_engine(resolved_settings.database_url)
     repository = SqliteResearchRepository(create_session_factory(engine))
-    workflow = SimulatedResearchWorkflow(repository, resolved_settings.simulation_step_delay)
+
+    if resolved_settings.workflow_mode == "llm":
+        client = llm_client or OpenAICompatibleLLMClient(
+            base_url=str(resolved_settings.llm_base_url),
+            model=resolved_settings.llm_model,
+            api_key=(
+                resolved_settings.llm_api_key.get_secret_value()
+                if resolved_settings.llm_api_key is not None
+                else None
+            ),
+            timeout_seconds=resolved_settings.llm_timeout_seconds,
+            provider=resolved_settings.llm_provider,
+        )
+        workflow = LLMResearchWorkflow(
+            repository,
+            client,
+            resolved_settings.simulation_step_delay,
+        )
+    else:
+        workflow = SimulatedResearchWorkflow(
+            repository,
+            resolved_settings.simulation_step_delay,
+        )
+
     application = ResearchRunApplication(repository, workflow)
 
     @asynccontextmanager
@@ -42,7 +72,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health")
     async def health() -> dict[str, str]:
-        return {"status": "ok"}
+        return {
+            "status": "ok",
+            "workflow_mode": resolved_settings.workflow_mode,
+        }
 
     return app
 

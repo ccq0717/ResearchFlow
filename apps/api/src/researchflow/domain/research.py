@@ -52,3 +52,25 @@ class ResearchEvent:
     progress: int | None
     payload: dict[str, Any] | None
     created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchQuestion:
+    id: str
+    question: str
+    rationale: str
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchPlan:
+    run_id: UUID
+    summary: str
+    questions: tuple[ResearchQuestion, ...]
+    deliverables: tuple[str, ...]
+    provider: str
+    model: str
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+    duration_ms: int
+    created_at: datetime

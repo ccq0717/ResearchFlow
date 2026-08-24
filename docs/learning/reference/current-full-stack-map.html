@@ -17,13 +17,16 @@
     <tbody>
       <tr><td>Dashboard</td><td>目标输入、创建按钮、历史列表</td><td><code>apps/web/src/app/page.tsx</code></td><td>浏览器页面和 Console</td></tr>
       <tr><td>前端 API 客户端</td><td>组织 HTTP 请求、解析 JSON</td><td><code>apps/web/src/lib/api.ts</code></td><td>Network 面板</td></tr>
-      <tr><td>Research Workspace</td><td>显示任务、SSE 进度和报告</td><td><code>apps/web/src/app/research/[runId]/page.tsx</code></td><td>Network 中的 <code>/events</code></td></tr>
+      <tr><td>Research Workspace</td><td>显示任务、计划、SSE 进度和报告</td><td><code>apps/web/src/app/research/[runId]/page.tsx</code></td><td>Network 中的 <code>/events</code></td></tr>
       <tr><td>FastAPI 路由</td><td>HTTP 与应用用例之间的转换</td><td><code>apps/api/src/researchflow/api/routes.py</code></td><td>后端终端和 API Docs</td></tr>
       <tr><td>应用层</td><td>创建任务、安排工作流</td><td><code>application/research_runs.py</code></td><td>任务状态与单元测试</td></tr>
-      <tr><td>模拟工作流</td><td>推进阶段、生成事件和报告</td><td><code>workflows/simulated.py</code></td><td>SSE 日志和任务进度</td></tr>
-      <tr><td>Repository</td><td>保存、查询、更新任务和事件</td><td><code>persistence/repository.py</code></td><td>数据库记录和测试</td></tr>
+      <tr><td>工作流接口</td><td>隔离模拟与真实规划执行</td><td><code>workflows/base.py</code></td><td>装配配置和工作流测试</td></tr>
+      <tr><td>模拟工作流</td><td>不联网推进阶段、生成事件和报告</td><td><code>workflows/simulated.py</code></td><td>SSE 日志和任务进度</td></tr>
+      <tr><td>LLM 规划工作流</td><td>生成并保存真实结构化计划</td><td><code>workflows/llm_research.py</code></td><td>研究计划和失败代码</td></tr>
+      <tr><td>LLM 适配器</td><td>封装 HTTP、鉴权、Schema 和解析</td><td><code>integrations/llm/</code></td><td>适配器测试和后端错误</td></tr>
+      <tr><td>Repository</td><td>保存、查询、更新任务、计划和事件</td><td><code>persistence/repository.py</code></td><td>数据库记录和测试</td></tr>
       <tr><td>数据库连接</td><td>创建 Engine、Session 和表</td><td><code>persistence/database.py</code></td><td>后端启动和数据库文件</td></tr>
-      <tr><td>SQLite 文件</td><td>持久保存任务、事件和报告</td><td><code>var/researchflow.db</code></td><td>文件存在性和只读查询</td></tr>
+      <tr><td>SQLite 文件</td><td>持久保存任务、计划、事件和报告</td><td><code>var/researchflow.db</code></td><td>文件存在性和只读查询</td></tr>
     </tbody>
   </table>
 
@@ -36,8 +39,12 @@
   → var/researchflow.db
   → HTTP 201 + run.id 返回前端</code></pre>
 
-  <h2>实时进度的主路径</h2>
-  <pre><code>SimulatedResearchWorkflow
+  <h2>LLM 计划与实时进度的主路径</h2>
+  <pre><code>LLMResearchWorkflow → LLMClient → research_plans
+  → research.plan.completed
+  → 前端读取 /plan 并展示
+
+SimulatedResearchWorkflow 或 LLMResearchWorkflow
   → Repository 保存 research_events
   → FastAPI StreamingResponse
   → 浏览器 EventSource
@@ -45,7 +52,7 @@
   → 进度条和实时日志重绘</code></pre>
 
   <div class="callout success"><strong>定位原则：</strong>页面样式先看组件；请求失败先看 Network 和路由；状态错误看应用层与工作流；刷新后数据错误看 Repository 和 SQLite；实时更新错误看事件表与 SSE。</div>
-  <p class="footer"><a href="../lessons/0002-follow-a-research-request.html">学习完整请求链路</a> · <a href="../lessons/0003-understand-sqlite-persistence.html">学习 SQLite 持久化</a> · <a href="../../guides/development-and-operations.md">查看运维手册</a></p>
+  <p class="footer"><a href="../lessons/0002-follow-a-research-request.html">学习完整请求链路</a> · <a href="../lessons/0003-understand-sqlite-persistence.html">学习 SQLite 持久化</a> · <a href="../lessons/0004-understand-llm-adapters.html">学习 LLM 适配器</a> · <a href="../../guides/development-and-operations.md">查看运维手册</a></p>
 </main>
 </body>
 </html>
