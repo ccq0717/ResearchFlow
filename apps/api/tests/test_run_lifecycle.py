@@ -44,6 +44,38 @@ async def test_sse_stream_contains_terminal_events(tmp_path: Path) -> None:
             assert "event: run.completed" in body
 
 
+async def test_event_history_survives_reopen_and_keeps_utc_offset(tmp_path: Path) -> None:
+    database_path = tmp_path / "event-history.db"
+    app = create_app(_settings(database_path))
+
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            created = await client.post(
+                "/api/research-runs",
+                json={"goal": "验证重新打开研究记录后可以恢复完整事件历史"},
+            )
+            run_id = created.json()["id"]
+            for _ in range(100):
+                detail = await client.get(f"/api/research-runs/{run_id}")
+                if detail.json()["status"] == "completed":
+                    break
+                await asyncio.sleep(0.01)
+
+    reopened = create_app(_settings(database_path))
+    async with reopened.router.lifespan_context(reopened):
+        async with AsyncClient(
+            transport=ASGITransport(app=reopened),
+            base_url="http://test",
+        ) as client:
+            history = await client.get(f"/api/research-runs/{run_id}/events/history")
+            items = history.json()["items"]
+
+            assert history.status_code == 200
+            assert items[0]["type"] == "run.queued"
+            assert items[-1]["type"] == "run.completed"
+            assert all(item["created_at"].endswith(("Z", "+00:00")) for item in items)
+
+
 async def test_shutdown_marks_active_run_as_interrupted(tmp_path: Path) -> None:
     database_path = tmp_path / "shutdown.db"
     app = create_app(_settings(database_path, step_delay=10))

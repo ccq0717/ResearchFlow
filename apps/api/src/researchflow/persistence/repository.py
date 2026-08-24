@@ -281,6 +281,14 @@ class SqliteResearchRepository:
         )
 
     @staticmethod
+    def _as_utc(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+    @staticmethod
     def _run_to_row(run: ResearchRun) -> ResearchRunRow:
         return ResearchRunRow(
             id=str(run.id),
@@ -310,10 +318,10 @@ class SqliteResearchRepository:
             report_markdown=row.report_markdown,
             error_code=row.error_code,
             error_message=row.error_message,
-            created_at=row.created_at,
-            updated_at=row.updated_at,
-            started_at=row.started_at,
-            completed_at=row.completed_at,
+            created_at=SqliteResearchRepository._as_utc(row.created_at),
+            updated_at=SqliteResearchRepository._as_utc(row.updated_at),
+            started_at=SqliteResearchRepository._as_utc(row.started_at),
+            completed_at=SqliteResearchRepository._as_utc(row.completed_at),
         )
 
     @staticmethod
@@ -336,7 +344,7 @@ class SqliteResearchRepository:
             output_tokens=row.output_tokens,
             total_tokens=row.total_tokens,
             duration_ms=row.duration_ms,
-            created_at=row.created_at,
+            created_at=SqliteResearchRepository._as_utc(row.created_at),
         )
 
     @staticmethod
@@ -349,5 +357,5 @@ class SqliteResearchRepository:
             message=row.message,
             progress=row.progress,
             payload=row.payload,
-            created_at=row.created_at,
+            created_at=SqliteResearchRepository._as_utc(row.created_at),
         )

@@ -9,11 +9,13 @@ import {
   apiBaseUrl,
   getResearchPlan,
   getResearchRun,
+  listResearchEvents,
   type ResearchEventData,
   type ResearchPlan,
   type ResearchRun,
   type ResearchStage,
 } from "@/lib/api";
+import { formatEventTime } from "@/lib/format";
 
 const stages: Array<{ id: ResearchStage; label: string }> = [
   { id: "planning", label: "规划问题" },
@@ -58,20 +60,27 @@ export default function ResearchWorkspace() {
 
     async function start() {
       try {
-        const [initial, initialPlan] = await Promise.all([
+        const [initial, initialPlan, initialEvents] = await Promise.all([
           getResearchRun(runId),
           getResearchPlan(runId),
+          listResearchEvents(runId),
         ]);
         if (cancelled) return;
         setRun(initial);
         setPlan(initialPlan);
+        setEvents(initialEvents);
         if (["completed", "failed", "cancelled"].includes(initial.status)) {
           setConnection("已结束");
           return;
         }
 
+        const lastSequence = initialEvents.at(-1)?.sequence ?? 0;
         source = new EventSource(
-          apiBaseUrl + "/api/research-runs/" + runId + "/events",
+          apiBaseUrl +
+            "/api/research-runs/" +
+            runId +
+            "/events?after=" +
+            lastSequence,
         );
         source.onopen = () => setConnection("实时连接");
 
@@ -79,7 +88,11 @@ export default function ResearchWorkspace() {
           const message = raw as MessageEvent<string>;
           const data = JSON.parse(message.data) as ResearchEventData;
           if (data.message !== "事件流已连接") {
-            setEvents((current) => [...current, data]);
+            setEvents((current) =>
+              current.some((event) => event.sequence === data.sequence)
+                ? current
+                : [...current, data],
+            );
           }
           if (message.type === "research.plan.completed") {
             void getResearchPlan(runId).then(setPlan);
@@ -236,14 +249,14 @@ export default function ResearchWorkspace() {
                 {events.length === 0 && (
                   <p className="text-sm text-[#6d746f]">等待工作流事件…</p>
                 )}
-                {events.map((event, index) => (
+                {events.map((event) => (
                   <div
                     className="border-l-2 border-[#a7b8af] pl-3 text-sm"
-                    key={index}
+                    key={event.sequence}
                   >
                     <p>{event.message}</p>
                     <p className="mt-1 text-xs text-[#777c78]">
-                      {new Date(event.created_at).toLocaleTimeString("zh-CN")}
+                      {formatEventTime(event.created_at)}
                     </p>
                   </div>
                 ))}

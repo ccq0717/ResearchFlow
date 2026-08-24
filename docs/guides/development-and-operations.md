@@ -37,7 +37,7 @@
 3. 在“你想研究什么？”文本框输入至少 10 个字符的研究目标。
 4. 点击“开始研究”。
 5. 在 Research Workspace 查看阶段、进度、实时日志和最终报告。
-6. 返回 Dashboard，可从“研究记录”重新打开已保存任务。
+6. 返回 Dashboard，可从“研究记录”查看完成/更新时间并重新打开已保存任务；重新进入后会恢复完整工作日志。
 
 推荐演示输入：
 
@@ -122,6 +122,8 @@ npm run dev -- --hostname 127.0.0.1
 ```
 
 看到 Next.js 显示 Ready 后，打开 http://localhost:3000。
+
+开发模式左下角的 `N` 是 Next.js 16 自带的开发指示器（Dev Indicator），用于查看当前 Route、Bundler 等开发信息，不属于 ResearchFlow 产品界面，也不会出现在生产模式页面。可以在 `next.config.ts` 中通过 `devIndicators` 调整位置或关闭；当前保留默认设置，方便开发诊断。
 
 ### 4.3 推荐启动顺序
 
@@ -379,10 +381,10 @@ npm run build --prefix apps/web
 
 1. 检查 `/api/research-runs/{id}/events` 请求是否仍处于连接状态；
 2. 检查后端是否仍在运行；
-3. 刷新任务页面；已保存的事件应允许页面恢复状态；
+3. 刷新或重新进入任务页面；前端会先读取 `/events/history` 恢复已保存日志，再从最后事件序号继续 SSE；
 4. 区分“SSE 连接中断”和“研究任务失败”，两者不是同一件事。
 
-详细协议见 [SSE 事件契约](../architecture/sse-events.md)，入门解释见 [SSE 第一课](../learning/lessons/0001-understand-sse.html)。
+详细协议见 [SSE 事件契约](../architecture/sse-events.md)，入门解释见 [SSE 第一课](../learning/lessons/0001-understand-sse.html)。SQLite 取回的时间可能没有时区信息，Repository 会将其恢复为 UTC；API 输出 `Z`/`+00:00`，前端再按浏览器本地时区展示。
 
 ### 9.4 修改代码后没有生效
 

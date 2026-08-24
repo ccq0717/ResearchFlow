@@ -49,7 +49,9 @@ export interface ResearchPlan {
 }
 
 export interface ResearchEventData {
+  sequence: number;
   run_id: string;
+  type: string;
   stage: ResearchStage | null;
   message: string;
   progress: number | null;
@@ -90,6 +92,15 @@ export async function listResearchRuns(): Promise<ResearchRun[]> {
 
 export function getResearchRun(runId: string): Promise<ResearchRun> {
   return request<ResearchRun>("/api/research-runs/" + runId);
+}
+
+export async function listResearchEvents(
+  runId: string,
+): Promise<ResearchEventData[]> {
+  const response = await request<{ items: ResearchEventData[] }>(
+    "/api/research-runs/" + runId + "/events/history",
+  );
+  return response.items;
 }
 
 export async function getResearchPlan(

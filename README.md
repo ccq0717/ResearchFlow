@@ -8,11 +8,12 @@ ResearchFlow 是一个以证据为核心的 AI 深度研究工作台。它将开
 
 仓库目前已完成 M0 全栈闭环和 M1 真实 LLM 最小接入：
 
-- 在 Next.js Dashboard 中创建任务，并在 Research Workspace 查看 SSE 实时进度；
+- 在 Next.js Dashboard 中创建任务，并在 Research Workspace 查看 SSE 实时进度；重新进入任务时会恢复持久化日志；
 - 使用 SQLite 持久化研究任务、事件、结构化研究计划和演示报告；
 - 默认模拟模式无需 API Key、外部服务、Docker 或 GPU；
 - LLM 模式可通过 OpenAI-compatible HTTP 服务生成结构化研究计划；
-- 前端展示计划摘要、核心研究问题、交付物、模型、耗时和 Token 用量；
+- 前端展示计划摘要、核心研究问题、交付物、模型、人类可读耗时和 Token 用量；
+- API 始终输出带 UTC 标记的时间，前端按浏览器本地时区显示事件与研究记录时间；
 - Fake LLM 与 Mock HTTP 测试显式隔离本机 `.env`，保证自动化测试不联网、不产生 API 费用；
 - OpenCode Zen `mimo-v2.5-free` 已通过一次不含敏感内容的真实 API 冒烟测试。
 
@@ -143,6 +144,7 @@ Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completions`�
 - [项目讨论记录](docs/product/project-discussion.md)
 - [项目路线图](docs/product/roadmap.md)
 - [M1 阶段复盘](docs/product/retrospectives/m1.md)
+- [M1 可用性跟进复盘](docs/product/retrospectives/m1-usability-follow-up.md)
 - [MVP 技术规格](docs/product/mvp-spec.md)
 - [领域词汇表](CONTEXT.md)
 - [核心数据模型](docs/architecture/domain-model.md)

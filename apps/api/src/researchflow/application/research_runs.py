@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from researchflow.domain.research import (
+    ResearchEvent,
     ResearchEventDraft,
     ResearchPlan,
     ResearchRun,
@@ -125,6 +126,9 @@ class ResearchRunApplication:
 
     async def get_plan(self, run_id: UUID) -> ResearchPlan | None:
         return await self.repository.get_plan(run_id)
+
+    async def list_events(self, run_id: UUID) -> list[ResearchEvent]:
+        return await self.repository.events_after(run_id, 0)
 
     async def list_runs(self) -> list[ResearchRun]:
         return await self.repository.list_runs()

@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from researchflow.domain.research import (
+    ResearchEvent,
     ResearchPlan,
     ResearchQuestion,
     ResearchRun,
@@ -88,3 +89,31 @@ class ResearchPlanResponse(BaseModel):
 
 class ResearchPlanEnvelope(BaseModel):
     plan: ResearchPlanResponse | None
+
+
+class ResearchEventResponse(BaseModel):
+    sequence: int
+    run_id: UUID
+    type: str
+    stage: ResearchStage | None
+    message: str
+    progress: int | None
+    created_at: datetime
+    payload: dict[str, object]
+
+    @classmethod
+    def from_domain(cls, event: ResearchEvent) -> "ResearchEventResponse":
+        return cls(
+            sequence=event.sequence,
+            run_id=event.run_id,
+            type=event.type,
+            stage=event.stage,
+            message=event.message,
+            progress=event.progress,
+            created_at=event.created_at,
+            payload=event.payload or {},
+        )
+
+
+class ResearchEventListResponse(BaseModel):
+    items: list[ResearchEventResponse]

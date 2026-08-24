@@ -1,4 +1,5 @@
 import type { ResearchPlan } from "@/lib/api";
+import { formatDuration } from "@/lib/format";
 
 interface ResearchPlanPanelProps {
   plan: ResearchPlan | null;
@@ -44,8 +45,11 @@ export function ResearchPlanPanel({ plan }: ResearchPlanPanelProps) {
               ))}
             </ul>
           </div>
-          <p className="border-t border-[#e5e0d6] pt-3 text-xs text-[#777c78]">
-            {plan.provider} · {plan.duration_ms} ms ·{" "}
+          <p
+            className="border-t border-[#e5e0d6] pt-3 text-xs text-[#777c78]"
+            title={`精确模型调用耗时：${plan.duration_ms} ms`}
+          >
+            {plan.provider} · {formatDuration(plan.duration_ms)} ·{" "}
             {plan.total_tokens ?? "—"} tokens
           </p>
         </div>

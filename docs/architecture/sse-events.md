@@ -18,7 +18,7 @@ data: {"run_id":"...","stage":"retrieving","message":"正在检索资料","progr
 
 - `id` 是运行内单调递增的事件序号；
 - `event` 是稳定事件类型；
-- `data` 是 JSON；
+- `data` 是 JSON，其中持久化事件包含 `sequence` 和 `type`；
 - 每个事件以空行结束；
 - 响应 Content-Type 为 `text/event-stream`；
 - 服务端定期发送注释心跳，避免空闲连接被中间层关闭。
@@ -60,8 +60,11 @@ data: {"run_id":"...","stage":"retrieving","message":"正在检索资料","progr
 - 浏览器重连时发送 `Last-Event-ID`；
 - 后端先补发该序号之后的持久化事件，再订阅新事件；
 - 前端按事件序号去重；
+- 页面首次打开时通过 `GET /api/research-runs/{id}/events/history` 读取完整持久化历史；
+- 实时订阅可使用 `?after={sequence}` 从历史最后序号继续，避免重复事件；
 - 运行状态和终结事件在同一个数据库事务中提交；运行已到终态时，补发终结事件后关闭连接；
-- 网络断开不自动将 Research Run 标记为失败。
+- 网络断开不自动将 Research Run 标记为失败；
+- API 时间戳统一携带 `Z` 或 `+00:00` UTC 标记，浏览器负责转换为用户本地时区。
 
 ## 6. 错误原则
 

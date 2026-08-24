@@ -8,6 +8,8 @@ from fastapi.responses import StreamingResponse
 
 from researchflow.api.schemas import (
     CreateResearchRunRequest,
+    ResearchEventListResponse,
+    ResearchEventResponse,
     ResearchPlanEnvelope,
     ResearchPlanResponse,
     ResearchRunListResponse,
@@ -60,11 +62,26 @@ async def get_research_plan(run_id: UUID, request: Request) -> ResearchPlanEnvel
     )
 
 
+@router.get(
+    "/research-runs/{run_id}/events/history",
+    response_model=ResearchEventListResponse,
+)
+async def list_research_events(run_id: UUID, request: Request) -> ResearchEventListResponse:
+    application = _application(request)
+    if await application.get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail={"code": "RUN_NOT_FOUND"})
+    events = await application.list_events(run_id)
+    return ResearchEventListResponse(
+        items=[ResearchEventResponse.from_domain(event) for event in events]
+    )
+
+
 @router.get("/research-runs/{run_id}/events")
 async def stream_research_events(
     run_id: UUID,
     request: Request,
     last_event_id: int | None = Header(default=None, alias="Last-Event-ID"),
+    after: int = 0,
 ) -> StreamingResponse:
     application = _application(request)
     run = await application.get_run(run_id)
@@ -72,11 +89,13 @@ async def stream_research_events(
         raise HTTPException(status_code=404, detail={"code": "RUN_NOT_FOUND"})
 
     async def generate() -> AsyncIterator[str]:
-        sequence = last_event_id or 0
+        sequence = max(last_event_id or 0, after)
         yield _format_sse(
             event_type="stream.ready",
             data={
+                "sequence": sequence,
                 "run_id": str(run_id),
+                "type": "stream.ready",
                 "stage": run.current_stage,
                 "message": "事件流已连接",
                 "progress": run.progress,
@@ -114,7 +133,9 @@ def _format_event(event: ResearchEvent) -> str:
         event_id=event.sequence,
         event_type=event.type,
         data={
+            "sequence": event.sequence,
             "run_id": str(event.run_id),
+            "type": event.type,
             "stage": event.stage,
             "message": event.message,
             "progress": event.progress,

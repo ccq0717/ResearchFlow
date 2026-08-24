@@ -8,6 +8,7 @@ import {
   listResearchRuns,
   type ResearchRun,
 } from "@/lib/api";
+import { formatDateTime } from "@/lib/format";
 
 const exampleGoal =
   "调研学术界和工业界对 AI 代码生成工具的评测方法，并设计一份覆盖代码质量、安全性和开发效率的评测方案。";
@@ -56,7 +57,7 @@ export default function Dashboard() {
           <div className="mb-10 flex items-center justify-between">
             <div className="text-lg font-semibold tracking-tight">ResearchFlow</div>
             <div className="rounded-full border border-white/25 px-3 py-1 text-xs text-white/75">
-              Simulated MVP
+              M1 · LLM Planning
             </div>
           </div>
           <div className="max-w-3xl">
@@ -88,7 +89,7 @@ export default function Dashboard() {
             />
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-[#6d746f]">
-                第一阶段使用模拟工作流，不会调用真实模型或搜索服务。
+                规划阶段可调用真实 LLM；检索、分析和报告阶段当前仍为演示流程。
               </p>
               <button
                 className="rounded-full bg-[#d96f32] px-6 py-3 font-semibold text-white transition hover:bg-[#bd5e2a] disabled:cursor-not-allowed disabled:opacity-50"
@@ -134,6 +135,10 @@ export default function Dashboard() {
                     {statusLabel[run.status]}
                   </span>
                 </div>
+                <p className="mt-3 text-xs text-[#777c78]">
+                  {run.completed_at ? "完成于 " : "更新于 "}
+                  {formatDateTime(run.completed_at ?? run.updated_at)}
+                </p>
                 <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#e7e2d8]">
                   <div
                     className="h-full rounded-full bg-[#d96f32]"
