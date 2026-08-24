@@ -54,6 +54,8 @@ Pydantic 同时负责生成 JSON Schema 和校验响应。即使 HTTP 状态为 
 
 模型调用同时记录 provider、model、耗时和可获得的输入/输出/总 Token 数。这些数据用于调试和后续成本分析，不把 API Key 或原始错误响应写入事件。
 
+配置中的 `RESEARCHFLOW_LLM_BASE_URL` 是 API 根地址，HTTP 适配器会自动追加 `/chat/completions`。`RESEARCHFLOW_LLM_PROVIDER` 当前用于记录接口协议和来源，不是动态适配器选择器；OpenAI-compatible 服务应保持 `openai-compatible`。
+
 ## 5. 错误与安全
 
 | 错误代码 | 含义 | 对用户暴露的内容 |
@@ -65,6 +67,8 @@ Pydantic 同时负责生成 JSON Schema 和校验响应。即使 HTTP 状态为 
 | `WORKFLOW_FAILED` | 非预期工作流错误 | 提示检查后端日志 |
 
 API Key 使用 Pydantic `SecretStr` 读取，只在构造 HTTP Authorization 头时取出。代码、事件、报告和已提交的 `.env.example` 都不得包含真实密钥。
+
+自动化测试显式禁用 `.env` 加载，只使用 Fake 或 Mock，不得读取开发者密钥或访问外部模型。真实供应商兼容性通过单独、人工授权的冒烟测试验证。
 
 ## 6. 为什么当前不直接引入模型 SDK
 

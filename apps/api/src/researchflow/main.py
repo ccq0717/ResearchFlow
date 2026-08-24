@@ -56,8 +56,14 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         await create_schema(engine)
-        yield
-        await engine.dispose()
+        await application.recover_interrupted_runs()
+        try:
+            yield
+        finally:
+            try:
+                await application.shutdown()
+            finally:
+                await engine.dispose()
 
     app = FastAPI(title=resolved_settings.app_name, lifespan=lifespan)
     app.state.research_runs = application

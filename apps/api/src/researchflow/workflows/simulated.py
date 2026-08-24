@@ -1,9 +1,17 @@
 import asyncio
+import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from researchflow.domain.research import ResearchRunStatus, ResearchStage
+from researchflow.domain.research import (
+    ResearchEventDraft,
+    ResearchRunOutcome,
+    ResearchRunStatus,
+    ResearchStage,
+)
 from researchflow.persistence.repository import SqliteResearchRepository
+
+logger = logging.getLogger(__name__)
 
 
 class SimulatedResearchWorkflow:
@@ -51,43 +59,55 @@ class SimulatedResearchWorkflow:
                     progress=progress,
                 )
 
-            report = self._build_report(goal)
-            completed_at = datetime.now(UTC)
-            await self._repository.update(
+            await self._repository.finalize(
                 run_id,
-                status=ResearchRunStatus.COMPLETED,
-                progress=100,
-                report_markdown=report,
-                completed_at=completed_at,
+                ResearchRunOutcome(
+                    status=ResearchRunStatus.COMPLETED,
+                    progress=100,
+                    stage=ResearchStage.FINALIZING,
+                    report_markdown=self._build_report(goal),
+                    error_code=None,
+                    error_message=None,
+                    events=(
+                        ResearchEventDraft(
+                            type="report.completed",
+                            stage=ResearchStage.FINALIZING,
+                            message="模拟研究报告已经生成",
+                            progress=100,
+                        ),
+                        ResearchEventDraft(
+                            type="run.completed",
+                            stage=ResearchStage.FINALIZING,
+                            message="研究任务已完成",
+                            progress=100,
+                        ),
+                    ),
+                ),
             )
-            await self._repository.append_event(
-                run_id,
-                event_type="report.completed",
-                stage=ResearchStage.FINALIZING,
-                message="模拟研究报告已经生成",
-                progress=100,
-            )
-            await self._repository.append_event(
-                run_id,
-                event_type="run.completed",
-                stage=ResearchStage.FINALIZING,
-                message="研究任务已完成",
-                progress=100,
-            )
-        except Exception as error:
-            await self._repository.update(
-                run_id,
+        except Exception:
+            logger.exception("模拟研究工作流执行失败，run_id=%s", run_id)
+            await self._fail_run(run_id)
+
+    async def _fail_run(self, run_id: UUID) -> None:
+        message = "模拟研究工作流执行失败"
+        await self._repository.finalize(
+            run_id,
+            ResearchRunOutcome(
                 status=ResearchRunStatus.FAILED,
+                progress=None,
+                stage=None,
+                report_markdown=None,
                 error_code="SIMULATION_FAILED",
-                error_message="模拟研究工作流执行失败",
-                completed_at=datetime.now(UTC),
-            )
-            await self._repository.append_event(
-                run_id,
-                event_type="run.failed",
-                message="模拟研究工作流执行失败",
-                payload={"code": "SIMULATION_FAILED", "detail": str(error)},
-            )
+                error_message=message,
+                events=(
+                    ResearchEventDraft(
+                        type="run.failed",
+                        message=message,
+                        payload={"code": "SIMULATION_FAILED"},
+                    ),
+                ),
+            ),
+        )
 
     @staticmethod
     def _build_report(goal: str) -> str:

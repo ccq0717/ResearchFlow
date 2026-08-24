@@ -41,6 +41,10 @@ queued → running → completed
 
 终态为 `completed`、`failed`、`cancelled`。终态运行不得重新回到 `running`；重试应创建新的尝试记录或显式重试流程，而不是静默修改历史。
 
+### ResearchRunOutcome
+
+`ResearchRunOutcome` 表示一次运行不可再变化的领域结果，统一携带终态、最终进度、报告或可安全展示的错误，以及该结果必须产生的终结事件。Repository 在同一个 SQLite 事务中更新 `research_runs` 并追加全部终结事件，避免 SSE 观察到“运行已结束、终结事件尚未写入”的竞态。
+
 ### ResearchStage
 
 ```text
@@ -88,7 +92,7 @@ finalizing
 | `payload` | JSON/null | 事件特有的结构化数据 |
 | `created_at` | datetime | UTC 事件时间 |
 
-事件只能追加，不能覆盖。客户端可通过最后收到的事件序号继续订阅。`research.plan.completed` 只携带模型元数据和读取提示，完整计划通过独立 REST API 获取。
+事件只能追加，不能覆盖。客户端可通过最后收到的事件序号继续订阅。终结事件与对应 Research Outcome 原子提交；`research.plan.completed` 只携带模型元数据和读取提示，完整计划通过独立 REST API 获取。
 
 ## 5. 当前持久化
 

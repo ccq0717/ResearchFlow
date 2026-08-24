@@ -1,15 +1,20 @@
 import asyncio
+import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
 from researchflow.domain.research import (
+    ResearchEventDraft,
     ResearchPlan,
     ResearchQuestion,
+    ResearchRunOutcome,
     ResearchRunStatus,
     ResearchStage,
 )
 from researchflow.integrations.llm.base import LLMClient, LLMClientError
 from researchflow.persistence.repository import SqliteResearchRepository
+
+logger = logging.getLogger(__name__)
 
 
 class LLMResearchWorkflow:
@@ -34,10 +39,11 @@ class LLMResearchWorkflow:
         except LLMClientError as error:
             await self._fail_run(run_id, error.code, error.public_message)
         except Exception:
+            logger.exception("研究工作流执行失败，run_id=%s", run_id)
             await self._fail_run(
                 run_id,
                 "WORKFLOW_FAILED",
-                "研究工作流执行失败，请检查后端日志",
+                "研究工作流执行失败，请稍后重试",
             )
 
     async def _start_run(self, run_id: UUID) -> None:
@@ -139,42 +145,50 @@ class LLMResearchWorkflow:
             )
 
     async def _complete_run(self, run_id: UUID, goal: str, plan: ResearchPlan) -> None:
-        completed_at = datetime.now(UTC)
-        await self._repository.update(
+        await self._repository.finalize(
             run_id,
-            status=ResearchRunStatus.COMPLETED,
-            progress=100,
-            report_markdown=self._build_report(goal, plan),
-            completed_at=completed_at,
-        )
-        await self._repository.append_event(
-            run_id,
-            event_type="report.completed",
-            stage=ResearchStage.FINALIZING,
-            message="基于真实研究计划的演示报告已经生成",
-            progress=100,
-        )
-        await self._repository.append_event(
-            run_id,
-            event_type="run.completed",
-            stage=ResearchStage.FINALIZING,
-            message="研究任务已完成",
-            progress=100,
+            ResearchRunOutcome(
+                status=ResearchRunStatus.COMPLETED,
+                progress=100,
+                stage=ResearchStage.FINALIZING,
+                report_markdown=self._build_report(goal, plan),
+                error_code=None,
+                error_message=None,
+                events=(
+                    ResearchEventDraft(
+                        type="report.completed",
+                        stage=ResearchStage.FINALIZING,
+                        message="基于真实研究计划的演示报告已经生成",
+                        progress=100,
+                    ),
+                    ResearchEventDraft(
+                        type="run.completed",
+                        stage=ResearchStage.FINALIZING,
+                        message="研究任务已完成",
+                        progress=100,
+                    ),
+                ),
+            ),
         )
 
     async def _fail_run(self, run_id: UUID, code: str, message: str) -> None:
-        await self._repository.update(
+        await self._repository.finalize(
             run_id,
-            status=ResearchRunStatus.FAILED,
-            error_code=code,
-            error_message=message,
-            completed_at=datetime.now(UTC),
-        )
-        await self._repository.append_event(
-            run_id,
-            event_type="run.failed",
-            message=message,
-            payload={"code": code},
+            ResearchRunOutcome(
+                status=ResearchRunStatus.FAILED,
+                progress=None,
+                stage=None,
+                report_markdown=None,
+                error_code=code,
+                error_message=message,
+                events=(
+                    ResearchEventDraft(
+                        type="run.failed",
+                        message=message,
+                        payload={"code": code},
+                    ),
+                ),
+            ),
         )
 
     @staticmethod

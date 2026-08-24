@@ -12,6 +12,10 @@ _Avoid_: Prompt、问题描述
 从一个研究目标开始，到完成、失败或取消为止的一次独立执行。
 _Avoid_: Session、Job、对话
 
+**Research Outcome（研究结果）**:
+Research Run 到达终态时形成的不可再变化结果，成功时包含报告，失败时包含可安全展示的原因。
+_Avoid_: Terminal Status、最终事件
+
 **Research Plan（研究计划）**:
 研究运行在检索前形成的结构化中间产物，包含计划摘要、研究问题和预期交付物。
 _Avoid_: Agent 思维过程、Prompt

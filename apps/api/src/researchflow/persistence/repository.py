@@ -1,16 +1,21 @@
+import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text, func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
 from researchflow.domain.research import (
     ResearchEvent,
+    ResearchEventDraft,
     ResearchPlan,
     ResearchQuestion,
     ResearchRun,
+    ResearchRunOutcome,
     ResearchRunStatus,
     ResearchStage,
 )
@@ -72,19 +77,32 @@ class SqliteResearchRepository:
     def __init__(self, session_factory: async_sessionmaker) -> None:
         self._sessions = session_factory
 
+    @asynccontextmanager
+    async def _session(self) -> AsyncIterator[AsyncSession]:
+        session = self._sessions()
+        try:
+            yield session
+        except asyncio.CancelledError:
+            # SQLite 提交由工作线程执行。协程取消时必须等待回滚完成，
+            # 否则后台连接可能继续持有写锁，阻塞关闭流程的终态写入。
+            await asyncio.shield(session.rollback())
+            raise
+        finally:
+            await asyncio.shield(session.close())
+
     async def create(self, run: ResearchRun) -> ResearchRun:
-        async with self._sessions() as session:
+        async with self._session() as session:
             session.add(self._run_to_row(run))
             await session.commit()
         return run
 
     async def get(self, run_id: UUID) -> ResearchRun | None:
-        async with self._sessions() as session:
+        async with self._session() as session:
             row = await session.get(ResearchRunRow, str(run_id))
             return self._row_to_run(row) if row else None
 
     async def list_runs(self) -> list[ResearchRun]:
-        async with self._sessions() as session:
+        async with self._session() as session:
             result = await session.scalars(
                 select(ResearchRunRow).order_by(ResearchRunRow.created_at.desc())
             )
@@ -103,7 +121,7 @@ class SqliteResearchRepository:
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
     ) -> ResearchRun:
-        async with self._sessions() as session:
+        async with self._session() as session:
             row = await session.get(ResearchRunRow, str(run_id))
             if row is None:
                 raise KeyError(str(run_id))
@@ -124,6 +142,47 @@ class SqliteResearchRepository:
             if completed_at is not None:
                 row.completed_at = completed_at
             row.updated_at = datetime.now(UTC)
+            await session.commit()
+            await session.refresh(row)
+            return self._row_to_run(row)
+
+    async def finalize(self, run_id: UUID, outcome: ResearchRunOutcome) -> ResearchRun:
+        """在一个事务中保存终态和全部终态事件。"""
+        if not outcome.status.is_terminal:
+            raise ValueError("ResearchRunOutcome must use a terminal status")
+
+        async with self._session() as session:
+            row = await session.get(ResearchRunRow, str(run_id))
+            if row is None:
+                raise KeyError(str(run_id))
+
+            current_sequence = await session.scalar(
+                select(func.max(ResearchEventRow.sequence)).where(
+                    ResearchEventRow.run_id == str(run_id)
+                )
+            )
+            now = datetime.now(UTC)
+            event_rows = [
+                self._event_draft_to_row(
+                    run_id,
+                    sequence=(current_sequence or 0) + offset,
+                    draft=draft,
+                    created_at=now,
+                )
+                for offset, draft in enumerate(outcome.events, start=1)
+            ]
+
+            row.status = outcome.status
+            if outcome.progress is not None:
+                row.progress = outcome.progress
+            if outcome.stage is not None:
+                row.current_stage = outcome.stage
+            row.report_markdown = outcome.report_markdown
+            row.error_code = outcome.error_code
+            row.error_message = outcome.error_message
+            row.completed_at = now
+            row.updated_at = now
+            session.add_all(event_rows)
             await session.commit()
             await session.refresh(row)
             return self._row_to_run(row)
@@ -149,13 +208,13 @@ class SqliteResearchRepository:
             duration_ms=plan.duration_ms,
             created_at=plan.created_at,
         )
-        async with self._sessions() as session:
+        async with self._session() as session:
             await session.merge(row)
             await session.commit()
         return plan
 
     async def get_plan(self, run_id: UUID) -> ResearchPlan | None:
-        async with self._sessions() as session:
+        async with self._session() as session:
             row = await session.get(ResearchPlanRow, str(run_id))
             return self._row_to_plan(row) if row else None
 
@@ -169,7 +228,7 @@ class SqliteResearchRepository:
         progress: int | None = None,
         payload: dict[str, Any] | None = None,
     ) -> ResearchEvent:
-        async with self._sessions() as session:
+        async with self._session() as session:
             current = await session.scalar(
                 select(func.max(ResearchEventRow.sequence)).where(
                     ResearchEventRow.run_id == str(run_id)
@@ -191,7 +250,7 @@ class SqliteResearchRepository:
             return self._row_to_event(row)
 
     async def events_after(self, run_id: UUID, sequence: int) -> list[ResearchEvent]:
-        async with self._sessions() as session:
+        async with self._session() as session:
             result = await session.scalars(
                 select(ResearchEventRow)
                 .where(
@@ -201,6 +260,25 @@ class SqliteResearchRepository:
                 .order_by(ResearchEventRow.sequence)
             )
             return [self._row_to_event(row) for row in result]
+
+    @staticmethod
+    def _event_draft_to_row(
+        run_id: UUID,
+        *,
+        sequence: int,
+        draft: ResearchEventDraft,
+        created_at: datetime,
+    ) -> ResearchEventRow:
+        return ResearchEventRow(
+            run_id=str(run_id),
+            sequence=sequence,
+            type=draft.type,
+            stage=draft.stage,
+            message=draft.message,
+            progress=draft.progress,
+            payload=draft.payload,
+            created_at=created_at,
+        )
 
     @staticmethod
     def _run_to_row(run: ResearchRun) -> ResearchRunRow:

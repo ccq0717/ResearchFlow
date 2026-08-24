@@ -22,6 +22,7 @@ class FailingLLMClient:
 async def test_llm_workflow_generates_and_persists_plan(tmp_path: Path) -> None:
     app = create_app(
         Settings(
+            _env_file=None,
             database_url=f"sqlite+aiosqlite:///{(tmp_path / 'llm.db').as_posix()}",
             workflow_mode="llm",
             llm_model="test-model",
@@ -124,12 +125,13 @@ async def test_openai_compatible_adapter_parses_structured_output() -> None:
 
 def test_llm_settings_validate_required_model_and_base_url() -> None:
     with pytest.raises(ValidationError, match="RESEARCHFLOW_LLM_MODEL"):
-        Settings(workflow_mode="llm")
+        Settings(_env_file=None, workflow_mode="llm")
 
     with pytest.raises(ValidationError):
-        Settings(llm_base_url="not-a-url")
+        Settings(_env_file=None, llm_base_url="not-a-url")
 
     settings = Settings(
+        _env_file=None,
         workflow_mode="llm",
         llm_model="local-model",
         llm_api_key=None,
@@ -140,6 +142,7 @@ def test_llm_settings_validate_required_model_and_base_url() -> None:
 async def test_llm_failure_is_persisted_without_internal_details(tmp_path: Path) -> None:
     app = create_app(
         Settings(
+            _env_file=None,
             database_url=f"sqlite+aiosqlite:///{(tmp_path / 'failure.db').as_posix()}",
             workflow_mode="llm",
             llm_model="test-model",

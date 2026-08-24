@@ -11,6 +11,7 @@ async def test_research_run_completes_and_persists(tmp_path: Path) -> None:
     database_path = tmp_path / "test.db"
     app = create_app(
         Settings(
+            _env_file=None,
             database_url=f"sqlite+aiosqlite:///{database_path.as_posix()}",
             simulation_step_delay=0.01,
         )
@@ -44,6 +45,7 @@ async def test_research_run_completes_and_persists(tmp_path: Path) -> None:
 async def test_short_goal_is_rejected(tmp_path: Path) -> None:
     app = create_app(
         Settings(
+            _env_file=None,
             database_url=f"sqlite+aiosqlite:///{(tmp_path / 'test.db').as_posix()}",
             simulation_step_delay=0,
         )

@@ -185,6 +185,8 @@ Get-NetTCPConnection -State Listen |
 
 先在对应终端按 `Ctrl + C`，确认进程退出，再重新执行启动命令。只修改普通 Python 文件时，后端的 `--reload` 通常会自动重启；修改依赖、环境变量或遇到异常状态时，应手动完整重启。
 
+后端正常关闭时会请求取消正在执行的工作流并等待数据库清理完成；若任务尚未到达终态，则保存为 `failed` 并使用稳定错误码 `RUN_INTERRUPTED`。若进程被强制结束而来不及清理，下次启动会恢复检查，并把遗留的 `queued` 或 `running` 任务标记为同类中断失败，避免任务永远卡住。
+
 ## 6. 配置文件与环境变量
 
 ### 6.1 后端当前实际读取的变量
@@ -198,13 +200,13 @@ Get-NetTCPConnection -State Listen |
 | `RESEARCHFLOW_CORS_ORIGINS` | 允许访问 API 的前端来源 | `http://localhost:3000` |
 | `RESEARCHFLOW_SIMULATION_STEP_DELAY` | 演示阶段之间的等待秒数 | `0.7` |
 | `RESEARCHFLOW_WORKFLOW_MODE` | `simulation` 或 `llm` | `simulation` |
-| `RESEARCHFLOW_LLM_PROVIDER` | 计划记录中的供应商标识 | `openai-compatible` |
+| `RESEARCHFLOW_LLM_PROVIDER` | 接口协议/来源标签；当前不用于动态选择适配器 | `openai-compatible` |
 | `RESEARCHFLOW_LLM_MODEL` | 模型服务识别的模型名 | 空 |
 | `RESEARCHFLOW_LLM_API_KEY` | 模型鉴权密钥；本地服务可留空 | 空 |
-| `RESEARCHFLOW_LLM_BASE_URL` | 兼容 API 根地址 | `https://api.openai.com/v1` |
+| `RESEARCHFLOW_LLM_BASE_URL` | 兼容 API 根地址；客户端追加 `/chat/completions` | `https://api.openai.com/v1` |
 | `RESEARCHFLOW_LLM_TIMEOUT_SECONDS` | 单次模型请求超时秒数 | `60` |
 
-修改 `.env` 后应重启后端。`llm` 模式必须配置非空模型名；API Key 使用 `SecretStr` 读取，不会出现在正常配置打印中。
+修改 `.env` 后应重启后端。`llm` 模式必须配置非空模型名；API Key 使用 `SecretStr` 读取，不会出现在正常配置打印中。`RESEARCHFLOW_LLM_PROVIDER` 保持 `openai-compatible` 即可，它目前只用于记录协议/来源，不会切换适配器。Base URL 应填 API 根地址，不要包含末尾的 `/chat/completions`。
 
 ### 6.2 前端 API 地址
 
@@ -236,6 +238,16 @@ RESEARCHFLOW_LLM_API_KEY=本机真实密钥
 RESEARCHFLOW_LLM_BASE_URL=https://供应商地址/v1
 RESEARCHFLOW_LLM_TIMEOUT_SECONDS=60
 ```
+
+OpenCode Zen 的 MiMo-V2.5 Free 示例：
+
+```dotenv
+RESEARCHFLOW_LLM_PROVIDER=openai-compatible
+RESEARCHFLOW_LLM_MODEL=mimo-v2.5-free
+RESEARCHFLOW_LLM_BASE_URL=https://opencode.ai/zen/v1
+```
+
+直接 API 不使用 `opencode/` 模型前缀；该前缀仅属于 OpenCode 自身的模型配置。根据 OpenCode 官方说明，免费 MiMo 模型的数据可能被用于改进模型，因此不要提交密钥、个人信息、未公开论文或企业敏感资料。详细核对见 [OpenCode Zen API 配置调研](../research/opencode-zen-api.md)。
 
 重启后端并访问 `/health`，确认 `workflow_mode` 为 `llm`。创建任务后，规划阶段会访问模型服务；成功时工作区出现结构化计划，失败时任务进入 `failed` 并显示安全错误。
 
@@ -340,6 +352,8 @@ npm run build --prefix apps/web
 
 一个完整功能改动在提交前至少应运行与该改动相关的检查；跨越前后端的改动建议运行全部四项。
 
+自动化测试通过 `_env_file=None` 明确禁止读取仓库根目录 `.env`，并使用 Fake 或 Mock，因而不会使用本机真实 API Key、访问外部模型或产生费用。真实供应商检查是单独执行、需要明确授权的冒烟测试，不能混入常规测试套件。
+
 ## 9. 常见问题排查
 
 ### 9.1 提示端口已被占用
@@ -393,9 +407,10 @@ npm run build --prefix apps/web
 3. `LLM_CONNECTION_ERROR`：检查 Base URL、网络或本地模型服务是否启动；
 4. `LLM_HTTP_ERROR`：检查状态码、模型名、权限和余额，但不要把完整 Key 发到聊天或日志；
 5. `LLM_INVALID_RESPONSE`：服务可能不支持严格 JSON Schema，或所选模型没有按 Schema 返回；
-6. `LLM_TIMEOUT`：确认服务状态，必要时谨慎提高超时。
+6. `LLM_TIMEOUT`：确认服务状态，必要时谨慎提高超时；
+7. 若请求路径出现重复的 `/chat/completions/chat/completions`，说明 Base URL 填成了完整端点，应改回 API 根地址。
 
-模型错误事件不会包含密钥或原始响应正文。真实服务兼容性与费用需要使用者根据供应商文档自行确认。
+模型错误事件不会包含密钥或原始响应正文。真实服务兼容性、隐私规则与费用需要使用者根据供应商文档自行确认。OpenCode Zen 的当前核对记录见 [OpenCode Zen API 配置调研](../research/opencode-zen-api.md)。
 
 ## 10. Git 与敏感信息
 

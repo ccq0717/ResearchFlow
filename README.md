@@ -13,7 +13,8 @@ ResearchFlow 是一个以证据为核心的 AI 深度研究工作台。它将开
 - 默认模拟模式无需 API Key、外部服务、Docker 或 GPU；
 - LLM 模式可通过 OpenAI-compatible HTTP 服务生成结构化研究计划；
 - 前端展示计划摘要、核心研究问题、交付物、模型、耗时和 Token 用量；
-- Fake LLM 与 Mock HTTP 测试保证自动化测试不联网、不产生 API 费用。
+- Fake LLM 与 Mock HTTP 测试显式隔离本机 `.env`，保证自动化测试不联网、不产生 API 费用；
+- OpenCode Zen `mimo-v2.5-free` 已通过一次不含敏感内容的真实 API 冒烟测试。
 
 当前真实 LLM 只负责规划，检索、分析和报告生成仍为轻量演示。学术搜索、网页检索、证据提取、RAG 和引用验证将在 M2～M4 逐步加入。
 
@@ -127,12 +128,13 @@ npm run build --prefix apps/web
 
 ```dotenv
 RESEARCHFLOW_WORKFLOW_MODE=llm
+RESEARCHFLOW_LLM_PROVIDER=openai-compatible
 RESEARCHFLOW_LLM_MODEL=你的模型名
 RESEARCHFLOW_LLM_API_KEY=你的密钥
 RESEARCHFLOW_LLM_BASE_URL=https://你的兼容服务/v1
 ```
 
-目标服务需支持 Chat Completions 和 JSON Schema 结构化输出。本地兼容服务若不要求鉴权，可将 API Key 留空。修改配置后重启后端；真实密钥不得提交到 Git。完整说明见[使用、开发与运维手册](docs/guides/development-and-operations.md)。
+Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completions`。`RESEARCHFLOW_LLM_PROVIDER` 当前是协议/来源标签，使用兼容服务时保持 `openai-compatible`。目标服务需支持 Chat Completions 和 JSON Schema 结构化输出。本地兼容服务若不要求鉴权，可将 API Key 留空。修改配置后重启后端；真实密钥不得提交到 Git。完整说明见[使用、开发与运维手册](docs/guides/development-and-operations.md)。
 
 ## 项目文档
 
@@ -140,6 +142,7 @@ RESEARCHFLOW_LLM_BASE_URL=https://你的兼容服务/v1
 - [从零学习 ResearchFlow：前后端与 AI 工程课程](docs/learning/README.md)
 - [项目讨论记录](docs/product/project-discussion.md)
 - [项目路线图](docs/product/roadmap.md)
+- [M1 阶段复盘](docs/product/retrospectives/m1.md)
 - [MVP 技术规格](docs/product/mvp-spec.md)
 - [领域词汇表](CONTEXT.md)
 - [核心数据模型](docs/architecture/domain-model.md)
@@ -148,3 +151,4 @@ RESEARCHFLOW_LLM_BASE_URL=https://你的兼容服务/v1
 - [仓库结构设计](docs/architecture/repository-structure.md)
 - [LangGraph 架构决策](docs/decisions/0001-use-langgraph-behind-workflow-interface.md)
 - [Hello-Agents 调研](docs/research/hello-agents-analysis.md)
+- [OpenCode Zen API 配置调研](docs/research/opencode-zen-api.md)

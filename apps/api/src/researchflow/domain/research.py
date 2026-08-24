@@ -55,6 +55,26 @@ class ResearchEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class ResearchEventDraft:
+    type: str
+    message: str
+    stage: ResearchStage | None = None
+    progress: int | None = None
+    payload: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchRunOutcome:
+    status: ResearchRunStatus
+    progress: int | None
+    stage: ResearchStage | None
+    report_markdown: str | None
+    error_code: str | None
+    error_message: str | None
+    events: tuple[ResearchEventDraft, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ResearchQuestion:
     id: str
     question: str
