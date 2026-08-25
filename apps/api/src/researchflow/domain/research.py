@@ -25,6 +25,12 @@ class ResearchStage(StrEnum):
     FINALIZING = "finalizing"
 
 
+class ResearchTaskStatus(StrEnum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True, slots=True)
 class ResearchRun:
     id: UUID
@@ -79,6 +85,7 @@ class ResearchQuestion:
     id: str
     question: str
     rationale: str
+    search_query: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,3 +101,44 @@ class ResearchPlan:
     total_tokens: int | None
     duration_ms: int
     created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchTask:
+    id: str
+    run_id: UUID
+    question_id: str
+    query: str
+    status: ResearchTaskStatus
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class Source:
+    id: str
+    run_id: UUID
+    task_id: str
+    title: str
+    url: str
+    snippet: str
+    retrieved_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class Evidence:
+    id: str
+    run_id: UUID
+    task_id: str
+    question_id: str
+    source_id: str
+    excerpt: str
+    summary: str
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchMaterials:
+    run_id: UUID
+    tasks: tuple[ResearchTask, ...]
+    sources: tuple[Source, ...]
+    evidence: tuple[Evidence, ...]

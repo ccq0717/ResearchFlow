@@ -33,6 +33,9 @@ export function ResearchPlanPanel({ plan }: ResearchPlanPanelProps) {
                   <p className="mt-1 text-xs leading-5 text-[#737a75]">
                     {question.rationale}
                   </p>
+                  <p className="mt-2 font-mono text-[11px] text-[#8a6a50]">
+                    检索词：{question.search_query}
+                  </p>
                 </li>
               ))}
             </ol>

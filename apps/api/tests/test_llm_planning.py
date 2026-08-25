@@ -82,14 +82,19 @@ async def test_openai_compatible_adapter_parses_structured_output() -> None:
                                         {
                                             "question": "应该评测哪些代码生成任务类型？",
                                             "rationale": "任务边界决定数据集和指标选择。",
+                                            "search_query": "code generation task evaluation",
                                         },
                                         {
                                             "question": "哪些学术基准具有代表性？",
                                             "rationale": "需要选择可复现且被广泛使用的基准。",
+                                            "search_query": "code generation benchmark dataset",
                                         },
                                         {
                                             "question": "如何评估真实开发者体验？",
                                             "rationale": "离线指标无法覆盖完整的使用体验。",
+                                            "search_query": (
+                                                "developer experience AI coding assistant"
+                                            ),
                                         },
                                     ],
                                     "deliverables": ["评测指标体系", "实验执行方案"],

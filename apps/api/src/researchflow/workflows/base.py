@@ -5,11 +5,14 @@ from typing import Protocol
 from uuid import UUID
 
 from researchflow.domain.research import (
+    Evidence,
     ResearchEventDraft,
     ResearchPlan,
     ResearchRunOutcome,
     ResearchRunStatus,
     ResearchStage,
+    ResearchTask,
+    Source,
 )
 
 
@@ -22,6 +25,9 @@ class ResearchWorkflowUpdate:
     progress: int | None = None
     started_at: datetime | None = None
     plan: ResearchPlan | None = None
+    tasks: tuple[ResearchTask, ...] = ()
+    sources: tuple[Source, ...] = ()
+    evidence: tuple[Evidence, ...] = ()
     events: tuple[ResearchEventDraft, ...] = ()
     outcome: ResearchRunOutcome | None = None
 
@@ -34,6 +40,9 @@ class ResearchWorkflowUpdate:
                 self.progress,
                 self.started_at,
                 self.plan,
+                self.tasks or None,
+                self.sources or None,
+                self.evidence or None,
             )
         ):
             raise ValueError("终态更新不能同时包含普通状态或计划")

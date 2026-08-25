@@ -16,18 +16,19 @@
     <strong>先记结论：</strong>LLM 不是直接“装进网页”。浏览器把研究目标交给后端，后端通过 HTTP 调用模型服务，再把经过校验的研究计划保存到数据库。
   </div>
 
-  <h2>1. 当前有两种工作流模式</h2>
+  <h2>1. 当前有三种工作流模式</h2>
   <table>
     <thead><tr><th>模式</th><th>是否联网调用模型</th><th>用途</th></tr></thead>
     <tbody>
       <tr><td><code>simulation</code></td><td>否</td><td>默认演示、低资源运行、没有 API Key 时开发</td></tr>
       <tr><td><code>llm</code></td><td>是</td><td>让兼容服务真实生成结构化研究计划</td></tr>
+      <tr><td><code>langgraph</code></td><td>是</td><td>规划、网页检索、证据提取和报告写作</td></tr>
     </tbody>
   </table>
   <p>模式由 <code>RESEARCHFLOW_WORKFLOW_MODE</code> 决定。默认值是 <code>simulation</code>，所以拉取仓库后不会意外产生模型费用。</p>
 
   <h2>2. 接口和适配器是什么</h2>
-  <p><code>LLMClient</code> 接口只承诺一件事：根据研究目标返回研究计划。调用方不需要知道 URL、Authorization Header、提示词和厂商 JSON。</p>
+  <p><code>LLMClient</code> 在 M2 提供计划生成、证据提取和报告写作三个领域操作。调用方不需要知道 URL、Authorization Header、提示词和厂商 JSON。</p>
   <pre><code>研究工作流 → LLMClient → 研究计划
                     ├─ FakeLLMClient
                     └─ OpenAICompatibleLLMClient</code></pre>
@@ -47,7 +48,11 @@
   <pre><code>{
   "summary": "计划摘要",
   "questions": [
-    {"question": "要调查什么？", "rationale": "为什么要调查？"}
+    {
+      "question": "要调查什么？",
+      "rationale": "为什么要调查？",
+      "search_query": "English technical search query"
+    }
   ],
   "deliverables": ["最终交付物"]
 }</code></pre>

@@ -4,13 +4,16 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ResearchErrorPanel } from "./research-error-panel";
+import { ResearchMaterialsPanel } from "./research-materials-panel";
 import { ResearchPlanPanel } from "./research-plan-panel";
 import {
   apiBaseUrl,
+  getResearchMaterials,
   getResearchPlan,
   getResearchRun,
   listResearchEvents,
   type ResearchEventData,
+  type ResearchMaterials,
   type ResearchPlan,
   type ResearchRun,
   type ResearchStage,
@@ -35,6 +38,7 @@ export default function ResearchWorkspace() {
   const runId = params.runId;
   const [run, setRun] = useState<ResearchRun | null>(null);
   const [plan, setPlan] = useState<ResearchPlan | null>(null);
+  const [materials, setMaterials] = useState<ResearchMaterials | null>(null);
   const [events, setEvents] = useState<ResearchEventData[]>([]);
   const [connection, setConnection] = useState("正在连接");
   const [error, setError] = useState<string | null>(null);
@@ -53,9 +57,10 @@ export default function ResearchWorkspace() {
 
     async function start() {
       try {
-        const [initial, initialPlan] = await Promise.all([
+        const [initial, initialPlan, initialMaterials] = await Promise.all([
           getResearchRun(runId),
           getResearchPlan(runId),
+          getResearchMaterials(runId),
         ]);
         // 状态先于历史读取：若状态已经终结，原子提交的终结事件随后一定可见。
         const initialEvents = await listResearchEvents(runId);
@@ -63,7 +68,14 @@ export default function ResearchWorkspace() {
         const historyHasPlan = initialEvents.some(
           (event) => event.type === "research.plan.completed",
         );
-        const [latestRun, latestPlan] = await Promise.all([
+        const historyHasMaterials = initialEvents.some((event) =>
+          [
+            "research.tasks.completed",
+            "research.sources.completed",
+            "research.evidence.completed",
+          ].includes(event.type),
+        );
+        const [latestRun, latestPlan, latestMaterials] = await Promise.all([
           historyIsTerminal &&
           !["completed", "failed", "cancelled"].includes(initial.status)
             ? getResearchRun(runId)
@@ -71,10 +83,14 @@ export default function ResearchWorkspace() {
           historyHasPlan && initialPlan === null
             ? getResearchPlan(runId)
             : initialPlan,
+          historyHasMaterials
+            ? getResearchMaterials(runId)
+            : initialMaterials,
         ]);
         if (cancelled) return;
         setRun(latestRun);
         setPlan(latestPlan);
+        setMaterials(latestMaterials);
         setEvents(initialEvents);
         if (
           historyIsTerminal ||
@@ -103,6 +119,13 @@ export default function ResearchWorkspace() {
           if (data.type === "research.plan.completed") {
             void getResearchPlan(runId).then(setPlan);
           }
+          if (
+            data.type === "research.tasks.completed" ||
+            data.type === "research.sources.completed" ||
+            data.type === "research.evidence.completed"
+          ) {
+            void getResearchMaterials(runId).then(setMaterials);
+          }
           setRun((current) =>
             current
               ? {
@@ -121,9 +144,11 @@ export default function ResearchWorkspace() {
             void Promise.all([
               getResearchRun(runId),
               getResearchPlan(runId),
-            ]).then(([latestRun, latestPlan]) => {
+              getResearchMaterials(runId),
+            ]).then(([latestRun, latestPlan, latestMaterials]) => {
               setRun(latestRun);
               setPlan(latestPlan);
+              setMaterials(latestMaterials);
             });
             source?.close();
             setConnection("已结束");
@@ -248,6 +273,8 @@ export default function ResearchWorkspace() {
             </section>
 
             <ResearchPlanPanel plan={plan} />
+
+            <ResearchMaterialsPanel materials={materials} />
 
             <section className="rounded-3xl border border-[#d8d3c7] bg-[#ebe5d9] p-6">
               <h2 className="font-semibold">研究事件</h2>

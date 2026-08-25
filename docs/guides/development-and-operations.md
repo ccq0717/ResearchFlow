@@ -1,6 +1,6 @@
 # ResearchFlow 使用、开发与运维手册
 
-> 适用阶段：M1 真实 LLM 最小接入
+> 适用阶段：M2 LangGraph 与真实网页研究闭环
 > 主要平台：Windows 10 / 11 + PowerShell
 > 最后更新：2026-08-25
 
@@ -11,10 +11,10 @@
 - 日常开发时如何启动、检查、停止和重启服务；
 - 数据放在哪里，如何备份与重置；
 - 常见故障如何定位；
-- 如何在默认模拟模式和真实 LLM 规划模式之间切换；
-- 未来接入搜索、RAG 等服务后，运行方式会如何扩展。
+- 如何在模拟、仅 LLM 规划和 LangGraph 网页研究模式之间切换；
+- 后续接入学术搜索、RAG 等服务后，运行方式会如何扩展。
 
-项目已完成 M1：真实 LLM 可以生成结构化研究计划；检索、证据与引用仍未实现。文中标注为“未来”的操作是维护预案，不代表对应能力已经实现。
+项目已完成 M2：真实链路可以规划、检索和读取 Stack Overflow 网页、提取证据并生成报告。当前不包含学术论文检索、Claim 级引用验证或本地 RAG。
 
 ## 1. 当前产品由什么组成
 
@@ -23,10 +23,10 @@
 | Web 前端 | Next.js | http://127.0.0.1:3000 | 是 |
 | API 后端 | FastAPI | http://127.0.0.1:8000 | 是 |
 | 本地数据库 | SQLite | `var/researchflow.db` | 由后端自动使用 |
-| 研究工作流 | 模拟或 LLM 规划工作流 | 后端进程内 | 由后端自动运行 |
-| LLM | OpenAI-compatible HTTP 适配器 | 远程或本地兼容服务 | 仅 `llm` 模式需要 |
-| 网页/论文搜索 | 尚未接入 | 无 | 否 |
-| 向量数据库 / RAG | 尚未接入 | 无 | 否 |
+| 研究工作流 | 模拟、LLM 规划或 LangGraph 网页研究 | 后端进程内 | 由后端自动运行 |
+| LLM | OpenAI-compatible HTTP 适配器 | 远程或本地兼容服务 | `llm` / `langgraph` 需要 |
+| 网页搜索与读取 | Stack Exchange API / Stack Overflow | 公共 HTTPS API | 仅 `langgraph` 需要 |
+| 学术搜索 / 向量数据库 / RAG | 尚未接入 | 无 | 否 |
 
 前端负责展示页面和接收操作，后端负责保存任务、运行工作流并通过 SSE 推送进度。关闭前端不会删除数据；关闭后端会让页面暂时无法读取或创建任务。
 
@@ -45,7 +45,7 @@
 调研学术界和工业界对 AI 代码生成工具的评测方法，并设计一份覆盖代码质量、安全性和开发效率的评测方案。
 ```
 
-默认 `simulation` 模式输出模拟报告，不访问互联网、论文数据库或真实模型。`llm` 模式会真实生成并展示研究计划，但后续检索、分析和报告仍是演示逻辑。演示时应主动说明这一边界。
+默认 `simulation` 模式输出模拟报告，不访问外部服务。`llm` 模式只真实生成研究计划。`langgraph` 模式会调用配置的 LLM，并通过 Stack Exchange API 检索和读取 Stack Overflow 技术问答；演示时应说明它不是通用 Web 或学术搜索。
 
 ## 3. 第一次初始化开发环境
 
@@ -200,15 +200,21 @@ Get-NetTCPConnection -State Listen |
 | `RESEARCHFLOW_ENVIRONMENT` | 环境名称 | `development` |
 | `RESEARCHFLOW_DATABASE_URL` | 数据库连接地址 | SQLite 文件 |
 | `RESEARCHFLOW_CORS_ORIGINS` | 允许访问 API 的前端来源 | `http://localhost:3000` |
-| `RESEARCHFLOW_SIMULATION_STEP_DELAY` | 演示阶段之间的等待秒数 | `0.7` |
-| `RESEARCHFLOW_WORKFLOW_MODE` | `simulation` 或 `llm` | `simulation` |
-| `RESEARCHFLOW_LLM_PROVIDER` | 接口协议/来源标签；当前不用于动态选择适配器 | `openai-compatible` |
-| `RESEARCHFLOW_LLM_MODEL` | 模型服务识别的模型名 | 空 |
-| `RESEARCHFLOW_LLM_API_KEY` | 模型鉴权密钥；本地服务可留空 | 空 |
-| `RESEARCHFLOW_LLM_BASE_URL` | 兼容 API 根地址；客户端追加 `/chat/completions` | `https://api.openai.com/v1` |
-| `RESEARCHFLOW_LLM_TIMEOUT_SECONDS` | 单次模型请求超时秒数 | `60` |
+| `RESEARCHFLOW_SIMULATION_STEP_DELAY` | 模拟阶段等待秒数 | `0.7` |
+| `RESEARCHFLOW_WORKFLOW_MODE` | `simulation`、`llm` 或 `langgraph` | `simulation` |
+| `RESEARCHFLOW_LLM_PROVIDER` | 接口协议/来源标签 | `openai-compatible` |
+| `RESEARCHFLOW_LLM_MODEL` | 模型名；`llm` / `langgraph` 必填 | 空 |
+| `RESEARCHFLOW_LLM_API_KEY` | 模型密钥；本地服务可留空 | 空 |
+| `RESEARCHFLOW_LLM_BASE_URL` | API 根地址 | `https://api.openai.com/v1` |
+| `RESEARCHFLOW_LLM_TIMEOUT_SECONDS` | 模型超时秒数 | `60` |
+| `RESEARCHFLOW_WEB_SEARCH_BASE_URL` | Stack Exchange API 根地址 | `https://api.stackexchange.com/2.3` |
+| `RESEARCHFLOW_WEB_SEARCH_SITE` | 目标站点 | `stackoverflow` |
+| `RESEARCHFLOW_WEB_SEARCH_RESULT_LIMIT` | 每个问题的结果上限 | `2` |
+| `RESEARCHFLOW_WEB_READER_MAX_CHARACTERS` | 单页正文最大字符数 | `16000` |
+| `RESEARCHFLOW_WEB_REQUEST_TIMEOUT_SECONDS` | 搜索/阅读超时秒数 | `20` |
+| `RESEARCHFLOW_WEB_USER_AGENT` | 公共 API 请求标识 | ResearchFlow 默认值 |
 
-修改 `.env` 后应重启后端。`llm` 模式必须配置非空模型名；API Key 使用 `SecretStr` 读取，不会出现在正常配置打印中。`RESEARCHFLOW_LLM_PROVIDER` 保持 `openai-compatible` 即可，它目前只用于记录协议/来源，不会切换适配器。Base URL 应填 API 根地址，不要包含末尾的 `/chat/completions`。
+修改 `.env` 后应重启后端。`llm` 与 `langgraph` 模式都必须配置非空模型名。Base URL 填 API 根地址，不要包含末尾的 `/chat/completions`。
 
 ### 6.2 前端 API 地址
 
@@ -228,48 +234,51 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 修改后应重启前端。`.env.local` 已被仓库的忽略规则覆盖，不应提交。
 
-### 6.3 启用真实 LLM 规划
+### 6.3 启用真实 LLM 或 M2 网页研究
 
-先确认服务支持 Chat Completions 的 `/chat/completions` 路径和 `response_format.type=json_schema`。把仓库根目录 `.env` 中相关配置改为：
+目标 LLM 服务需支持 Chat Completions 和 `response_format.type=json_schema`。只验证真实规划时使用：
 
 ```dotenv
 RESEARCHFLOW_WORKFLOW_MODE=llm
+RESEARCHFLOW_LLM_MODEL=供应商提供的模型名
+RESEARCHFLOW_LLM_API_KEY=本机真实密钥
+RESEARCHFLOW_LLM_BASE_URL=https://供应商地址/v1
+```
+
+要运行 M2 完整链路，把模式改为：
+
+```dotenv
+RESEARCHFLOW_WORKFLOW_MODE=langgraph
 RESEARCHFLOW_LLM_PROVIDER=openai-compatible
 RESEARCHFLOW_LLM_MODEL=供应商提供的模型名
 RESEARCHFLOW_LLM_API_KEY=本机真实密钥
 RESEARCHFLOW_LLM_BASE_URL=https://供应商地址/v1
-RESEARCHFLOW_LLM_TIMEOUT_SECONDS=60
+RESEARCHFLOW_WEB_SEARCH_SITE=stackoverflow
+RESEARCHFLOW_WEB_SEARCH_RESULT_LIMIT=2
 ```
 
-OpenCode Zen 的 MiMo-V2.5 Free 示例：
+Stack Exchange 搜索不需要 API Key，但运行设备必须能够访问 `api.stackexchange.com` 和模型服务。重启后端并检查 `/health` 的 `workflow_mode`。成功运行时，工作区会依次出现计划、检索任务、来源、证据和报告；网页或模型失败会进入 `failed` 并显示安全错误。
 
-```dotenv
-RESEARCHFLOW_LLM_PROVIDER=openai-compatible
-RESEARCHFLOW_LLM_MODEL=mimo-v2.5-free
-RESEARCHFLOW_LLM_BASE_URL=https://opencode.ai/zen/v1
-```
+OpenCode Zen 的 MiMo 示例和数据使用注意事项见 [OpenCode Zen API 配置调研](../research/opencode-zen-api.md)。直接 API 不使用 `opencode/` 模型前缀。
 
-直接 API 不使用 `opencode/` 模型前缀；该前缀仅属于 OpenCode 自身的模型配置。根据 OpenCode 官方说明，免费 MiMo 模型的数据可能被用于改进模型，因此不要提交密钥、个人信息、未公开论文或企业敏感资料。详细核对见 [OpenCode Zen API 配置调研](../research/opencode-zen-api.md)。
-
-重启后端并访问 `/health`，确认 `workflow_mode` 为 `llm`。创建任务后，规划阶段会访问模型服务；成功时工作区出现结构化计划，失败时任务进入 `failed` 并显示安全错误。
-
-要回到完全离线、无费用的模式，只需设置：
+要回到完全离线、无费用模式：
 
 ```dotenv
 RESEARCHFLOW_WORKFLOW_MODE=simulation
 ```
 
-然后重启后端。不要把真实密钥复制回 `.env.example`、README、聊天截图或 Git Commit。
+不要把真实密钥复制到 `.env.example`、README、截图或 Commit。
 
-### 6.4 当前仍未生效的搜索配置
+### 6.4 网页 Provider 边界
 
-`SEARCH_PROVIDER` 和 `TAVILY_API_KEY` 只是未来占位符，当前代码不会读取，也不会执行真实网页或论文搜索。
+当前 Provider 固定使用 Stack Exchange 官方 API 的 Stack Overflow 站点：搜索结果和正文读取共享一个客户端，支持超时与有限重试，正文会清理 HTML、限制长度并按 URL 去重。它适合普通编程技术问题，不覆盖任意网页、产品官网或学术论文。替换 Provider 时应实现 `SearchProvider` 和 `WebPageReader`，不要把供应商响应泄漏到工作流。
+
 
 ## 7. 本地数据、备份与重置
 
 ### 7.1 数据位置
 
-当前研究任务、结构化计划、事件和报告保存在：
+当前研究任务、结构化计划、检索子任务、来源、证据、事件和报告保存在：
 
 ```text
 var/researchflow.db
@@ -303,7 +312,7 @@ var/researchflow.db
 .\.venv\Scripts\python.exe -c 'import sqlite3; db=sqlite3.connect("file:var/researchflow.db?mode=ro", uri=True); print(db.execute("SELECT COUNT(*) FROM research_runs").fetchone()[0]); db.close()'
 ```
 
-两个命令都使用 Python 自带的 `sqlite3` 接口和只读模式，不会修改数据库。当前业务表包括 `research_runs`、`research_plans` 和 `research_events`。概念解释见 [SQLite 与数据持久化课程](../learning/lessons/0003-understand-sqlite-persistence.html)。
+两个命令都使用 Python 自带的 `sqlite3` 接口和只读模式，不会修改数据库。当前业务表包括 `research_runs`、`research_plans`、`research_events`、`research_tasks`、`research_sources` 和 `research_evidence`。概念解释见 [SQLite 与数据持久化课程](../learning/lessons/0003-understand-sqlite-persistence.html)。
 
 ### 7.3 备份
 
@@ -483,7 +492,7 @@ npm run start --prefix apps/web -- --hostname 127.0.0.1
 
 项目计划在本地核心研究闭环稳定后部署一个供面试官和少量受邀访问者使用的作品集在线 Demo。它不以开放注册、多租户或高并发生产系统为目标；部署边界、阻塞项、平台选择标准和上线验收清单见[作品集在线 Demo 部署指南](online-demo-deployment.md)。具体平台命令只有在实际验证后才会写入该指南。
 
-## 12. 当前 LLM 接入与未来搜索、RAG
+## 12. 当前外部服务与未来 RAG
 
 ### 12.1 两种已支持的 LLM 连接方式
 
@@ -493,7 +502,7 @@ npm run start --prefix apps/web -- --hostname 127.0.0.1
 
 两种方式都经过 `OpenAICompatibleLLMClient`，工作流不直接依赖某一家 SDK。当前要求服务支持 Chat Completions 和 JSON Schema 结构化输出。
 
-### 12.2 未来推荐启动顺序
+### 12.2 后续扩展后的推荐启动顺序
 
 当相关组件真正实现后，推荐顺序为：
 

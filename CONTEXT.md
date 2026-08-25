@@ -24,6 +24,18 @@ _Avoid_: Agent 思维过程、Prompt
 研究计划中可通过检索和证据验证的具体问题。
 _Avoid_: Task、搜索词
 
+**Research Task（研究任务）**:
+为回答一个 Research Question 而执行的具体检索活动，记录查询内容和完成状态。
+_Avoid_: Research Run、搜索结果
+
+**Source（研究来源）**:
+研究过程中实际读取并用于形成证据的外部资料。
+_Avoid_: 搜索结果、链接
+
+**Evidence（研究证据）**:
+从 Source 中提取、能够支持一个 Research Question 的原文片段及其研究解释。
+_Avoid_: 摘要、模型结论
+
 **Research Event（研究事件）**:
 描述研究运行中已发生状态变化的不可变记录。
 _Avoid_: Log、消息

@@ -5,12 +5,17 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_core import PydanticCustomError
 
 from researchflow.domain.research import (
+    Evidence,
     ResearchEvent,
+    ResearchMaterials,
     ResearchPlan,
     ResearchQuestion,
     ResearchRun,
     ResearchRunStatus,
     ResearchStage,
+    ResearchTask,
+    ResearchTaskStatus,
+    Source,
 )
 
 
@@ -60,6 +65,7 @@ class ResearchQuestionResponse(BaseModel):
     id: str
     question: str
     rationale: str
+    search_query: str
 
     @classmethod
     def from_domain(cls, question: ResearchQuestion) -> "ResearchQuestionResponse":
@@ -128,3 +134,67 @@ class ResearchEventResponse(BaseModel):
 
 class ResearchEventListResponse(BaseModel):
     items: list[ResearchEventResponse]
+
+
+class ResearchTaskResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    run_id: UUID
+    question_id: str
+    query: str
+    status: ResearchTaskStatus
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, task: ResearchTask) -> "ResearchTaskResponse":
+        return cls.model_validate(task)
+
+
+class SourceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    run_id: UUID
+    task_id: str
+    title: str
+    url: str
+    snippet: str
+    retrieved_at: datetime
+
+    @classmethod
+    def from_domain(cls, source: Source) -> "SourceResponse":
+        return cls.model_validate(source)
+
+
+class EvidenceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    run_id: UUID
+    task_id: str
+    question_id: str
+    source_id: str
+    excerpt: str
+    summary: str
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, evidence: Evidence) -> "EvidenceResponse":
+        return cls.model_validate(evidence)
+
+
+class ResearchMaterialsResponse(BaseModel):
+    run_id: UUID
+    tasks: list[ResearchTaskResponse]
+    sources: list[SourceResponse]
+    evidence: list[EvidenceResponse]
+
+    @classmethod
+    def from_domain(cls, materials: ResearchMaterials) -> "ResearchMaterialsResponse":
+        return cls(
+            run_id=materials.run_id,
+            tasks=[ResearchTaskResponse.from_domain(task) for task in materials.tasks],
+            sources=[SourceResponse.from_domain(source) for source in materials.sources],
+            evidence=[EvidenceResponse.from_domain(item) for item in materials.evidence],
+        )

@@ -10,14 +10,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
 from researchflow.domain.research import (
+    Evidence,
     ResearchEvent,
     ResearchEventDraft,
+    ResearchMaterials,
     ResearchPlan,
     ResearchQuestion,
     ResearchRun,
     ResearchRunOutcome,
     ResearchRunStatus,
     ResearchStage,
+    ResearchTask,
+    ResearchTaskStatus,
+    Source,
 )
 from researchflow.persistence.database import Base
 
@@ -70,6 +75,48 @@ class ResearchEventRow(Base):
     message: Mapped[str] = mapped_column(Text)
     progress: Mapped[int | None] = mapped_column(Integer)
     payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ResearchTaskRow(Base):
+    __tablename__ = "research_tasks"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("research_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    question_id: Mapped[str] = mapped_column(String(80))
+    query: Mapped[str] = mapped_column(Text)
+    status: Mapped[ResearchTaskStatus] = mapped_column(Enum(ResearchTaskStatus))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SourceRow(Base):
+    __tablename__ = "research_sources"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("research_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(80))
+    title: Mapped[str] = mapped_column(Text)
+    url: Mapped[str] = mapped_column(Text)
+    snippet: Mapped[str] = mapped_column(Text)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class EvidenceRow(Base):
+    __tablename__ = "research_evidence"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("research_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(80))
+    question_id: Mapped[str] = mapped_column(String(80))
+    source_id: Mapped[str] = mapped_column(String(80))
+    excerpt: Mapped[str] = mapped_column(Text)
+    summary: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
@@ -196,6 +243,7 @@ class SqliteResearchRepository:
                     "id": question.id,
                     "question": question.question,
                     "rationale": question.rationale,
+                    "search_query": question.search_query,
                 }
                 for question in plan.questions
             ],
@@ -217,6 +265,74 @@ class SqliteResearchRepository:
         async with self._session() as session:
             row = await session.get(ResearchPlanRow, str(run_id))
             return self._row_to_plan(row) if row else None
+
+    async def save_materials(
+        self,
+        *,
+        tasks: tuple[ResearchTask, ...] = (),
+        sources: tuple[Source, ...] = (),
+        evidence: tuple[Evidence, ...] = (),
+    ) -> None:
+        async with self._session() as session:
+            for task in tasks:
+                await session.merge(
+                    ResearchTaskRow(
+                        run_id=str(task.run_id),
+                        id=task.id,
+                        question_id=task.question_id,
+                        query=task.query,
+                        status=task.status,
+                        created_at=task.created_at,
+                    )
+                )
+            for source in sources:
+                await session.merge(
+                    SourceRow(
+                        run_id=str(source.run_id),
+                        id=source.id,
+                        task_id=source.task_id,
+                        title=source.title,
+                        url=source.url,
+                        snippet=source.snippet,
+                        retrieved_at=source.retrieved_at,
+                    )
+                )
+            for item in evidence:
+                await session.merge(
+                    EvidenceRow(
+                        run_id=str(item.run_id),
+                        id=item.id,
+                        task_id=item.task_id,
+                        question_id=item.question_id,
+                        source_id=item.source_id,
+                        excerpt=item.excerpt,
+                        summary=item.summary,
+                        created_at=item.created_at,
+                    )
+                )
+            await session.commit()
+
+    async def get_materials(self, run_id: UUID) -> ResearchMaterials:
+        async with self._session() as session:
+            task_rows = await session.scalars(
+                select(ResearchTaskRow)
+                .where(ResearchTaskRow.run_id == str(run_id))
+                .order_by(ResearchTaskRow.id)
+            )
+            source_rows = await session.scalars(
+                select(SourceRow).where(SourceRow.run_id == str(run_id)).order_by(SourceRow.id)
+            )
+            evidence_rows = await session.scalars(
+                select(EvidenceRow)
+                .where(EvidenceRow.run_id == str(run_id))
+                .order_by(EvidenceRow.id)
+            )
+            return ResearchMaterials(
+                run_id=run_id,
+                tasks=tuple(self._row_to_task(row) for row in task_rows),
+                sources=tuple(self._row_to_source(row) for row in source_rows),
+                evidence=tuple(self._row_to_evidence(row) for row in evidence_rows),
+            )
 
     async def append_event(
         self,
@@ -334,6 +450,7 @@ class SqliteResearchRepository:
                     id=question["id"],
                     question=question["question"],
                     rationale=question["rationale"],
+                    search_query=question.get("search_query", question["question"]),
                 )
                 for question in row.questions
             ),
@@ -357,5 +474,41 @@ class SqliteResearchRepository:
             message=row.message,
             progress=row.progress,
             payload=row.payload,
+            created_at=SqliteResearchRepository._as_utc(row.created_at),
+        )
+
+    @staticmethod
+    def _row_to_task(row: ResearchTaskRow) -> ResearchTask:
+        return ResearchTask(
+            id=row.id,
+            run_id=UUID(row.run_id),
+            question_id=row.question_id,
+            query=row.query,
+            status=row.status,
+            created_at=SqliteResearchRepository._as_utc(row.created_at),
+        )
+
+    @staticmethod
+    def _row_to_source(row: SourceRow) -> Source:
+        return Source(
+            id=row.id,
+            run_id=UUID(row.run_id),
+            task_id=row.task_id,
+            title=row.title,
+            url=row.url,
+            snippet=row.snippet,
+            retrieved_at=SqliteResearchRepository._as_utc(row.retrieved_at),
+        )
+
+    @staticmethod
+    def _row_to_evidence(row: EvidenceRow) -> Evidence:
+        return Evidence(
+            id=row.id,
+            run_id=UUID(row.run_id),
+            task_id=row.task_id,
+            question_id=row.question_id,
+            source_id=row.source_id,
+            excerpt=row.excerpt,
+            summary=row.summary,
             created_at=SqliteResearchRepository._as_utc(row.created_at),
         )

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 5 课：LangGraph 网页研究链路 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0005 · 约 20 分钟</p>
+  <h1>一次网页研究怎样穿过 LangGraph</h1>
+  <p class="lead">学完后，你应该能解释节点、状态、适配器、来源、证据和持久化更新怎样协作。</p>
+  <div class="callout"><strong>先记结论：</strong>LangGraph 负责工作流内部编排，但产品对外只暴露 ResearchFlow 自己的领域对象和事件。</div>
+
+  <h2>1. 六个节点</h2>
+  <div class="flow"><span>规划</span><b>→</b><span>搜索</span><b>→</b><span>阅读</span><b>→</b><span>证据</span><b>→</b><span>写作</span><b>→</b><span>检查</span></div>
+  <p>规划节点生成研究问题和英文检索词；搜索节点创建 ResearchTask；阅读节点保存 Source；证据节点把网页片段关联到问题；写作节点生成报告；检查节点做确定性关联检查。</p>
+
+  <h2>2. 为什么问题和检索词分开</h2>
+  <table><thead><tr><th>字段</th><th>服务对象</th><th>示例</th></tr></thead><tbody>
+    <tr><td><code>question</code></td><td>用户与报告</td><td>如何评估 AI 编程工具的真实开发体验？</td></tr>
+    <tr><td><code>search_query</code></td><td>Stack Overflow API</td><td>developer experience AI coding assistant</td></tr>
+  </tbody></table>
+  <p>研究问题表达“想知道什么”，检索词表达“怎样向特定搜索系统提问”。</p>
+
+  <h2>3. 三个深接口</h2>
+  <pre><code>LangGraphResearchWorkflow
+├─ LLMClient
+├─ SearchProvider
+└─ WebPageReader</code></pre>
+  <p>测试注入 Fake，真实运行注入 OpenAI-compatible 和 Stack Exchange 实现。节点不需要知道 HTTP 参数、重试或 HTML 清理细节。</p>
+
+  <h2>4. Source 和 Evidence 的区别</h2>
+  <ul>
+    <li><strong>Source</strong> 是实际读过的网页；</li>
+    <li><strong>Evidence</strong> 是网页短原文与解释，并关联 Source 和 Research Question；</li>
+    <li>有 Source 不代表它支持结论，建立 Evidence 关联后材料才进入证据链。</li>
+  </ul>
+
+  <h2>5. 为什么 Graph 不直接写数据库</h2>
+  <p>工作流把节点状态转换成 <code>ResearchWorkflowUpdate</code>，Application 统一保存材料和事件。未来更换编排框架时，API 无需跟着改变。</p>
+
+  <h2>6. 当前检查不是完整引用验证</h2>
+  <p>M2 只确认 Evidence 指向已有 Source，并检查报告包含来源链接。M3 才会加入 Claim—Evidence 关系、学术来源和引用覆盖检查。</p>
+
+  <h2>练习</h2>
+  <ol>
+    <li>找到六个 StateGraph 节点和它们的边；</li>
+    <li>说明为什么 FakeSearchProvider 能替换真实搜索；</li>
+    <li>画出 Research Question 到 ResearchTask、Source、Evidence 的关联。</li>
+  </ol>
+  <p><a href="../README.md">返回学习区</a></p>
+</main>
+</body>
+</html>

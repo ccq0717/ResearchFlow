@@ -66,11 +66,14 @@ async def create_research_run(body, request):
   <p><a href="../../../apps/api/src/researchflow/persistence/repository.py"><code>SqliteResearchRepository</code></a> 隔离了业务代码和数据库代码。它把 Python 领域对象转换为 SQLAlchemy Row，然后执行提交：</p>
   <pre><code>session.add(row)
 await session.commit()</code></pre>
-  <p>当前主要有三张业务表：</p>
+  <p>当前主要有六张业务表：</p>
   <ul>
     <li><code>research_runs</code>：一行代表一个研究任务及其当前状态和报告；</li>
     <li><code>research_plans</code>：保存 LLM 模式生成的结构化研究计划；</li>
-    <li><code>research_events</code>：多行代表任务运行过程中按序产生的事件。</li>
+    <li><code>research_events</code>：多行代表任务运行过程中按序产生的事件；</li>
+    <li><code>research_tasks</code>：保存每个研究问题对应的检索任务；</li>
+    <li><code>research_sources</code>：保存实际读取的网页来源；</li>
+    <li><code>research_evidence</code>：保存来源原文片段及其问题关联。</li>
   </ul>
   <p>这些表最终保存在 <code>var/researchflow.db</code> 文件中。</p>
 

@@ -1,47 +1,48 @@
 # ResearchFlow
 
-ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前版本能把开放式研究目标转成结构化计划并展示可恢复的研究过程；后续将接入网页、学术资料和个人知识库，生成带可验证引用的报告。
+ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前版本能把开放式研究目标转成结构化计划，检索和读取多个技术网页，保存来源与证据，并展示可恢复的研究过程；后续将加入学术资料、严格引用和个人知识库。
 
 项目的首个演示场景是：调研 AI 代码生成工具的现有评测方法，并产出一份可以实际执行的评测方案。
 
 ## 当前进度
 
-仓库目前已完成 M0 全栈闭环、M1 真实 LLM 最小接入和进入 M2 前的工程加固：
+仓库目前已完成 M0、M1、M1.5 和 M2，已经具备第一条可重新打开的真实网页研究闭环：
 
-- 在 Next.js Dashboard 中创建任务，并在 Research Workspace 查看 SSE 实时进度；重新进入任务时会恢复持久化研究事件；
-- 使用 SQLite 持久化研究任务、事件、结构化研究计划和演示报告；
-- 默认模拟模式无需 API Key、外部服务、Docker 或 GPU；
-- LLM 模式可通过 OpenAI-compatible HTTP 服务生成结构化研究计划；
-- 前端展示计划摘要、核心研究问题、交付物、模型、人类可读耗时和 Token 用量；
-- API 始终输出带 UTC 标记的时间，前端按浏览器本地时区显示事件与研究记录时间；
-- 无副作用的应用工厂、Fake LLM 与 Mock HTTP 测试隔离本机 `.env`，保证自动化测试不联网、不产生 API 费用；
-- OpenCode Zen `mimo-v2.5-free` 已通过一次不含敏感内容的真实 API 冒烟测试；
-- 后端集成测试、前端 Vitest、Ruff、ESLint 和生产构建已纳入 GitHub Actions。
+- 在 Next.js Dashboard 创建任务，并在 Research Workspace 查看 SSE 实时进度；
+- 使用 SQLite 持久化运行、事件、结构化计划、检索子任务、网页来源、证据和报告；
+- `simulation` 模式完全离线，`llm` 模式只生成真实计划；
+- `langgraph` 模式执行规划、搜索、阅读、证据提取、写作和检查六个节点；
+- 真实网页来源使用 Stack Exchange 官方 API 检索并读取 Stack Overflow 问答正文；
+- 中文研究问题与英文检索词分开保存，兼顾界面可读性和技术站点检索效果；
+- 前端展示研究计划、检索来源、证据摘要与原文片段，刷新后仍可恢复；
+- 外部能力均有 Fake/Mock，常规测试不联网、不消耗模型额度；
+- 后端、前端、Ruff、ESLint 和生产构建纳入 GitHub Actions。
 
-当前真实 LLM 只负责规划，检索、分析和报告生成仍为轻量演示。学术搜索、网页检索、证据提取、RAG 和引用验证将在 M2～M4 逐步加入。
+M2 的边界是普通技术问题的网页研究，不等同于完整的学术研究与引用系统。论文检索、Claim—Evidence 引用关系、黄金演示报告和引用覆盖检查属于 M3。
 
 ## 开发路线图
 
-当前已完成 M0“模拟全栈纵向闭环”、M1“真实 LLM 最小接入”和 M1.5“进入 M2 前工程加固”，下一步是 M2“LangGraph 与真实网页研究闭环”。
+当前已完成 M2“LangGraph 与真实网页研究闭环”，下一步是 M3“学术检索、引用和黄金演示场景”。
 
 - [x] M0：模拟全栈纵向闭环；
 - [x] M1：真实 LLM 最小接入；
 - [x] M1.5：进入 M2 前工程加固；
-- [ ] M2：LangGraph 与真实网页研究闭环；
+- [x] M2：LangGraph 与真实网页研究闭环；
 - [ ] M3：学术检索、引用和黄金演示场景；
 - [ ] M4：本地知识库与 RAG；
 - [ ] M5：可靠性、测试与作品集交付。
 
-每个里程碑的详细任务、实施顺序、完成标准和待确认选择见[项目路线图](docs/product/roadmap.md)。完成里程碑或调整范围时，应同步更新本节和上面的“当前进度”。
+每个里程碑的详细任务、实施顺序、完成标准和待确认选择见[项目路线图](docs/product/roadmap.md)。
 
 ## 技术栈
 
 - Next.js 16、React 19、TypeScript、Tailwind CSS
-- FastAPI、Python 3.12、SQLAlchemy
-- 本地 MVP 使用 SQLite
+- FastAPI、Python 3.12、SQLAlchemy、SQLite
+- LangGraph `StateGraph`
 - REST API 与 Server-Sent Events（SSE）
-- HTTPX、OpenAI-compatible JSON Schema 结构化输出
-- ResearchFlow 自有 `ResearchWorkflow` / `LLMClient` 接口，计划在其后使用 LangGraph
+- HTTPX、Beautiful Soup、Stack Exchange API
+- OpenAI-compatible JSON Schema 结构化输出
+- ResearchFlow 自有 `ResearchWorkflow`、`LLMClient`、`SearchProvider` 与 `WebPageReader` 接口
 
 ## 仓库结构
 
@@ -129,17 +130,17 @@ npm run build --prefix apps/web
 
 请从 `.env.example` 复制本地配置，不要提交真实 API Key、访问令牌或个人资料。
 
-默认 `simulation` 模式不需要任何外部 API Key。若要启用真实规划，在本地 `.env` 中设置：
+默认 `simulation` 模式不需要任何外部服务。若要启用 M2 真实网页研究，在本地 `.env` 中设置：
 
 ```dotenv
-RESEARCHFLOW_WORKFLOW_MODE=llm
+RESEARCHFLOW_WORKFLOW_MODE=langgraph
 RESEARCHFLOW_LLM_PROVIDER=openai-compatible
 RESEARCHFLOW_LLM_MODEL=你的模型名
 RESEARCHFLOW_LLM_API_KEY=你的密钥
 RESEARCHFLOW_LLM_BASE_URL=https://你的兼容服务/v1
 ```
 
-Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completions`。`RESEARCHFLOW_LLM_PROVIDER` 当前是协议/来源标签，使用兼容服务时保持 `openai-compatible`。目标服务需支持 Chat Completions 和 JSON Schema 结构化输出。本地兼容服务若不要求鉴权，可将 API Key 留空。修改配置后重启后端；真实密钥不得提交到 Git。完整说明见[使用、开发与运维手册](docs/guides/development-and-operations.md)。
+Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completions`。`RESEARCHFLOW_LLM_PROVIDER` 当前是协议/来源标签，使用兼容服务时保持 `openai-compatible`。目标服务需支持 Chat Completions 和 JSON Schema 结构化输出；Stack Overflow 检索无需额外 API Key。本地兼容服务若不要求鉴权，可将 API Key 留空。修改配置后重启后端；真实密钥不得提交到 Git。完整说明见[使用、开发与运维手册](docs/guides/development-and-operations.md)。
 
 ## 项目文档
 
@@ -151,6 +152,7 @@ Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completions`�
 - [M1 阶段复盘](docs/product/retrospectives/m1.md)
 - [M1 可用性跟进复盘](docs/product/retrospectives/m1-usability-follow-up.md)
 - [进入 M2 前工程加固复盘](docs/product/retrospectives/pre-m2-hardening.md)
+- [M2 阶段复盘](docs/product/retrospectives/m2.md)
 - [MVP 技术规格](docs/product/mvp-spec.md)
 - [领域词汇表](CONTEXT.md)
 - [核心数据模型](docs/architecture/domain-model.md)

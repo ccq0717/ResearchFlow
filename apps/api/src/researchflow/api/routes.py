@@ -10,6 +10,7 @@ from researchflow.api.schemas import (
     CreateResearchRunRequest,
     ResearchEventListResponse,
     ResearchEventResponse,
+    ResearchMaterialsResponse,
     ResearchPlanEnvelope,
     ResearchPlanResponse,
     ResearchRunListResponse,
@@ -60,6 +61,20 @@ async def get_research_plan(run_id: UUID, request: Request) -> ResearchPlanEnvel
     return ResearchPlanEnvelope(
         plan=ResearchPlanResponse.from_domain(plan) if plan is not None else None
     )
+
+
+@router.get(
+    "/research-runs/{run_id}/materials",
+    response_model=ResearchMaterialsResponse,
+)
+async def get_research_materials(
+    run_id: UUID,
+    request: Request,
+) -> ResearchMaterialsResponse:
+    application = _application(request)
+    if await application.get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail={"code": "RUN_NOT_FOUND"})
+    return ResearchMaterialsResponse.from_domain(await application.get_materials(run_id))
 
 
 @router.get(

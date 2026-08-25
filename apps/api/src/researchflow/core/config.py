@@ -19,17 +19,27 @@ class Settings(BaseSettings):
     cors_origins: tuple[str, ...] = ("http://localhost:3000",)
     simulation_step_delay: float = Field(default=0.7, ge=0, le=10)
 
-    workflow_mode: Literal["simulation", "llm"] = "simulation"
+    workflow_mode: Literal["simulation", "llm", "langgraph"] = "simulation"
     llm_provider: str = Field(default="openai-compatible", min_length=1)
     llm_model: str = ""
     llm_api_key: SecretStr | None = None
     llm_base_url: AnyHttpUrl = AnyHttpUrl("https://api.openai.com/v1")
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    web_search_base_url: AnyHttpUrl = AnyHttpUrl("https://api.stackexchange.com/2.3")
+    web_search_site: str = Field(default="stackoverflow", min_length=1, max_length=80)
+    web_search_result_limit: int = Field(default=2, ge=1, le=5)
+    web_reader_max_characters: int = Field(default=16000, ge=2000, le=50000)
+    web_request_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    web_user_agent: str = Field(
+        default="ResearchFlow/0.1 (portfolio research demo)",
+        min_length=10,
+        max_length=200,
+    )
 
     @model_validator(mode="after")
     def validate_llm_configuration(self) -> "Settings":
-        if self.workflow_mode == "llm" and not self.llm_model.strip():
-            raise ValueError("LLM 模式必须设置 RESEARCHFLOW_LLM_MODEL")
+        if self.workflow_mode in {"llm", "langgraph"} and not self.llm_model.strip():
+            raise ValueError("LLM 或 LangGraph 模式必须设置 RESEARCHFLOW_LLM_MODEL")
         return self
 
     def ensure_runtime_directories(self) -> None:

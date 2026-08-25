@@ -62,6 +62,7 @@ class LLMResearchWorkflow:
                     id=f"q{index}",
                     question=question.question,
                     rationale=question.rationale,
+                    search_query=question.search_query,
                 )
                 for index, question in enumerate(result.plan.questions, start=1)
             ),

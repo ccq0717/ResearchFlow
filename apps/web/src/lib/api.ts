@@ -32,6 +32,7 @@ export interface ResearchQuestion {
   id: string;
   question: string;
   rationale: string;
+  search_query: string;
 }
 
 export interface ResearchPlan {
@@ -57,6 +58,43 @@ export interface ResearchEventData {
   progress: number | null;
   created_at: string;
   payload: Record<string, unknown>;
+}
+
+export interface ResearchTask {
+  id: string;
+  run_id: string;
+  question_id: string;
+  query: string;
+  status: "pending" | "completed" | "failed";
+  created_at: string;
+}
+
+export interface ResearchSource {
+  id: string;
+  run_id: string;
+  task_id: string;
+  title: string;
+  url: string;
+  snippet: string;
+  retrieved_at: string;
+}
+
+export interface ResearchEvidence {
+  id: string;
+  run_id: string;
+  task_id: string;
+  question_id: string;
+  source_id: string;
+  excerpt: string;
+  summary: string;
+  created_at: string;
+}
+
+export interface ResearchMaterials {
+  run_id: string;
+  tasks: ResearchTask[];
+  sources: ResearchSource[];
+  evidence: ResearchEvidence[];
 }
 
 export const apiBaseUrl =
@@ -110,4 +148,8 @@ export async function getResearchPlan(
     "/api/research-runs/" + runId + "/plan",
   );
   return response.plan;
+}
+
+export function getResearchMaterials(runId: string): Promise<ResearchMaterials> {
+  return request<ResearchMaterials>("/api/research-runs/" + runId + "/materials");
 }

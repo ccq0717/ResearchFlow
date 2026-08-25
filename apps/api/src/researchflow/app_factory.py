@@ -9,12 +9,18 @@ from researchflow.application.research_runs import ResearchRunApplication
 from researchflow.core.config import Settings, get_settings
 from researchflow.integrations.llm.base import LLMClient
 from researchflow.integrations.llm.openai_compatible import OpenAICompatibleLLMClient
+from researchflow.integrations.web.base import SearchProvider, WebPageReader
+from researchflow.integrations.web.stackexchange import (
+    StackExchangePageReader,
+    StackExchangeSearchProvider,
+)
 from researchflow.persistence.database import (
     create_engine,
     create_schema,
     create_session_factory,
 )
 from researchflow.persistence.repository import SqliteResearchRepository
+from researchflow.workflows.langgraph_research import LangGraphResearchWorkflow
 from researchflow.workflows.llm_research import LLMResearchWorkflow
 from researchflow.workflows.simulated import SimulatedResearchWorkflow
 
@@ -23,13 +29,15 @@ def create_app(
     settings: Settings | None = None,
     *,
     llm_client: LLMClient | None = None,
+    search_provider: SearchProvider | None = None,
+    page_reader: WebPageReader | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     resolved_settings.ensure_runtime_directories()
     engine = create_engine(resolved_settings.database_url)
     repository = SqliteResearchRepository(create_session_factory(engine))
 
-    if resolved_settings.workflow_mode == "llm":
+    if resolved_settings.workflow_mode in {"llm", "langgraph"}:
         client = llm_client or OpenAICompatibleLLMClient(
             base_url=str(resolved_settings.llm_base_url),
             model=resolved_settings.llm_model,
@@ -41,6 +49,27 @@ def create_app(
             timeout_seconds=resolved_settings.llm_timeout_seconds,
             provider=resolved_settings.llm_provider,
         )
+    if resolved_settings.workflow_mode == "langgraph":
+        resolved_search = search_provider or StackExchangeSearchProvider(
+            base_url=str(resolved_settings.web_search_base_url),
+            site=resolved_settings.web_search_site,
+            timeout_seconds=resolved_settings.web_request_timeout_seconds,
+            user_agent=resolved_settings.web_user_agent,
+        )
+        resolved_reader = page_reader or StackExchangePageReader(
+            base_url=str(resolved_settings.web_search_base_url),
+            site=resolved_settings.web_search_site,
+            timeout_seconds=resolved_settings.web_request_timeout_seconds,
+            user_agent=resolved_settings.web_user_agent,
+            max_characters=resolved_settings.web_reader_max_characters,
+        )
+        workflow = LangGraphResearchWorkflow(
+            llm_client=client,
+            search_provider=resolved_search,
+            page_reader=resolved_reader,
+            results_per_question=resolved_settings.web_search_result_limit,
+        )
+    elif resolved_settings.workflow_mode == "llm":
         workflow = LLMResearchWorkflow(client, resolved_settings.simulation_step_delay)
     else:
         workflow = SimulatedResearchWorkflow(resolved_settings.simulation_step_delay)

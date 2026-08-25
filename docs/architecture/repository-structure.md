@@ -1,7 +1,7 @@
 # ResearchFlow 仓库结构设计
 
-> 状态：已采纳的初始方案
-> 更新日期：2026-08-23
+> 状态：M2 实现基线
+> 更新日期：2026-08-25
 
 ## 1. 设计目标
 
@@ -41,9 +41,8 @@ ResearchFlow/
 │       │       ├── domain/        # 研究任务、证据、来源等领域模型
 │       │       ├── application/   # 用例编排，不依赖 Web 框架
 │       │       ├── workflows/     # ResearchWorkflow 与 LangGraph 实现
-│       │       ├── retrieval/     # 网页、论文和知识库检索
-│       │       ├── ingestion/     # 文件解析、切分与索引
-│       │       ├── adapters/      # LLM、搜索、存储等外部适配器
+│       │       ├── integrations/  # LLM 与 Web 外部适配器
+│       │       ├── ingestion/     # 后续文件解析、切分与索引
 │       │       ├── persistence/   # SQLAlchemy 仓储和数据库模型
 │       │       └── core/          # 配置、日志和通用错误
 │       ├── tests/
@@ -92,17 +91,16 @@ Research Application Use Case
 ResearchWorkflow interface
     ↓
 LangGraphResearchWorkflow implementation
-    ↓
-Planner / Retrieval / Evidence / Writer modules
+    ├─ LLMClient
+    ├─ SearchProvider
+    └─ WebPageReader
 ```
 
 `ResearchWorkflow` 是框架隔离的 seam。它对调用方暴露少量 ResearchFlow 自己的输入、事件和结果类型，并在内部处理：
 
 - 节点顺序与条件分支；
-- 并发检索；
-- 最大研究轮数；
-- 重试与超时；
-- checkpoint 和恢复；
+- 搜索、阅读、证据提取、写作与检查节点；
+- 外部请求的有限重试与超时；
 - LangGraph 状态到领域事件的转换。
 
 这一模块应保持较深：调用方只学习一个小接口，就能获得完整研究流程，而不需要理解 LangGraph 的实现细节。
@@ -111,8 +109,9 @@ Planner / Retrieval / Evidence / Writer modules
 
 只有确实需要生产实现和测试替身的外部能力才建立接口，例如：
 
-- `LLMProvider`：真实模型适配器 / 测试假实现；
-- `SearchProvider`：网页搜索适配器 / 固定结果假实现；
+- `LLMClient`：OpenAI-compatible 适配器 / Fake；
+- `SearchProvider`：Stack Exchange 适配器 / Fake；
+- `WebPageReader`：Stack Exchange 正文读取 / Fake；
 - `PaperProvider`：学术资料适配器 / 固定论文假实现；
 - `KnowledgeRetriever`：本地向量检索 / 内存测试实现；
 - `SqliteResearchRepository` 当前只有一个真实 adapter，因此暂不提取假想的 Repository Protocol；测试使用临时 SQLite。出现第二种存储后再建立 seam。

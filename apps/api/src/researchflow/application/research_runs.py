@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from researchflow.domain.research import (
     ResearchEvent,
     ResearchEventDraft,
+    ResearchMaterials,
     ResearchPlan,
     ResearchRun,
     ResearchRunOutcome,
@@ -96,6 +97,12 @@ class ResearchRunApplication:
             )
         if update.plan is not None:
             await self._repository.save_plan(update.plan)
+        if update.tasks or update.sources or update.evidence:
+            await self._repository.save_materials(
+                tasks=update.tasks,
+                sources=update.sources,
+                evidence=update.evidence,
+            )
         for event in update.events:
             await self._repository.append_event(
                 run_id,
@@ -175,6 +182,9 @@ class ResearchRunApplication:
 
     async def get_plan(self, run_id: UUID) -> ResearchPlan | None:
         return await self._repository.get_plan(run_id)
+
+    async def get_materials(self, run_id: UUID) -> ResearchMaterials:
+        return await self._repository.get_materials(run_id)
 
     async def list_events(self, run_id: UUID) -> list[ResearchEvent]:
         return await self._repository.events_after(run_id, 0)
