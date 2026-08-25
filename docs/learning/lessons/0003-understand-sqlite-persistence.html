@@ -85,19 +85,12 @@
   <h2>9. 为什么 MVP 先用 SQLite</h2>
   <p>它占用资源少、没有独立服务、备份就是复制文件，非常适合 Windows 本地演示。代价是高并发、多实例部署和复杂运维能力有限。未来正式部署时可以迁移到 PostgreSQL；Repository 边界会降低业务层受到的影响，但数据库模型、迁移和部署配置仍需修改。</p>
 
-  <h2>10. 检查理解</h2>
-  <div class="card"><ol>
-    <li>为什么不需要为当前项目启动 SQLite 服务？</li>
-    <li>aiosqlite 和 SQLAlchemy 各解决什么问题？</li>
-    <li>为什么关闭后端再启动，研究历史仍然存在？</li>
-  </ol></div>
-  <details><summary>完成后查看参考答案</summary><ol>
-    <li>SQLite 嵌入后端进程，后端直接读写数据库文件，没有独立服务器。</li>
+  <h2>10. 三个持久化结论</h2>
+  <div class="card"><ul>
+    <li>SQLite 嵌入后端进程，后端直接读写数据库文件，因此不需要单独启动数据库服务。</li>
     <li>aiosqlite 提供异步桥接；SQLAlchemy 管理映射、查询、Session 和事务。</li>
-    <li>任务已经提交到磁盘中的数据库文件，进程退出不会删除该文件。</li>
-  </ol></details>
-
-  <div class="callout success"><strong>实践任务：</strong>创建一个研究任务，记住标题；停止前后端并重新启动；确认历史记录仍在。然后用自己的话解释“进程内存消失了，为什么数据没有消失”。把解释发给我后，我们再判断是否真正掌握了持久化。</div>
+    <li>研究任务已经提交到磁盘中的数据库文件，所以后端进程退出后，历史记录仍然存在。</li>
+  </ul></div>
   <p class="footer">上一课：<a href="0002-follow-a-research-request.html">一次研究任务如何穿过前后端</a> · 速查：<a href="../reference/current-full-stack-map.html">当前全栈实现地图</a>。有任何概念不清楚，请直接问我。</p>
 </main>
 </body>

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ResearchErrorPanel } from "./research-error-panel";
 import { ResearchMaterialsPanel } from "./research-materials-panel";
 import { ResearchPlanPanel } from "./research-plan-panel";
+import { ResearchReport } from "./research-report";
 import {
   apiBaseUrl,
   getResearchMaterials,
@@ -313,9 +314,7 @@ export default function ResearchWorkspace() {
                 message={run.error_message}
               />
             ) : run.report_markdown ? (
-              <pre className="mt-6 whitespace-pre-wrap font-sans text-[15px] leading-7 text-[#354039]">
-                {run.report_markdown}
-              </pre>
+              <ResearchReport markdown={run.report_markdown} />
             ) : (
               <div className="grid min-h-96 place-items-center text-center text-[#737a75]">
                 <div>

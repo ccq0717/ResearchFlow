@@ -89,22 +89,15 @@
   <h2>8. 失败时会发生什么</h2>
   <p>超时、连接失败、HTTP 错误和格式错误会转换成稳定错误代码。前端得到的是安全、可理解的消息，而不是可能包含内部地址、响应正文或密钥的异常堆栈。Research Run 会进入 <code>failed</code> 终态。</p>
 
-  <h2>9. 当前能力边界</h2>
-  <p>真实 LLM 目前只生成计划。后面的检索、分析和写作仍是演示逻辑，所以不能把 M1 报告描述为经过真实论文调研的结论。下一里程碑才会把计划送入 LangGraph 和网页检索。</p>
+  <h2>9. M1 阶段的能力边界</h2>
+  <p>本课对应的 M1 工作流只让真实 LLM 生成计划，后面的检索、分析和写作仍是演示逻辑，所以不能把 M1 报告描述为经过真实网页调研的结论。M2 已在此接口基础上把计划送入 LangGraph 和网页检索。</p>
 
-  <h2>10. 检查理解</h2>
-  <div class="card"><ol>
-    <li>为什么不让工作流直接调用某一家模型 SDK？</li>
-    <li>Fake LLM 能证明什么，不能证明什么？</li>
-    <li>为什么模型返回 HTTP 200 后仍要做 Pydantic 校验？</li>
-  </ol></div>
-  <details><summary>完成后查看参考答案</summary><ol>
-    <li>用稳定接口隔离厂商细节，替换服务时不修改业务流程。</li>
-    <li>它能确定性验证应用、工作流、持久化和 API 契约；不能证明真实供应商在线或完全兼容。</li>
-    <li>HTTP 成功只说明服务器处理了请求，不保证内容满足业务需要的字段、类型和数量限制。</li>
-  </ol></details>
-
-  <div class="callout success"><strong>实践任务：</strong>先保持 <code>simulation</code> 创建任务，再阅读 <code>main.py</code> 找出程序在哪一处分支选择工作流。不要填写真实 Key，也能先解释整个装配过程。</div>
+  <h2>10. 三个适配器边界</h2>
+  <div class="card"><ul>
+    <li>稳定接口隔离了模型厂商细节，更换兼容服务时不需要修改业务流程。</li>
+    <li>Fake LLM 能确定性验证应用、工作流、持久化和 API 契约，但不能证明真实供应商在线或完全兼容。</li>
+    <li>HTTP 200 只说明服务器成功处理了请求，不保证响应满足业务字段、类型和数量限制，因此仍需 Pydantic 校验。</li>
+  </ul></div>
   <p class="footer">上一课：<a href="0003-understand-sqlite-persistence.html">SQLite 与数据持久化</a> · 架构说明：<a href="../../architecture/llm-integration.md">LLM 接入架构</a>。</p>
 </main>
 </body>

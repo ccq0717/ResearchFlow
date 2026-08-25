@@ -7,6 +7,27 @@ from researchflow.app_factory import create_app
 from researchflow.core.config import Settings
 
 
+async def test_default_cors_accepts_both_local_frontend_hosts(tmp_path: Path) -> None:
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_url=f"sqlite+aiosqlite:///{(tmp_path / 'cors.db').as_posix()}",
+            simulation_step_delay=0,
+        )
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        for origin in ("http://localhost:3000", "http://127.0.0.1:3000"):
+            response = await client.options(
+                "/api/research-runs",
+                headers={
+                    "Origin": origin,
+                    "Access-Control-Request-Method": "POST",
+                },
+            )
+            assert response.status_code == 200
+            assert response.headers["access-control-allow-origin"] == origin
+
+
 async def test_research_run_completes_and_persists(tmp_path: Path) -> None:
     database_path = tmp_path / "test.db"
     app = create_app(

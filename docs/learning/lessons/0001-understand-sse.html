@@ -71,18 +71,11 @@ source.close();</code></pre>
 <p>不意味着。SSE 连接只是“看进度的窗口”，研究任务本身运行在后端。关闭网页可能会让前端看不到新消息，但不应该自动把研究任务判定为失败。</p>
 <p>ResearchFlow 为事件保存递增序号。浏览器重连时可以使用 <code>Last-Event-ID</code> 告诉后端最后收到哪一条，后端再补发后续事件。这也是为什么事件需要持久化，而不能只存在内存中。</p>
 
-<h2>8. 用三个问题检查理解</h2>
-<div class="card"><ol>
-<li>为什么创建研究任务使用普通 REST，而显示进度使用 SSE？</li>
-<li>如果一条事件末尾没有空行，可能发生什么？</li>
-<li>网页断线后，为什么研究任务不应该自动失败？</li>
-</ol></div>
-<details><summary>完成后再查看参考答案</summary><ol>
-<li>创建操作只需要一次明确响应；进度是后端在一段时间内产生的多次单向更新。</li>
-<li>空行是事件边界；缺少它时，浏览器可能认为事件还没结束而不触发处理函数。</li>
-<li>连接只是进度展示通道，工作流运行状态属于后端，两者生命周期不应绑定。</li>
-</ol></details>
-
-<div class="callout success"><strong>实践任务：</strong>启动前后端并创建研究任务，然后在浏览器开发者工具的 Network 面板中找到 <code>/events</code> 请求，观察它是否保持连接以及收到的事件内容。完成后，把你看到的一条事件解释给我；这会成为你真正掌握 SSE 的证据。</div>
+<h2>8. 三个容易混淆的结论</h2>
+<div class="card"><ul>
+<li>创建操作只需要一次明确响应，因此使用普通 REST；研究进度是后端在一段时间内产生的多次单向更新，因此使用 SSE。</li>
+<li>SSE 用空行标记一条事件的边界；缺少空行时，浏览器可能认为事件尚未结束而不触发处理函数。</li>
+<li>SSE 连接只是进度展示通道，工作流运行状态属于后端，两者生命周期不应绑定。</li>
+</ul></div>
 <p class="footer">继续阅读：<a href="../../architecture/sse-events.md">ResearchFlow SSE 事件契约</a> · <a href="../reference/web-communication-cheatsheet.html">通信方式速查表</a>。遇到任何不清楚的地方，请直接问我，我们可以结合代码逐行解释。</p>
 </main></body></html>

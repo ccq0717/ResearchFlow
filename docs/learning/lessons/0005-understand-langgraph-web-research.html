@@ -44,12 +44,8 @@
   <h2>6. 当前检查不是完整引用验证</h2>
   <p>M2 只确认 Evidence 指向已有 Source，并检查报告包含来源链接。M3 才会加入 Claim—Evidence 关系、学术来源和引用覆盖检查。</p>
 
-  <h2>练习</h2>
-  <ol>
-    <li>找到六个 StateGraph 节点和它们的边；</li>
-    <li>说明为什么 FakeSearchProvider 能替换真实搜索；</li>
-    <li>画出 Research Question 到 ResearchTask、Source、Evidence 的关联。</li>
-  </ol>
+  <h2>7. 关联关系总结</h2>
+  <p>六个 StateGraph 节点用固定边按顺序连接；FakeSearchProvider 与真实搜索实现遵守相同接口，因此测试无需访问互联网。数据关系从 Research Question 开始，经 ResearchTask 记录检索，再由 Source 保存实际读取的网页，最后由 Evidence 把原文片段关联回问题和来源。</p>
   <p><a href="../README.md">返回学习区</a></p>
 </main>
 </body>

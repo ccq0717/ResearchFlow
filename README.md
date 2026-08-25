@@ -6,7 +6,7 @@ ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前
 
 ## 当前进度
 
-仓库目前已完成 M0、M1、M1.5 和 M2，已经具备第一条可重新打开的真实网页研究闭环：
+仓库目前已完成 M0、M1 和 M2，已经具备第一条可重新打开的真实网页研究闭环：
 
 - 在 Next.js Dashboard 创建任务，并在 Research Workspace 查看 SSE 实时进度；
 - 使用 SQLite 持久化运行、事件、结构化计划、检索子任务、网页来源、证据和报告；
@@ -25,8 +25,7 @@ M2 已建立通用网页研究闭环，但尚不等同于完整的学术研究�
 当前已完成 M2“LangGraph 与真实网页研究闭环”，下一步是 M3“学术检索、引用和黄金演示场景”。
 
 - [x] M0：模拟全栈纵向闭环；
-- [x] M1：真实 LLM 最小接入；
-- [x] M1.5：进入 M2 前工程加固；
+- [x] M1：真实 LLM 接入与工程加固；
 - [x] M2：LangGraph 与真实网页研究闭环；
 - [ ] M3：学术检索、引用和黄金演示场景；
 - [ ] M4：本地知识库与 RAG；
@@ -153,7 +152,7 @@ LLM Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completio
 - [项目路线图](docs/product/roadmap.md)
 - [M1 阶段复盘](docs/product/retrospectives/m1.md)
 - [M1 可用性跟进复盘](docs/product/retrospectives/m1-usability-follow-up.md)
-- [进入 M2 前工程加固复盘](docs/product/retrospectives/pre-m2-hardening.md)
+- [M1 工程加固复盘](docs/product/retrospectives/pre-m2-hardening.md)
 - [M2 阶段复盘](docs/product/retrospectives/m2.md)
 - [MVP 技术规格](docs/product/mvp-spec.md)
 - [领域词汇表](CONTEXT.md)

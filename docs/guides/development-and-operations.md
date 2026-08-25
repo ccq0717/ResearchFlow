@@ -20,7 +20,7 @@
 
 | 组件 | 当前实现 | 默认地址或位置 | 是否必须运行 |
 | --- | --- | --- | --- |
-| Web 前端 | Next.js | http://127.0.0.1:3000 | 是 |
+| Web 前端 | Next.js | http://localhost:3000 | 是 |
 | API 后端 | FastAPI | http://127.0.0.1:8000 | 是 |
 | 本地数据库 | SQLite | `var/researchflow.db` | 由后端自动使用 |
 | 研究工作流 | 模拟、LLM 规划或 LangGraph 网页研究 | 后端进程内 | 由后端自动运行 |
@@ -199,7 +199,7 @@ Get-NetTCPConnection -State Listen |
 | --- | --- | --- |
 | `RESEARCHFLOW_ENVIRONMENT` | 环境名称 | `development` |
 | `RESEARCHFLOW_DATABASE_URL` | 数据库连接地址 | SQLite 文件 |
-| `RESEARCHFLOW_CORS_ORIGINS` | 允许访问 API 的前端来源 | `http://localhost:3000` |
+| `RESEARCHFLOW_CORS_ORIGINS` | 允许访问 API 的前端来源；环境变量使用 JSON 数组 | `localhost:3000` 与 `127.0.0.1:3000` |
 | `RESEARCHFLOW_SIMULATION_STEP_DELAY` | 模拟阶段等待秒数 | `0.7` |
 | `RESEARCHFLOW_WORKFLOW_MODE` | `simulation`、`llm` 或 `langgraph` | `simulation` |
 | `RESEARCHFLOW_LLM_PROVIDER` | 接口协议/来源标签 | `openai-compatible` |

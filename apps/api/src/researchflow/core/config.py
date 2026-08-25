@@ -16,7 +16,10 @@ class Settings(BaseSettings):
     app_name: str = "ResearchFlow API"
     environment: str = "development"
     database_url: str = "sqlite+aiosqlite:///./var/researchflow.db"
-    cors_origins: tuple[str, ...] = ("http://localhost:3000",)
+    cors_origins: tuple[str, ...] = (
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    )
     simulation_step_delay: float = Field(default=0.7, ge=0, le=10)
 
     workflow_mode: Literal["simulation", "llm", "langgraph"] = "simulation"
