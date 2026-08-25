@@ -8,6 +8,8 @@ from httpx import ASGITransport, AsyncClient
 
 from researchflow.app_factory import create_app
 from researchflow.core.config import Settings
+from researchflow.domain.research import SourceType
+from researchflow.domain.source_quality import classify_source, parse_published_at
 from researchflow.integrations.llm.fake import FakeLLMClient
 from researchflow.integrations.web.base import SearchResult, WebResearchError
 from researchflow.integrations.web.exa import ExaSearchProvider
@@ -49,8 +51,9 @@ async def test_langgraph_web_research_persists_materials_and_report(tmp_path: Pa
                 await asyncio.sleep(0.01)
 
             assert detail.json()["status"] == "completed", detail.json()
-            assert "M2 网页研究" in detail.json()["report_markdown"]
-            assert "https://example.test/" in detail.json()["report_markdown"]
+            assert "M3 可追溯引用" in detail.json()["report_markdown"]
+            assert "## 可追溯主张与证据" in detail.json()["report_markdown"]
+            assert "https://arxiv.org/" in detail.json()["report_markdown"]
 
             materials_response = await client.get(f"/api/research-runs/{run_id}/materials")
             materials = materials_response.json()
@@ -58,6 +61,16 @@ async def test_langgraph_web_research_persists_materials_and_report(tmp_path: Pa
             assert len(materials["tasks"]) == 3
             assert len(materials["sources"]) == 6
             assert len(materials["evidence"]) == 6
+            assert len(materials["claims"]) == 3
+            assert materials["citation_audit"]["coverage_percent"] == 100
+            assert materials["citation_audit"]["unsupported_claim_ids"] == []
+            assert materials["citation_audit"]["source_type_counts"] == {
+                "academic": 2,
+                "official": 2,
+                "industry": 2,
+                "community": 0,
+                "other": 0,
+            }
             assert {item["status"] for item in materials["tasks"]} == {"completed"}
             assert {item["query"] for item in materials["tasks"]} == {
                 "AI code generation evaluation metrics",
@@ -65,6 +78,9 @@ async def test_langgraph_web_research_persists_materials_and_report(tmp_path: Pa
                 "automated code evaluation human review",
             }
             assert all(item["source_id"].startswith("s") for item in materials["evidence"])
+            assert all(item["evidence_ids"] for item in materials["claims"])
+            assert all(item["author"] for item in materials["sources"])
+            assert all(item["published_at"] for item in materials["sources"])
 
             plan = (await client.get(f"/api/research-runs/{run_id}/plan")).json()["plan"]
             assert all(question["search_query"] for question in plan["questions"])
@@ -96,6 +112,28 @@ async def test_langgraph_web_research_persists_materials_and_report(tmp_path: Pa
             materials = (await client.get(f"/api/research-runs/{run_id}/materials")).json()
             assert len(materials["sources"]) == 6
             assert len(materials["evidence"]) == 6
+            assert len(materials["claims"]) == 3
+            assert materials["citation_audit"]["coverage_percent"] == 100
+
+
+def test_source_quality_rules_are_stable_and_conservative() -> None:
+    assert classify_source("https://arxiv.org/abs/2401.00001") is SourceType.ACADEMIC
+    assert (
+        classify_source("https://aclanthology.org/2025.findings-acl.686.pdf") is SourceType.ACADEMIC
+    )
+    assert classify_source("https://www.etsi.org/deliver/standard.pdf") is SourceType.OFFICIAL
+    assert classify_source("https://docs.python.org/3/library/") is SourceType.OFFICIAL
+    assert classify_source("https://engineering.example.com/blog/evals") is SourceType.INDUSTRY
+    assert classify_source("https://stackoverflow.com/questions/1") is SourceType.COMMUNITY
+    assert classify_source("https://github.com/OWASP/AISVS") is SourceType.OFFICIAL
+    assert classify_source("https://github.com/OWASP/AISVS/issues/1") is SourceType.COMMUNITY
+    assert (
+        classify_source("https://aws.amazon.com/blogs/enterprise-strategy/evaluating-ai")
+        is SourceType.INDUSTRY
+    )
+    assert classify_source("https://example.com/article") is SourceType.OTHER
+    assert parse_published_at("2026-07-01T00:00:00Z") is not None
+    assert parse_published_at("not-a-date") is None
 
 
 async def test_exa_search_and_reader_parse_external_response() -> None:

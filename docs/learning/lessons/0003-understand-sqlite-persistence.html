@@ -52,7 +52,7 @@
   <pre><code>await connection.run_sync(Base.metadata.create_all)</code></pre>
   <p>如果数据库文件或表不存在，SQLAlchemy 会根据模型创建它们；已经存在时则保留原数据。因此首次启动会自动生成文件，重启后历史记录仍然存在。</p>
 
-  <h2>5. 当前六张表怎样分工</h2>
+  <h2>5. 当前九张表怎样分工</h2>
   <table>
     <thead><tr><th>表</th><th>保存什么</th><th>关系</th></tr></thead>
     <tbody>
@@ -61,10 +61,13 @@
       <tr><td><code>research_events</code></td><td>事件类型、序号、消息、阶段和进度</td><td>一个任务对应多行</td></tr>
       <tr><td><code>research_tasks</code></td><td>研究问题对应的检索词和状态</td><td>一个任务对应多个检索任务</td></tr>
       <tr><td><code>research_sources</code></td><td>已读取网页的标题、URL 和摘要</td><td>每个来源属于一个检索任务</td></tr>
+      <tr><td><code>research_source_metadata</code></td><td>来源类型、作者、发布时间和发布机构</td><td>每个来源至多一行扩展元数据</td></tr>
       <tr><td><code>research_evidence</code></td><td>原文片段、解释及问题关联</td><td>每条证据指向一个来源</td></tr>
+      <tr><td><code>research_claims</code></td><td>报告中可独立检查的关键主张</td><td>每条主张属于一个研究问题</td></tr>
+      <tr><td><code>research_claim_evidence</code></td><td>主张与证据的显式关联</td><td>支持一条主张由多条证据共同支撑</td></tr>
     </tbody>
   </table>
-  <p><code>research_plans.run_id</code> 和 <code>research_events.run_id</code> 都指向所属任务。计划以任务 ID 为主键；事件序号和任务 ID 共同构成主键，使每个任务的事件能按顺序补发。M2 的检索任务、来源和证据也用 run_id 归属到同一次运行。</p>
+  <p><code>research_plans.run_id</code> 和 <code>research_events.run_id</code> 都指向所属任务。计划以任务 ID 为主键；事件序号和任务 ID 共同构成主键，使每个任务的事件能按顺序补发。检索任务、来源、证据和主张也用 run_id 归属到同一次运行。M3 把来源元数据放在独立扩展表中，因此旧数据库无需给原来源表破坏性加列；启动时可以直接补齐新表。</p>
 
   <h2>6. SQLAlchemy 帮了什么忙</h2>
   <p>没有 ORM 时，代码需要手写大量 SQL，并手动把查询结果转换成 Python 对象。当前项目用 <code>ResearchRunRow</code> 和 <code>ResearchEventRow</code> 描述表结构，再通过异步 Session 执行查询与提交。SQLAlchemy 的异步接口由官方 <a href="https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html">Asyncio 文档</a>定义。</p>

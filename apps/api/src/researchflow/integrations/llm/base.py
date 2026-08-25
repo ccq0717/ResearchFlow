@@ -44,6 +44,7 @@ class ResearchDocumentInput:
 class EvidenceDraft:
     source_id: str
     question_id: str
+    claim: str
     excerpt: str
     summary: str
 

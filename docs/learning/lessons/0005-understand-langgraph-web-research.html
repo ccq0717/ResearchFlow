@@ -15,7 +15,7 @@
 
   <h2>1. 六个节点</h2>
   <div class="flow"><span>规划</span><b>→</b><span>搜索</span><b>→</b><span>阅读</span><b>→</b><span>证据</span><b>→</b><span>写作</span><b>→</b><span>检查</span></div>
-  <p>规划节点生成研究问题和英文检索词；搜索节点创建 ResearchTask；阅读节点保存 Source；证据节点把网页片段关联到问题；写作节点生成报告；检查节点做确定性关联检查。</p>
+  <p>规划节点生成研究问题和英文检索词；搜索节点创建 ResearchTask；阅读节点保存并分类 Source；证据节点把网页片段关联到问题并形成 Claim；写作节点生成报告与可追溯章节；检查节点做确定性关联检查。</p>
 
   <h2>2. 为什么问题和检索词分开</h2>
   <table><thead><tr><th>字段</th><th>服务对象</th><th>示例</th></tr></thead><tbody>
@@ -41,11 +41,11 @@
   <h2>5. 为什么 Graph 不直接写数据库</h2>
   <p>工作流把节点状态转换成 <code>ResearchWorkflowUpdate</code>，Application 统一保存材料和事件。未来更换编排框架时，API 无需跟着改变。</p>
 
-  <h2>6. 当前检查不是完整引用验证</h2>
-  <p>M2 只确认 Evidence 指向已有 Source，并检查报告包含来源链接。M3 将加入来源分类与元数据、Claim—Evidence 关系、来源质量控制和引用覆盖检查。</p>
+  <h2>6. 当前怎样检查引用</h2>
+  <p>M3 要求每条 Claim 至少关联一条已有 Evidence、每条 Evidence 指向已有 Source，并检查报告的主张小节包含对应来源链接。界面显示主张覆盖率和来源类型计数；DOI、卷期、被引量等专业学术元数据仍不在当前范围。</p>
 
   <h2>7. 关联关系总结</h2>
-  <p>六个 StateGraph 节点用固定边按顺序连接；FakeSearchProvider 与真实搜索实现遵守相同接口，因此测试无需访问互联网。数据关系从 Research Question 开始，经 ResearchTask 记录检索，再由 Source 保存实际读取的网页，最后由 Evidence 把原文片段关联回问题和来源。</p>
+  <p>六个 StateGraph 节点用固定边按顺序连接；FakeSearchProvider 与真实搜索实现遵守相同接口，因此测试无需访问互联网。数据关系从 Research Question 开始，经 ResearchTask 记录检索，再由 Source 保存实际读取的网页，Evidence 把原文片段关联回问题和来源，Claim 最后把报告中的关键陈述关联到一条或多条 Evidence。</p>
   <p><a href="../README.md">返回学习区</a></p>
 </main>
 </body>

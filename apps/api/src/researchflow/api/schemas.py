@@ -5,6 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_core import PydanticCustomError
 
 from researchflow.domain.research import (
+    CitationAudit,
+    Claim,
     Evidence,
     ResearchEvent,
     ResearchMaterials,
@@ -16,6 +18,7 @@ from researchflow.domain.research import (
     ResearchTask,
     ResearchTaskStatus,
     Source,
+    SourceType,
 )
 
 
@@ -161,6 +164,10 @@ class SourceResponse(BaseModel):
     url: str
     snippet: str
     retrieved_at: datetime
+    source_type: SourceType
+    author: str | None
+    published_at: datetime | None
+    publisher: str | None
 
     @classmethod
     def from_domain(cls, source: Source) -> "SourceResponse":
@@ -184,11 +191,53 @@ class EvidenceResponse(BaseModel):
         return cls.model_validate(evidence)
 
 
+class ClaimResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    run_id: UUID
+    question_id: str
+    text: str
+    evidence_ids: list[str]
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, claim: Claim) -> "ClaimResponse":
+        return cls(
+            id=claim.id,
+            run_id=claim.run_id,
+            question_id=claim.question_id,
+            text=claim.text,
+            evidence_ids=list(claim.evidence_ids),
+            created_at=claim.created_at,
+        )
+
+
+class CitationAuditResponse(BaseModel):
+    claim_count: int
+    supported_claim_count: int
+    coverage_percent: int
+    unsupported_claim_ids: list[str]
+    source_type_counts: dict[SourceType, int]
+
+    @classmethod
+    def from_domain(cls, audit: CitationAudit) -> "CitationAuditResponse":
+        return cls(
+            claim_count=audit.claim_count,
+            supported_claim_count=audit.supported_claim_count,
+            coverage_percent=audit.coverage_percent,
+            unsupported_claim_ids=list(audit.unsupported_claim_ids),
+            source_type_counts=audit.source_type_counts,
+        )
+
+
 class ResearchMaterialsResponse(BaseModel):
     run_id: UUID
     tasks: list[ResearchTaskResponse]
     sources: list[SourceResponse]
     evidence: list[EvidenceResponse]
+    claims: list[ClaimResponse]
+    citation_audit: CitationAuditResponse
 
     @classmethod
     def from_domain(cls, materials: ResearchMaterials) -> "ResearchMaterialsResponse":
@@ -197,4 +246,6 @@ class ResearchMaterialsResponse(BaseModel):
             tasks=[ResearchTaskResponse.from_domain(task) for task in materials.tasks],
             sources=[SourceResponse.from_domain(source) for source in materials.sources],
             evidence=[EvidenceResponse.from_domain(item) for item in materials.evidence],
+            claims=[ClaimResponse.from_domain(claim) for claim in materials.claims],
+            citation_audit=CitationAuditResponse.from_domain(materials.citation_audit),
         )

@@ -53,6 +53,7 @@ class FakeLLMClient:
             EvidenceDraft(
                 source_id=document.source_id,
                 question_id=f"q{index % len(questions) + 1}",
+                claim=("可靠的代码生成评测需要结合可复现任务、质量指标、安全检查和效率指标。"),
                 excerpt=document.content[:240],
                 summary="该来源支持采用可复现任务、质量指标、安全检查和效率指标进行综合评测。",
             )
@@ -75,7 +76,7 @@ class FakeLLMClient:
         findings = "\n".join(
             f"- {item.summary}（证据 {index}）" for index, item in enumerate(evidence, start=1)
         )
-        report = f"""# AI 研究报告（M2 网页研究）
+        report = f"""# AI 研究报告（M3 可追溯引用）
 
 ## 研究目标
 

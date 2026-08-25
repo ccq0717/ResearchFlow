@@ -5,6 +5,7 @@ from typing import Protocol
 from uuid import UUID
 
 from researchflow.domain.research import (
+    Claim,
     Evidence,
     ResearchEventDraft,
     ResearchPlan,
@@ -28,6 +29,7 @@ class ResearchWorkflowUpdate:
     tasks: tuple[ResearchTask, ...] = ()
     sources: tuple[Source, ...] = ()
     evidence: tuple[Evidence, ...] = ()
+    claims: tuple[Claim, ...] = ()
     events: tuple[ResearchEventDraft, ...] = ()
     outcome: ResearchRunOutcome | None = None
 
@@ -43,6 +45,7 @@ class ResearchWorkflowUpdate:
                 self.tasks or None,
                 self.sources or None,
                 self.evidence or None,
+                self.claims or None,
             )
         ):
             raise ValueError("终态更新不能同时包含普通状态或计划")

@@ -1,8 +1,8 @@
 # ResearchFlow 使用、开发与运维手册
 
-> 适用阶段：M2 LangGraph 与真实网页研究闭环
+> 适用阶段：M3 来源质量与可追溯引用闭环
 > 主要平台：Windows 10 / 11 + PowerShell
-> 最后更新：2026-08-25
+> 最后更新：2026-08-26
 
 本文是 ResearchFlow 的统一运行手册，回答以下问题：
 
@@ -12,9 +12,9 @@
 - 数据放在哪里，如何备份与重置；
 - 常见故障如何定位；
 - 如何在模拟、仅 LLM 规划和 LangGraph 网页研究模式之间切换；
-- 后续完善来源质量、可追溯引用和本地 RAG 后，运行方式会如何扩展。
+- 后续接入本地 RAG 后，运行方式会如何扩展。
 
-项目已完成 M2：真实链路可以规划、检索和读取开放 Web 中的公开资料、提取证据并生成报告。当前不包含专业学术元数据、Claim 级引用验证或本地 RAG。
+项目已完成 M3：真实链路可以规划、检索和分类开放 Web 资料，保存可用来源元数据，建立 Claim—Evidence 关系，检查引用覆盖并生成报告。当前不包含 DOI、卷期、被引量等专业学术元数据或本地 RAG。
 
 ## 1. 当前产品由什么组成
 
@@ -26,7 +26,7 @@
 | 研究工作流 | 模拟、LLM 规划或 LangGraph 网页研究 | 后端进程内 | 由后端自动运行 |
 | LLM | OpenAI-compatible HTTP 适配器 | 远程或本地兼容服务 | `llm` / `langgraph` 需要 |
 | 网页搜索与读取 | Exa Search API / Search Result Reader | 公共 HTTPS API | 仅 `langgraph` 需要 |
-| 专业学术元数据与引用验证 | 尚未接入 | 无 | 否 |
+| 来源质量与可追溯引用 | 来源分类、Claim—Evidence、引用检查 | 后端与前端 | `langgraph` 使用 |
 | 本地知识库 / 向量数据库 / RAG | 尚未接入 | 无 | 否 |
 
 前端负责展示页面和接收操作，后端负责保存任务、运行工作流并通过 SSE 推送进度。关闭前端不会删除数据；关闭后端会让页面暂时无法读取或创建任务。
@@ -46,7 +46,7 @@
 调研学术界和工业界对 AI 代码生成工具的评测方法，并设计一份覆盖代码质量、安全性和开发效率的评测方案。
 ```
 
-默认 `simulation` 模式输出模拟报告，不访问外部服务。`llm` 模式只真实生成研究计划。`langgraph` 模式会调用配置的 LLM，并通过 Exa Search API 检索论文页面、官方文档、企业技术博客和其他公开网页。它属于通用 Web 搜索，但尚未提供专业学术元数据和严格引用验证。
+默认 `simulation` 模式输出模拟报告，不访问外部服务。`llm` 模式只真实生成研究计划。`langgraph` 模式会调用配置的 LLM，并通过 Exa Search API 检索论文页面、官方文档、企业技术博客和其他公开网页；工作流会分类来源、保存可用元数据、建立主张与证据关系并执行引用检查。
 
 ## 3. 第一次初始化开发环境
 
@@ -236,7 +236,7 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 修改后应重启前端。`.env.local` 已被仓库的忽略规则覆盖，不应提交。
 
-### 6.3 启用真实 LLM 或 M2 网页研究
+### 6.3 启用真实 LLM 或 M3 可追溯网页研究
 
 目标 LLM 服务需支持 Chat Completions 和 `response_format.type=json_schema`。只验证真实规划时使用：
 
@@ -247,7 +247,7 @@ RESEARCHFLOW_LLM_API_KEY=本机真实密钥
 RESEARCHFLOW_LLM_BASE_URL=https://供应商地址/v1
 ```
 
-要运行 M2 完整链路，把模式改为：
+要运行 M3 完整链路，把模式改为：
 
 ```dotenv
 RESEARCHFLOW_WORKFLOW_MODE=langgraph
@@ -261,7 +261,7 @@ RESEARCHFLOW_WEB_SEARCH_API_KEY=本机真实Exa密钥
 RESEARCHFLOW_WEB_SEARCH_RESULT_LIMIT=3
 ```
 
-Exa Key 只写入仓库根目录被 Git 忽略的 `.env`，不要发送到前端，也不要复制到 `.env.example`、文档、截图或 Commit。运行设备必须能够访问 `api.exa.ai` 和模型服务。重启后端并检查 `/health` 的 `workflow_mode`。成功运行时，工作区会依次出现计划、检索任务、来源、证据和报告；网页或模型失败会进入 `failed` 并显示安全错误。
+Exa Key 只写入仓库根目录被 Git 忽略的 `.env`，不要发送到前端，也不要复制到 `.env.example`、文档、截图或 Commit。运行设备必须能够访问 `api.exa.ai` 和模型服务。重启后端并检查 `/health` 的 `workflow_mode`。成功运行时，工作区会依次出现计划、检索任务、分类来源、证据、关键主张、引用覆盖率和报告；网页或模型失败会进入 `failed` 并显示安全错误。
 
 OpenCode Zen 的 MiMo 示例和数据使用注意事项见 [OpenCode Zen API 配置调研](../research/opencode-zen-api.md)。直接 API 不使用 `opencode/` 模型前缀。
 
@@ -275,7 +275,7 @@ RESEARCHFLOW_WORKFLOW_MODE=simulation
 
 ### 6.4 网页 Provider 边界
 
-当前默认 Provider 是 Exa：`ExaSearchProvider` 调用通用 `/search`，请求 token-efficient highlights，并把标题、URL、摘要、正文和可选元数据归一化成 `SearchResult`；`SearchResultPageReader` 再把 Provider 已提取的正文转换成 `WebDocument`。适配器支持超时与有限重试，并分别处理鉴权失败、额度限制、供应商错误和非法响应。
+当前默认 Provider 是 Exa：`ExaSearchProvider` 调用通用 `/search`，请求 token-efficient highlights，并把标题、URL、摘要、正文、作者和发布时间归一化成 `SearchResult`；工作流再使用可解释 URL 规则归一化来源类型与发布机构。`SearchResultPageReader` 把 Provider 已提取的正文转换成 `WebDocument`。适配器支持超时与有限重试，并分别处理鉴权失败、额度限制、供应商错误和非法响应。
 
 LangGraph 只依赖 `SearchProvider` 和 `WebPageReader`，不认识 Exa 请求或响应。未来更换质量更高的付费搜索服务时，应新增或替换 adapter，继续返回 ResearchFlow DTO；如果新服务只返回 URL，可以为它注入独立网页 Reader，不需要修改工作流、领域模型或前端。
 
@@ -352,9 +352,17 @@ Move-Item .\var\researchflow.db .\var\researchflow.db.bak
 后端静态检查：
 
 ```powershell
-.\.venv\Scripts\ruff.exe check apps/api
-.\.venv\Scripts\ruff.exe format --check apps/api
+.\.venv\Scripts\ruff.exe check apps/api scripts
+.\.venv\Scripts\ruff.exe format --check apps/api scripts
 ```
+
+M3 Exa 来源覆盖度评测会执行 3 次真实搜索，只在需要重新验证供应商覆盖时手动运行：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_exa_coverage.py
+```
+
+验收查询、阈值和最近结果见 [M3 Exa 来源覆盖度评测](../research/exa-m3-source-coverage.md)。该命令会读取本地 `.env` 并消耗少量 Exa 额度，不属于 CI。
 
 前端基础测试：
 

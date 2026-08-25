@@ -1,12 +1,12 @@
 # ResearchFlow
 
-ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前版本能把开放式研究目标转成结构化计划，检索和读取开放 Web 中的公开资料，保存来源与证据，并展示可恢复的研究过程；后续将加入来源分类、可追溯引用和个人知识库。
+ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前版本能把开放式研究目标转成结构化计划，检索和读取开放 Web 中的公开资料，保存分类来源、证据与关键主张，并展示可恢复、可追溯引用的研究过程；下一阶段将加入个人知识库。
 
 项目的首个演示场景是：调研 AI 代码生成工具的现有评测方法，并产出一份可以实际执行的评测方案。
 
 ## 当前进度
 
-仓库目前已完成 M0、M1 和 M2，已经具备第一条可重新打开的真实网页研究闭环：
+仓库目前已完成 M0 至 M3，已经具备可重新打开、可追溯引用的真实网页研究闭环：
 
 - 在 Next.js Dashboard 创建任务，并在 Research Workspace 查看 SSE 实时进度；
 - 使用 SQLite 持久化运行、事件、结构化计划、检索子任务、网页来源、证据和报告；
@@ -14,20 +14,21 @@ ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前
 - `langgraph` 模式执行规划、搜索、阅读、证据提取、写作和检查六个节点；
 - 真实网页来源使用 Exa Search API 检索论文页面、官方文档、企业技术博客和其他公开网页；
 - 中文研究问题与英文检索词分开保存，兼顾界面可读性和通用 Web 检索效果；
-- 前端展示研究计划、检索来源、证据摘要与原文片段，刷新后仍可恢复；
+- 保存来源类型与可用元数据，建立 Claim—Evidence 关系并检查引用覆盖率；
+- 前端展示研究计划、分类来源、关键主张、证据与可点击引用，刷新后仍可恢复；
 - 外部能力均有 Fake/Mock，常规测试不联网、不消耗模型额度；
 - 后端、前端、Ruff、ESLint 和生产构建纳入 GitHub Actions。
 
-M2 已建立通用网页研究闭环，但尚不等同于完整的学术研究与引用系统。专业学术元数据、Claim—Evidence 引用关系、黄金演示报告和引用覆盖检查属于 M3。
+M3 已建立来源分类与可追溯引用闭环。固定查询验证 Exa 足以覆盖当前黄金场景所需的学术、官方和工业资料，因此暂不额外接入学术 Provider；DOI、期刊、被引量等专业学术元数据仍属于后续按需增强能力。
 
 ## 开发路线图
 
-当前已完成 M2“LangGraph 与真实网页研究闭环”，下一步是 M3“来源质量、可追溯引用和黄金演示场景”。
+当前已完成 M3“来源质量、可追溯引用和黄金演示场景”，下一步是 M4“本地知识库与 RAG”。
 
 - [x] M0：模拟全栈纵向闭环；
 - [x] M1：真实 LLM 接入与工程加固；
 - [x] M2：LangGraph 与真实网页研究闭环；
-- [ ] M3：来源质量、可追溯引用和黄金演示场景；
+- [x] M3：来源质量、可追溯引用和黄金演示场景；
 - [ ] M4：本地知识库与 RAG；
 - [ ] M5：可靠性、测试与作品集交付。
 
@@ -50,10 +51,11 @@ apps/web       Next.js 前端
 apps/api       FastAPI 后端
 docs           产品、架构、技术决策和调研文档
 examples       可公开使用的演示输入
+scripts        可重复运行的质量评测与开发辅助脚本
 var            本地运行数据（不提交到 Git）
 ```
 
-建议先阅读 [MVP 技术规格](docs/product/mvp-spec.md)、[核心数据模型](docs/architecture/domain-model.md)、[LLM 接入架构](docs/architecture/llm-integration.md)、[SSE 事件契约](docs/architecture/sse-events.md)和[仓库结构设计](docs/architecture/repository-structure.md)。
+建议先阅读 [MVP 技术规格](docs/product/mvp-spec.md)、[核心数据模型](docs/architecture/domain-model.md)、[LLM 接入架构](docs/architecture/llm-integration.md)、[SSE 事件契约](docs/architecture/sse-events.md)、[M3 阶段复盘](docs/product/retrospectives/m3.md)和[仓库结构设计](docs/architecture/repository-structure.md)。
 
 ## 环境要求
 
@@ -111,8 +113,8 @@ npm run dev -- --hostname 127.0.0.1
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest apps/api/tests
-.\.venv\Scripts\ruff.exe check apps/api
-.\.venv\Scripts\ruff.exe format --check apps/api
+.\.venv\Scripts\ruff.exe check apps/api scripts
+.\.venv\Scripts\ruff.exe format --check apps/api scripts
 ```
 
 前端测试、代码检查与生产构建：
@@ -127,7 +129,7 @@ npm run build --prefix apps/web
 
 请从 `.env.example` 复制本地配置，不要提交真实 API Key、访问令牌或个人资料。
 
-默认 `simulation` 模式不需要任何外部服务。若要启用 M2 真实网页研究，在本地 `.env` 中设置：
+默认 `simulation` 模式不需要任何外部服务。若要启用 M3 可追溯网页研究，在本地 `.env` 中设置：
 
 ```dotenv
 RESEARCHFLOW_WORKFLOW_MODE=langgraph

@@ -1,7 +1,7 @@
 # ResearchFlow 核心数据模型
 
-> 状态：M2 实现基线
-> 更新日期：2026-08-25
+> 状态：M3 实现基线
+> 更新日期：2026-08-26
 
 ## 1. 建模原则
 
@@ -25,15 +25,19 @@
 
 问题不是证据；检索词也不是新的研究问题。旧数据库中没有 `search_query` 的 M1 计划会回退使用原问题文本。
 
-## 3. M2 研究材料
+## 3. M2/M3 研究材料与可追溯引用
 
 | 模型 | 关键字段 | 语义 |
 | --- | --- | --- |
 | `ResearchTask` | `question_id`、`query`、`status` | 为某个问题执行的一次检索活动 |
-| `Source` | `task_id`、`title`、`url`、`snippet` | 实际读取并保存元数据的外部材料 |
+| `Source` | `task_id`、`title`、`url`、`snippet`、`source_type`、作者/日期/机构 | 实际读取并归一化元数据的外部材料 |
 | `Evidence` | `task_id`、`question_id`、`source_id`、`excerpt`、`summary` | 来源原文片段及其对问题的解释 |
+| `Claim` | `question_id`、`text`、`evidence_ids` | 报告中需要证据支持、可以独立检查的关键主张 |
+| `CitationAudit` | 主张数、已支持主张数、覆盖率、来源类型计数 | 从当前材料确定性计算的引用完整性摘要 |
 
-Evidence 必须同时关联 Source 和 Research Question。M2 的检查保证证据引用已有来源，且报告至少包含一个实际来源链接；它尚未建立报告主张级的 `Claim` 模型。
+Evidence 必须同时关联 Source 和 Research Question；Claim 通过显式关系关联一条或多条 Evidence。M3 检查保证每条 Claim 都有有效 Evidence、相关 Evidence 指向已有 Source，并且报告的可追溯章节包含相邻的来源链接。
+
+来源类型是 `academic`、`official`、`industry`、`community` 或保守回退的 `other`。分类使用可解释的 URL 规则，作者和发布时间来自 Provider 可用元数据，发布机构从来源域名归一化；缺失值不会由模型猜测补齐。
 
 ## 4. 阶段与事件
 
@@ -47,7 +51,7 @@ planning → retrieving → analyzing → writing → finalizing
 
 ## 5. ResearchWorkflowUpdate
 
-`ResearchWorkflow` 以异步迭代器产生 `ResearchWorkflowUpdate`。更新可以携带状态、阶段、进度、计划、任务、来源、证据、事件或终态。Application 是唯一消费方，并调用 Repository 持久化；工作流不导入 Repository。
+`ResearchWorkflow` 以异步迭代器产生 `ResearchWorkflowUpdate`。更新可以携带状态、阶段、进度、计划、任务、来源、证据、主张、事件或终态。Application 是唯一消费方，并调用 Repository 持久化；工作流不导入 Repository。
 
 这使 `LangGraphResearchWorkflow` 能在内部使用 Graph State，同时 FastAPI、领域模型、数据库接口和前端都只看 ResearchFlow 类型。
 
@@ -58,7 +62,10 @@ planning → retrieving → analyzing → writing → finalizing
 - `research_events`
 - `research_tasks`
 - `research_sources`
+- `research_source_metadata`
 - `research_evidence`
+- `research_claims`
+- `research_claim_evidence`
 
 后端启动时使用 SQLAlchemy `create_all` 补齐新表。当前没有正式迁移工具，因此公开部署前仍需加入迁移和回滚方案。
 
@@ -72,4 +79,4 @@ planning → retrieving → analyzing → writing → finalizing
 
 ## 8. 后续模型
 
-M3～M5 再引入 `Claim`、`KnowledgeDocument`、`DocumentChunk` 和 `WorkflowAttempt`，分别承载主张引用、本地资料、向量片段和重试恢复信息。
+M4～M5 再引入 `KnowledgeDocument`、`DocumentChunk` 和 `WorkflowAttempt`，分别承载本地资料、向量片段和重试恢复信息。

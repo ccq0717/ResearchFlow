@@ -77,6 +77,10 @@ export interface ResearchSource {
   url: string;
   snippet: string;
   retrieved_at: string;
+  source_type: "academic" | "official" | "industry" | "community" | "other";
+  author: string | null;
+  published_at: string | null;
+  publisher: string | null;
 }
 
 export interface ResearchEvidence {
@@ -90,11 +94,30 @@ export interface ResearchEvidence {
   created_at: string;
 }
 
+export interface ResearchClaim {
+  id: string;
+  run_id: string;
+  question_id: string;
+  text: string;
+  evidence_ids: string[];
+  created_at: string;
+}
+
+export interface CitationAudit {
+  claim_count: number;
+  supported_claim_count: number;
+  coverage_percent: number;
+  unsupported_claim_ids: string[];
+  source_type_counts: Record<ResearchSource["source_type"], number>;
+}
+
 export interface ResearchMaterials {
   run_id: string;
   tasks: ResearchTask[];
   sources: ResearchSource[];
   evidence: ResearchEvidence[];
+  claims: ResearchClaim[];
+  citation_audit: CitationAudit;
 }
 
 export const apiBaseUrl =

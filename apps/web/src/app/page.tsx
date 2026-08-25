@@ -57,7 +57,7 @@ export default function Dashboard() {
           <div className="mb-10 flex items-center justify-between">
             <div className="text-lg font-semibold tracking-tight">ResearchFlow</div>
             <div className="rounded-full border border-white/25 px-3 py-1 text-xs text-white/75">
-              M2 · Web Research
+              M3 · Traceable Research
             </div>
           </div>
           <div className="max-w-3xl">

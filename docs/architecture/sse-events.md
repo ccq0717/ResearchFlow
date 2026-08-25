@@ -1,7 +1,7 @@
 # ResearchFlow SSE 事件契约
 
-> 状态：M2 实现基线
-> 更新日期：2026-08-25
+> 状态：M3 实现基线
+> 更新日期：2026-08-26
 
 ## 1. 传输原则
 
@@ -15,13 +15,13 @@ SSE 从后端向 Research Workspace 单向推送运行进度。持久化事件�
 | `stage.started` / `stage.completed` | 通用阶段开始与完成 |
 | `research.plan.completed` | 计划已保存，前端重新读取 `/plan` |
 | `research.tasks.completed` | 检索任务已保存 |
-| `research.sources.completed` | 来源正文已读取并保存 |
-| `research.evidence.completed` | 证据已提取并保存 |
+| `research.sources.completed` | 来源正文、类型和可用元数据已保存 |
+| `research.evidence.completed` | 证据与 Claim—Evidence 关系已保存 |
 | `report.draft.completed` | 草稿已生成 |
 | `report.completed` / `run.completed` | 检查通过并结束 |
 | `run.failed` | 运行失败，payload 含稳定错误代码 |
 
-任务、来源或证据事件到达时，前端重新读取 `/api/research-runs/{id}/materials`。事件只传计数和状态，不重复传输正文。
+任务、来源或证据事件到达时，前端重新读取 `/api/research-runs/{id}/materials`。事件只传计数、引用覆盖率和来源类型计数等摘要，不重复传输正文。
 
 ## 3. 通用数据
 

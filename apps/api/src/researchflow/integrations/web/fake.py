@@ -8,11 +8,23 @@ class FakeSearchProvider:
 
     async def search(self, query: str, *, limit: int) -> tuple[SearchResult, ...]:
         query_id = sha256(query.encode("utf-8")).hexdigest()[:12]
+        normalized = query.lower()
+        if "benchmark" in normalized or "dataset" in normalized:
+            host = "arxiv.org"
+            author = "Research Benchmark Team"
+        elif "metric" in normalized:
+            host = "docs.example.test"
+            author = "Example Standards Group"
+        else:
+            host = "engineering.example.test"
+            author = "Example Engineering"
         return tuple(
             SearchResult(
                 title=f"{query}：公开资料 {index}",
-                url=f"https://example.test/research/{query_id}/{index}",
+                url=f"https://{host}/research/{query_id}/{index}",
                 snippet=f"关于“{query}”的公开资料摘要 {index}。",
+                published_at="2026-07-01T00:00:00Z",
+                author=author,
             )
             for index in range(1, limit + 1)
         )

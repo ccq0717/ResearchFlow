@@ -97,11 +97,12 @@ class ResearchRunApplication:
             )
         if update.plan is not None:
             await self._repository.save_plan(update.plan)
-        if update.tasks or update.sources or update.evidence:
+        if update.tasks or update.sources or update.evidence or update.claims:
             await self._repository.save_materials(
                 tasks=update.tasks,
                 sources=update.sources,
                 evidence=update.evidence,
+                claims=update.claims,
             )
         for event in update.events:
             await self._repository.append_event(

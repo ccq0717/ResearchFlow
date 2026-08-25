@@ -36,6 +36,14 @@ _Avoid_: 搜索结果、链接
 从 Source 中提取、能够支持一个 Research Question 的原文片段及其研究解释。
 _Avoid_: 摘要、模型结论
 
+**Claim（研究主张）**:
+报告中需要证据支持、可以独立检查的关键陈述；一条 Claim 可以由一条或多条 Evidence 支持。
+_Avoid_: Evidence、摘要、整份报告的结论
+
+**Citation Coverage（引用覆盖）**:
+一组 Claim 中已经关联有效 Evidence 的比例，用于识别缺少依据的关键陈述。
+_Avoid_: 来源数量、链接数量
+
 **Research Event（研究事件）**:
 描述研究运行中已发生状态变化的不可变记录。
 _Avoid_: Log、消息

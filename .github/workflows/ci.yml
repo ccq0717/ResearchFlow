@@ -26,8 +26,8 @@ jobs:
         run: .\.venv\Scripts\python.exe -m pytest apps/api/tests
       - name: Run Ruff
         run: |
-          .\.venv\Scripts\ruff.exe check apps/api
-          .\.venv\Scripts\ruff.exe format --check apps/api
+          .\.venv\Scripts\ruff.exe check apps/api scripts
+          .\.venv\Scripts\ruff.exe format --check apps/api scripts
 
   frontend:
     name: Frontend · Node 24

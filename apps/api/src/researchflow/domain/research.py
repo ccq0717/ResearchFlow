@@ -31,6 +31,14 @@ class ResearchTaskStatus(StrEnum):
     FAILED = "failed"
 
 
+class SourceType(StrEnum):
+    ACADEMIC = "academic"
+    OFFICIAL = "official"
+    INDUSTRY = "industry"
+    COMMUNITY = "community"
+    OTHER = "other"
+
+
 @dataclass(frozen=True, slots=True)
 class ResearchRun:
     id: UUID
@@ -122,6 +130,10 @@ class Source:
     url: str
     snippet: str
     retrieved_at: datetime
+    source_type: SourceType = SourceType.OTHER
+    author: str | None = None
+    published_at: datetime | None = None
+    publisher: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,8 +149,29 @@ class Evidence:
 
 
 @dataclass(frozen=True, slots=True)
+class Claim:
+    id: str
+    run_id: UUID
+    question_id: str
+    text: str
+    evidence_ids: tuple[str, ...]
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CitationAudit:
+    claim_count: int
+    supported_claim_count: int
+    coverage_percent: int
+    unsupported_claim_ids: tuple[str, ...]
+    source_type_counts: dict[SourceType, int]
+
+
+@dataclass(frozen=True, slots=True)
 class ResearchMaterials:
     run_id: UUID
     tasks: tuple[ResearchTask, ...]
     sources: tuple[Source, ...]
     evidence: tuple[Evidence, ...]
+    claims: tuple[Claim, ...]
+    citation_audit: CitationAudit

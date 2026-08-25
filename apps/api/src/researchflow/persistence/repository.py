@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
 from researchflow.domain.research import (
+    CitationAudit,
+    Claim,
     Evidence,
     ResearchEvent,
     ResearchEventDraft,
@@ -23,6 +25,7 @@ from researchflow.domain.research import (
     ResearchTask,
     ResearchTaskStatus,
     Source,
+    SourceType,
 )
 from researchflow.persistence.database import Base
 
@@ -105,6 +108,19 @@ class SourceRow(Base):
     retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class SourceMetadataRow(Base):
+    __tablename__ = "research_source_metadata"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("research_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    source_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    source_type: Mapped[SourceType] = mapped_column(Enum(SourceType))
+    author: Mapped[str | None] = mapped_column(Text)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    publisher: Mapped[str | None] = mapped_column(Text)
+
+
 class EvidenceRow(Base):
     __tablename__ = "research_evidence"
 
@@ -118,6 +134,28 @@ class EvidenceRow(Base):
     excerpt: Mapped[str] = mapped_column(Text)
     summary: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ClaimRow(Base):
+    __tablename__ = "research_claims"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("research_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    question_id: Mapped[str] = mapped_column(String(80))
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ClaimEvidenceRow(Base):
+    __tablename__ = "research_claim_evidence"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("research_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    claim_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    evidence_id: Mapped[str] = mapped_column(String(80), primary_key=True)
 
 
 class SqliteResearchRepository:
@@ -272,6 +310,7 @@ class SqliteResearchRepository:
         tasks: tuple[ResearchTask, ...] = (),
         sources: tuple[Source, ...] = (),
         evidence: tuple[Evidence, ...] = (),
+        claims: tuple[Claim, ...] = (),
     ) -> None:
         async with self._session() as session:
             for task in tasks:
@@ -297,6 +336,16 @@ class SqliteResearchRepository:
                         retrieved_at=source.retrieved_at,
                     )
                 )
+                await session.merge(
+                    SourceMetadataRow(
+                        run_id=str(source.run_id),
+                        source_id=source.id,
+                        source_type=source.source_type,
+                        author=source.author,
+                        published_at=source.published_at,
+                        publisher=source.publisher,
+                    )
+                )
             for item in evidence:
                 await session.merge(
                     EvidenceRow(
@@ -310,6 +359,24 @@ class SqliteResearchRepository:
                         created_at=item.created_at,
                     )
                 )
+            for claim in claims:
+                await session.merge(
+                    ClaimRow(
+                        run_id=str(claim.run_id),
+                        id=claim.id,
+                        question_id=claim.question_id,
+                        text=claim.text,
+                        created_at=claim.created_at,
+                    )
+                )
+                for evidence_id in claim.evidence_ids:
+                    await session.merge(
+                        ClaimEvidenceRow(
+                            run_id=str(claim.run_id),
+                            claim_id=claim.id,
+                            evidence_id=evidence_id,
+                        )
+                    )
             await session.commit()
 
     async def get_materials(self, run_id: UUID) -> ResearchMaterials:
@@ -322,16 +389,41 @@ class SqliteResearchRepository:
             source_rows = await session.scalars(
                 select(SourceRow).where(SourceRow.run_id == str(run_id)).order_by(SourceRow.id)
             )
+            metadata_rows = await session.scalars(
+                select(SourceMetadataRow).where(SourceMetadataRow.run_id == str(run_id))
+            )
             evidence_rows = await session.scalars(
                 select(EvidenceRow)
                 .where(EvidenceRow.run_id == str(run_id))
                 .order_by(EvidenceRow.id)
             )
+            claim_rows = await session.scalars(
+                select(ClaimRow).where(ClaimRow.run_id == str(run_id)).order_by(ClaimRow.id)
+            )
+            claim_evidence_rows = await session.scalars(
+                select(ClaimEvidenceRow)
+                .where(ClaimEvidenceRow.run_id == str(run_id))
+                .order_by(ClaimEvidenceRow.claim_id, ClaimEvidenceRow.evidence_id)
+            )
+            metadata_by_source = {row.source_id: row for row in metadata_rows}
+            evidence_items = tuple(self._row_to_evidence(row) for row in evidence_rows)
+            evidence_by_claim: dict[str, list[str]] = {}
+            for row in claim_evidence_rows:
+                evidence_by_claim.setdefault(row.claim_id, []).append(row.evidence_id)
+            source_items = tuple(
+                self._row_to_source(row, metadata_by_source.get(row.id)) for row in source_rows
+            )
+            claim_items = tuple(
+                self._row_to_claim(row, tuple(evidence_by_claim.get(row.id, ())))
+                for row in claim_rows
+            )
             return ResearchMaterials(
                 run_id=run_id,
                 tasks=tuple(self._row_to_task(row) for row in task_rows),
-                sources=tuple(self._row_to_source(row) for row in source_rows),
-                evidence=tuple(self._row_to_evidence(row) for row in evidence_rows),
+                sources=source_items,
+                evidence=evidence_items,
+                claims=claim_items,
+                citation_audit=self._citation_audit(claim_items, evidence_items, source_items),
             )
 
     async def append_event(
@@ -489,7 +581,7 @@ class SqliteResearchRepository:
         )
 
     @staticmethod
-    def _row_to_source(row: SourceRow) -> Source:
+    def _row_to_source(row: SourceRow, metadata: SourceMetadataRow | None = None) -> Source:
         return Source(
             id=row.id,
             run_id=UUID(row.run_id),
@@ -498,6 +590,12 @@ class SqliteResearchRepository:
             url=row.url,
             snippet=row.snippet,
             retrieved_at=SqliteResearchRepository._as_utc(row.retrieved_at),
+            source_type=metadata.source_type if metadata else SourceType.OTHER,
+            author=metadata.author if metadata else None,
+            published_at=(
+                SqliteResearchRepository._as_utc(metadata.published_at) if metadata else None
+            ),
+            publisher=metadata.publisher if metadata else None,
         )
 
     @staticmethod
@@ -511,4 +609,40 @@ class SqliteResearchRepository:
             excerpt=row.excerpt,
             summary=row.summary,
             created_at=SqliteResearchRepository._as_utc(row.created_at),
+        )
+
+    @staticmethod
+    def _row_to_claim(row: ClaimRow, evidence_ids: tuple[str, ...]) -> Claim:
+        return Claim(
+            id=row.id,
+            run_id=UUID(row.run_id),
+            question_id=row.question_id,
+            text=row.text,
+            evidence_ids=evidence_ids,
+            created_at=SqliteResearchRepository._as_utc(row.created_at),
+        )
+
+    @staticmethod
+    def _citation_audit(
+        claims: tuple[Claim, ...],
+        evidence: tuple[Evidence, ...],
+        sources: tuple[Source, ...],
+    ) -> CitationAudit:
+        evidence_ids = {item.id for item in evidence}
+        unsupported = tuple(
+            claim.id
+            for claim in claims
+            if not claim.evidence_ids
+            or not all(evidence_id in evidence_ids for evidence_id in claim.evidence_ids)
+        )
+        supported_count = len(claims) - len(unsupported)
+        counts = {source_type: 0 for source_type in SourceType}
+        for source in sources:
+            counts[source.source_type] += 1
+        return CitationAudit(
+            claim_count=len(claims),
+            supported_claim_count=supported_count,
+            coverage_percent=round(supported_count / len(claims) * 100) if claims else 0,
+            unsupported_claim_ids=unsupported,
+            source_type_counts=counts,
         )

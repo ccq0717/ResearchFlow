@@ -6,6 +6,7 @@ from uuid import UUID
 from langgraph.graph import END, START, StateGraph
 
 from researchflow.domain.research import (
+    Claim,
     Evidence,
     ResearchEventDraft,
     ResearchPlan,
@@ -16,6 +17,11 @@ from researchflow.domain.research import (
     ResearchTask,
     ResearchTaskStatus,
     Source,
+)
+from researchflow.domain.source_quality import (
+    classify_source,
+    infer_publisher,
+    parse_published_at,
 )
 from researchflow.integrations.llm.base import (
     EvidenceDraft,
@@ -43,6 +49,7 @@ class _ResearchState(TypedDict, total=False):
     documents: tuple[ResearchDocumentInput, ...]
     sources: tuple[Source, ...]
     evidence: tuple[Evidence, ...]
+    claims: tuple[Claim, ...]
     evidence_drafts: tuple[EvidenceDraft, ...]
     report_markdown: str
     warnings: tuple[str, ...]
@@ -191,6 +198,10 @@ class LangGraphResearchWorkflow:
                     url=document.url,
                     snippet=result.snippet[:500],
                     retrieved_at=datetime.now(UTC),
+                    source_type=classify_source(document.url),
+                    author=result.author,
+                    published_at=parse_published_at(result.published_at),
+                    publisher=infer_publisher(document.url),
                 )
             )
             documents.append(
@@ -239,6 +250,8 @@ class LangGraphResearchWorkflow:
             state["documents"],
         )
         source_by_id = {source.id: source for source in state["sources"]}
+        valid_drafts = tuple(item for item in result.evidence if item.source_id in source_by_id)
+        now = datetime.now(UTC)
         evidence = tuple(
             Evidence(
                 id=f"e{index}",
@@ -248,14 +261,36 @@ class LangGraphResearchWorkflow:
                 source_id=item.source_id,
                 excerpt=item.excerpt,
                 summary=item.summary,
-                created_at=datetime.now(UTC),
+                created_at=now,
             )
-            for index, item in enumerate(result.evidence, start=1)
-            if item.source_id in source_by_id
+            for index, item in enumerate(valid_drafts, start=1)
         )
         if not evidence:
             raise LLMClientError("EVIDENCE_NOT_FOUND", "没有从网页资料中提取到有效证据")
-        return {"evidence": evidence, "evidence_drafts": result.evidence}
+        evidence_ids_by_claim: dict[tuple[str, str], list[str]] = {}
+        for item, evidence_item in zip(valid_drafts, evidence, strict=True):
+            claim_text = " ".join(item.claim.split())
+            evidence_ids_by_claim.setdefault((item.question_id, claim_text), []).append(
+                evidence_item.id
+            )
+        claims = tuple(
+            Claim(
+                id=f"c{index}",
+                run_id=plan.run_id,
+                question_id=question_id,
+                text=claim_text,
+                evidence_ids=tuple(evidence_ids),
+                created_at=now,
+            )
+            for index, ((question_id, claim_text), evidence_ids) in enumerate(
+                evidence_ids_by_claim.items(), start=1
+            )
+        )
+        return {
+            "evidence": evidence,
+            "claims": claims,
+            "evidence_drafts": valid_drafts,
+        }
 
     async def _writing(self, state: _ResearchState) -> dict[str, Any]:
         plan = state["plan"]
@@ -276,13 +311,47 @@ class LangGraphResearchWorkflow:
             state["evidence_drafts"],
             state["documents"],
         )
-        return {"report_markdown": result.report_markdown}
+        return {
+            "report_markdown": self._append_traceability_section(
+                result.report_markdown,
+                state["claims"],
+                state["evidence"],
+                state["sources"],
+            )
+        }
 
     async def _checking(self, state: _ResearchState) -> dict[str, Any]:
-        source_ids = {source.id for source in state["sources"]}
-        linked_source_ids = {item.source_id for item in state["evidence"]}
-        has_source_link = any(source.url in state["report_markdown"] for source in state["sources"])
-        passed = bool(state["evidence"]) and linked_source_ids <= source_ids and has_source_link
+        source_by_id = {source.id: source for source in state["sources"]}
+        evidence_by_id = {item.id: item for item in state["evidence"]}
+        unsupported_claims = tuple(
+            claim.id
+            for claim in state["claims"]
+            if not claim.evidence_ids
+            or not all(evidence_id in evidence_by_id for evidence_id in claim.evidence_ids)
+        )
+        has_missing_evidence_source = any(
+            evidence_by_id[evidence_id].source_id not in source_by_id
+            for claim in state["claims"]
+            for evidence_id in claim.evidence_ids
+            if evidence_id in evidence_by_id
+        )
+        cited_source_urls = {
+            source_by_id[evidence_by_id[evidence_id].source_id].url
+            for claim in state["claims"]
+            for evidence_id in claim.evidence_ids
+            if evidence_id in evidence_by_id
+            and evidence_by_id[evidence_id].source_id in source_by_id
+        }
+        has_claim_sections = all(
+            f"### {claim.id.upper()}" in state["report_markdown"] for claim in state["claims"]
+        )
+        passed = (
+            bool(state["claims"])
+            and not unsupported_claims
+            and not has_missing_evidence_source
+            and has_claim_sections
+            and all(url in state["report_markdown"] for url in cited_source_urls)
+        )
         if not passed:
             raise LLMClientError(
                 "REPORT_EVIDENCE_CHECK_FAILED",
@@ -291,7 +360,36 @@ class LangGraphResearchWorkflow:
         return {
             "check_passed": True,
             "report_markdown": state["report_markdown"],
+            "source_type_counts": {
+                source_type: sum(source.source_type == source_type for source in state["sources"])
+                for source_type in {source.source_type for source in state["sources"]}
+            },
         }
+
+    @staticmethod
+    def _append_traceability_section(
+        report_markdown: str,
+        claims: tuple[Claim, ...],
+        evidence: tuple[Evidence, ...],
+        sources: tuple[Source, ...],
+    ) -> str:
+        evidence_by_id = {item.id: item for item in evidence}
+        source_by_id = {source.id: source for source in sources}
+        sections = [report_markdown.rstrip(), "", "## 可追溯主张与证据", ""]
+        for claim in claims:
+            sections.extend((f"### {claim.id.upper()}", "", claim.text, ""))
+            for evidence_id in claim.evidence_ids:
+                item = evidence_by_id.get(evidence_id)
+                if item is None:
+                    continue
+                source = source_by_id.get(item.source_id)
+                if source is None:
+                    continue
+                sections.append(
+                    f"- {item.id.upper()}：{item.summary}（[{source.title}]({source.url})）"
+                )
+            sections.append("")
+        return "\n".join(sections).rstrip() + "\n"
 
     @staticmethod
     def _to_workflow_update(chunk: dict[str, Any]) -> ResearchWorkflowUpdate | None:
@@ -354,13 +452,20 @@ class LangGraphResearchWorkflow:
                 stage=ResearchStage.ANALYZING,
                 progress=74,
                 evidence=state_update["evidence"],
+                claims=state_update["claims"],
                 events=(
                     ResearchEventDraft(
                         type="research.evidence.completed",
                         stage=ResearchStage.ANALYZING,
-                        message=f"已提取并保存 {len(state_update['evidence'])} 条研究证据",
+                        message=(
+                            f"已提取 {len(state_update['evidence'])} 条证据并建立 "
+                            f"{len(state_update['claims'])} 条可追溯主张"
+                        ),
                         progress=74,
-                        payload={"evidence_count": len(state_update["evidence"])},
+                        payload={
+                            "evidence_count": len(state_update["evidence"]),
+                            "claim_count": len(state_update["claims"]),
+                        },
                     ),
                 ),
             )
@@ -390,8 +495,12 @@ class LangGraphResearchWorkflow:
                         ResearchEventDraft(
                             type="report.completed",
                             stage=ResearchStage.FINALIZING,
-                            message="报告已通过来源与证据检查",
+                            message="报告已通过主张、证据与来源引用检查",
                             progress=100,
+                            payload={
+                                "citation_coverage_percent": 100,
+                                "source_type_counts": state_update.get("source_type_counts", {}),
+                            },
                         ),
                         ResearchEventDraft(
                             type="run.completed",

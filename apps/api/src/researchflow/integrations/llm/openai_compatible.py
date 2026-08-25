@@ -39,6 +39,7 @@ class _EvidenceItemOutput(BaseModel):
 
     source_id: str = Field(min_length=1, max_length=80)
     question_id: str = Field(min_length=1, max_length=80)
+    claim: str = Field(min_length=10, max_length=500)
     excerpt: str = Field(min_length=10, max_length=800)
     summary: str = Field(min_length=10, max_length=500)
 
@@ -131,7 +132,8 @@ class OpenAICompatibleLLMClient:
             system_prompt=(
                 "你是 ResearchFlow 的证据提取器。只从提供的网页正文提取证据。"
                 "每条证据必须引用现有 source_id 和 question_id；excerpt 必须是正文中的短原文，"
-                "summary 说明它怎样帮助回答问题。不要使用外部知识或编造原文。"
+                "claim 是该证据直接支持、可以写入报告的单一主张，summary 说明证据怎样支持主张。"
+                "不要使用外部知识或编造原文。相同主张可以由多个来源共同支持。"
             ),
             user_prompt=(
                 f"研究目标：{goal}\n\n研究问题：\n{question_text}\n\n网页资料：\n{document_text}"
@@ -146,6 +148,7 @@ class OpenAICompatibleLLMClient:
             EvidenceDraft(
                 source_id=item.source_id,
                 question_id=item.question_id,
+                claim=item.claim,
                 excerpt=item.excerpt,
                 summary=item.summary,
             )
@@ -170,13 +173,17 @@ class OpenAICompatibleLLMClient:
             f"{document.source_id}: [{document.title}]({document.url})" for document in documents
         )
         evidence_text = "\n".join(
-            (f"- {item.question_id} / {item.source_id}: {item.summary}\n  原文：{item.excerpt}")
+            (
+                f"- {item.question_id} / {item.source_id}\n"
+                f"  主张：{item.claim}\n  说明：{item.summary}\n  原文：{item.excerpt}"
+            )
             for item in evidence
         )
         output, usage, duration_ms = await self._request_structured(
             system_prompt=(
                 "你是 ResearchFlow 的报告撰写器。只能使用给定证据形成结论。"
                 "用中文 Markdown 写一份结构化短报告；关键结论旁必须包含给定来源的可点击链接。"
+                "报告应包含评测目标、指标、数据集或任务集、执行流程、评分方法和风险。"
                 "明确说明证据不足之处，不要添加资料中没有的事实。"
             ),
             user_prompt=(
