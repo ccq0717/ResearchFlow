@@ -1,6 +1,5 @@
 import asyncio
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 from uuid import UUID
 
 from researchflow.domain.research import (
@@ -9,7 +8,7 @@ from researchflow.domain.research import (
     ResearchRunStatus,
     ResearchStage,
 )
-from researchflow.workflows.base import ResearchWorkflowUpdate
+from researchflow.workflows.base import ResearchWorkflowUpdate, workflow_started_update
 
 
 class SimulatedResearchWorkflow:
@@ -17,18 +16,7 @@ class SimulatedResearchWorkflow:
         self._step_delay = step_delay
 
     async def execute(self, run_id: UUID, goal: str) -> AsyncIterator[ResearchWorkflowUpdate]:
-        yield ResearchWorkflowUpdate(
-            status=ResearchRunStatus.RUNNING,
-            progress=2,
-            started_at=datetime.now(UTC),
-            events=(
-                ResearchEventDraft(
-                    type="run.started",
-                    message="研究工作流开始执行",
-                    progress=2,
-                ),
-            ),
-        )
+        yield workflow_started_update("研究工作流开始执行")
 
         stages = [
             (ResearchStage.PLANNING, 15, "正在拆解研究目标并生成研究计划"),

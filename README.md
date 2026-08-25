@@ -154,6 +154,8 @@ LLM Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completio
 - [M1 可用性跟进复盘](docs/product/retrospectives/m1-usability-follow-up.md)
 - [M1 工程加固复盘](docs/product/retrospectives/pre-m2-hardening.md)
 - [M2 阶段复盘](docs/product/retrospectives/m2.md)
+- [M3 阶段复盘](docs/product/retrospectives/m3.md)
+- [进入 M4 前审查](docs/product/retrospectives/pre-m4-review.md)
 - [MVP 技术规格](docs/product/mvp-spec.md)
 - [领域词汇表](CONTEXT.md)
 - [核心数据模型](docs/architecture/domain-model.md)

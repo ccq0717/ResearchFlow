@@ -56,12 +56,12 @@ data: {"type":"stage.completed","stage":"retrieving","message":"检索资料完�
 <p>前端页面在 <a href="../../../apps/web/src/app/research/%5BrunId%5D/page.tsx"><code>apps/web/src/app/research/[runId]/page.tsx</code></a>，核心是浏览器原生的 <code>EventSource</code>：</p>
 <pre><code>const source = new EventSource(".../events");
 
-source.addEventListener("stage.completed", handleEvent);
+source.addEventListener("research.event", handleEvent);
 source.onerror = () => setConnection("连接中断");
 
 // 页面离开或任务结束时释放连接
 source.close();</code></pre>
-<p>每收到一个事件，前端解析 <code>data</code> 中的 JSON，更新 React 状态；React 再根据新状态重新显示进度条和研究事件。浏览器端标准用法可参考 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events">MDN SSE 指南</a>。</p>
+<p>线路上的事件名统一是 <code>research.event</code>，具体业务类型（例如 <code>stage.completed</code> 或 <code>research.evidence.completed</code>）位于 <code>data.type</code>。前端解析 JSON 后更新 React 状态；React 再根据新状态重新显示进度条和研究事件。浏览器端标准用法可参考 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events">MDN SSE 指南</a>。</p>
 
 <h2>6. 为什么不直接使用 WebSocket</h2>
 <p>WebSocket 支持前端和后端随时双向发消息，但 ResearchFlow 当前只需要后端推送任务进度。SSE 基于普通 HTTP，浏览器自带 <code>EventSource</code> 和自动重连语义，模型更简单。技术不是越强越好，而是要和问题匹配。</p>

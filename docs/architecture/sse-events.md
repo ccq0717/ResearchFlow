@@ -12,7 +12,7 @@ SSE 从后端向 Research Workspace 单向推送运行进度。持久化事件�
 | `data.type` | 用途 |
 | --- | --- |
 | `run.queued` / `run.started` | 排队与开始 |
-| `stage.started` / `stage.completed` | 通用阶段开始与完成 |
+| `stage.started` / `stage.completed` | simulation/llm 兼容模式的通用阶段事件 |
 | `research.plan.completed` | 计划已保存，前端重新读取 `/plan` |
 | `research.tasks.completed` | 检索任务已保存 |
 | `research.sources.completed` | 来源正文、类型和可用元数据已保存 |
@@ -22,6 +22,8 @@ SSE 从后端向 Research Workspace 单向推送运行进度。持久化事件�
 | `run.failed` | 运行失败，payload 含稳定错误代码 |
 
 任务、来源或证据事件到达时，前端重新读取 `/api/research-runs/{id}/materials`。事件只传计数、引用覆盖率和来源类型计数等摘要，不重复传输正文。
+
+`langgraph` 模式使用 `research.*.completed` 表达持久化检查点，不额外发送 `stage.completed`。所有持久化领域事件在线路上的 SSE `event` 都是 `research.event`；业务类型位于 `data.type`。
 
 ## 3. 通用数据
 

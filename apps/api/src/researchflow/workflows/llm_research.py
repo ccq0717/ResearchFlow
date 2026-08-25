@@ -12,7 +12,11 @@ from researchflow.domain.research import (
     ResearchStage,
 )
 from researchflow.integrations.llm.base import LLMClient, LLMClientError
-from researchflow.workflows.base import ResearchWorkflowUpdate
+from researchflow.workflows.base import (
+    ResearchWorkflowUpdate,
+    workflow_failure_update,
+    workflow_started_update,
+)
 
 
 class LLMResearchWorkflow:
@@ -23,18 +27,7 @@ class LLMResearchWorkflow:
         self._step_delay = step_delay
 
     async def execute(self, run_id: UUID, goal: str) -> AsyncIterator[ResearchWorkflowUpdate]:
-        yield ResearchWorkflowUpdate(
-            status=ResearchRunStatus.RUNNING,
-            progress=2,
-            started_at=datetime.now(UTC),
-            events=(
-                ResearchEventDraft(
-                    type="run.started",
-                    message="研究工作流开始执行",
-                    progress=2,
-                ),
-            ),
-        )
+        yield workflow_started_update("研究工作流开始执行")
         yield ResearchWorkflowUpdate(
             stage=ResearchStage.PLANNING,
             progress=10,
@@ -51,7 +44,7 @@ class LLMResearchWorkflow:
         try:
             result = await self._llm_client.create_research_plan(goal)
         except LLMClientError as error:
-            yield self._failure(error.code, error.public_message)
+            yield workflow_failure_update(error.code, error.public_message)
             return
 
         plan = ResearchPlan(
@@ -151,26 +144,6 @@ class LLMResearchWorkflow:
                         stage=ResearchStage.FINALIZING,
                         message="研究任务已完成",
                         progress=100,
-                    ),
-                ),
-            )
-        )
-
-    @staticmethod
-    def _failure(code: str, message: str) -> ResearchWorkflowUpdate:
-        return ResearchWorkflowUpdate(
-            outcome=ResearchRunOutcome(
-                status=ResearchRunStatus.FAILED,
-                progress=None,
-                stage=None,
-                report_markdown=None,
-                error_code=code,
-                error_message=message,
-                events=(
-                    ResearchEventDraft(
-                        type="run.failed",
-                        message=message,
-                        payload={"code": code},
                     ),
                 ),
             )

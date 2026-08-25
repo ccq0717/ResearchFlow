@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -57,3 +57,38 @@ class ResearchWorkflow(Protocol):
     """研究工作流对应用层暴露的最小接口。"""
 
     def execute(self, run_id: UUID, goal: str) -> AsyncIterator[ResearchWorkflowUpdate]: ...
+
+
+def workflow_started_update(message: str) -> ResearchWorkflowUpdate:
+    return ResearchWorkflowUpdate(
+        status=ResearchRunStatus.RUNNING,
+        progress=2,
+        started_at=datetime.now(UTC),
+        events=(
+            ResearchEventDraft(
+                type="run.started",
+                message=message,
+                progress=2,
+            ),
+        ),
+    )
+
+
+def workflow_failure_update(code: str, message: str) -> ResearchWorkflowUpdate:
+    return ResearchWorkflowUpdate(
+        outcome=ResearchRunOutcome(
+            status=ResearchRunStatus.FAILED,
+            progress=None,
+            stage=None,
+            report_markdown=None,
+            error_code=code,
+            error_message=message,
+            events=(
+                ResearchEventDraft(
+                    type="run.failed",
+                    message=message,
+                    payload={"code": code},
+                ),
+            ),
+        )
+    )

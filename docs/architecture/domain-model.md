@@ -35,7 +35,7 @@
 | `Claim` | `question_id`、`text`、`evidence_ids` | 报告中需要证据支持、可以独立检查的关键主张 |
 | `CitationAudit` | 主张数、已支持主张数、覆盖率、来源类型计数 | 从当前材料确定性计算的引用完整性摘要 |
 
-Evidence 必须同时关联 Source 和 Research Question；Claim 通过显式关系关联一条或多条 Evidence。M3 检查保证每条 Claim 都有有效 Evidence、相关 Evidence 指向已有 Source，并且报告的可追溯章节包含相邻的来源链接。
+Evidence 必须同时关联已有 Source 和 Research Question，且原文片段必须能在对应来源正文中找到；Claim 通过显式关系关联一条或多条 Evidence。M3 检查保证每条结构化 Claim 都有完整的 Claim—Evidence—Source 链路，并且报告的可追溯章节包含相邻的来源链接。
 
 来源类型是 `academic`、`official`、`industry`、`community` 或保守回退的 `other`。分类使用可解释的 URL 规则，作者和发布时间来自 Provider 可用元数据，发布机构从来源域名归一化；缺失值不会由模型猜测补齐。
 
@@ -79,4 +79,4 @@ planning → retrieving → analyzing → writing → finalizing
 
 ## 8. 后续模型
 
-M4～M5 再引入 `KnowledgeDocument`、`DocumentChunk` 和 `WorkflowAttempt`，分别承载本地资料、向量片段和重试恢复信息。
+M4 引入 `KnowledgeDocument` 和 `DocumentChunk`：前者表示可跨研究运行复用的用户资料，后者表示保留文件名、页码或段落定位的可检索片段。检索命中必须先转换成某次 Research Run 使用的 Source，再生成现有 Evidence，避免让 Evidence 同时维护网页和文件两套关联规则。`WorkflowAttempt` 继续留到 M5 承载重试恢复信息。

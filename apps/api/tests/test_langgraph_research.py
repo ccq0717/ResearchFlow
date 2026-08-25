@@ -1,6 +1,8 @@
 import asyncio
 import json
+from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -8,8 +10,10 @@ from httpx import ASGITransport, AsyncClient
 
 from researchflow.app_factory import create_app
 from researchflow.core.config import Settings
-from researchflow.domain.research import SourceType
+from researchflow.domain.citations import build_citation_audit
+from researchflow.domain.research import Claim, Evidence, SourceType
 from researchflow.domain.source_quality import classify_source, parse_published_at
+from researchflow.integrations.llm.base import EvidenceDraft, LLMEvidenceResult, LLMUsage
 from researchflow.integrations.llm.fake import FakeLLMClient
 from researchflow.integrations.web.base import SearchResult, WebResearchError
 from researchflow.integrations.web.exa import ExaSearchProvider
@@ -134,6 +138,92 @@ def test_source_quality_rules_are_stable_and_conservative() -> None:
     assert classify_source("https://example.com/article") is SourceType.OTHER
     assert parse_published_at("2026-07-01T00:00:00Z") is not None
     assert parse_published_at("not-a-date") is None
+
+
+def test_citation_audit_rejects_evidence_with_a_missing_source() -> None:
+    run_id = uuid4()
+    now = datetime.now(UTC)
+    evidence = Evidence(
+        id="e1",
+        run_id=run_id,
+        task_id="t1",
+        question_id="q1",
+        source_id="missing-source",
+        excerpt="A directly quoted passage.",
+        summary="The passage supports the claim.",
+        created_at=now,
+    )
+    claim = Claim(
+        id="c1",
+        run_id=run_id,
+        question_id="q1",
+        text="A traceable claim.",
+        evidence_ids=(evidence.id,),
+        created_at=now,
+    )
+
+    audit = build_citation_audit((claim,), (evidence,), ())
+
+    assert audit.coverage_percent == 0
+    assert audit.unsupported_claim_ids == ("c1",)
+
+
+class _InvalidEvidenceLLM(FakeLLMClient):
+    def __init__(self, *, invalid_question: bool) -> None:
+        self._invalid_question = invalid_question
+
+    async def extract_evidence(self, goal, questions, documents) -> LLMEvidenceResult:
+        del goal, questions
+        document = documents[0]
+        return LLMEvidenceResult(
+            evidence=(
+                EvidenceDraft(
+                    source_id=document.source_id,
+                    question_id="q999" if self._invalid_question else "q1",
+                    claim="这是一条不应进入报告的无效主张。",
+                    excerpt=(
+                        document.content[:80]
+                        if self._invalid_question
+                        else "这段文字并不存在于来源正文中。"
+                    ),
+                    summary="这条证据故意破坏关联约束。",
+                ),
+            ),
+            usage=LLMUsage(),
+            duration_ms=1,
+        )
+
+
+@pytest.mark.parametrize("invalid_question", [True, False])
+async def test_workflow_rejects_invalid_evidence_associations(
+    tmp_path: Path,
+    invalid_question: bool,
+) -> None:
+    app = create_app(
+        _settings(tmp_path / f"invalid-{invalid_question}.db"),
+        llm_client=_InvalidEvidenceLLM(invalid_question=invalid_question),
+        search_provider=FakeSearchProvider(),
+        page_reader=FakeWebPageReader(),
+    )
+
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            created = await client.post(
+                "/api/research-runs",
+                json={"goal": "验证无效证据不会进入研究报告和引用覆盖率"},
+            )
+            run_id = created.json()["id"]
+            for _ in range(200):
+                detail = await client.get(f"/api/research-runs/{run_id}")
+                if detail.json()["status"] in {"completed", "failed"}:
+                    break
+                await asyncio.sleep(0.01)
+
+            assert detail.json()["status"] == "failed"
+            assert detail.json()["error_code"] == "EVIDENCE_NOT_FOUND"
+            materials = (await client.get(f"/api/research-runs/{run_id}/materials")).json()
+            assert materials["evidence"] == []
+            assert materials["claims"] == []
 
 
 async def test_exa_search_and_reader_parse_external_response() -> None:

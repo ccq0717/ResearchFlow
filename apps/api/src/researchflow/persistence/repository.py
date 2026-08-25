@@ -9,8 +9,8 @@ from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text, 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
+from researchflow.domain.citations import build_citation_audit
 from researchflow.domain.research import (
-    CitationAudit,
     Claim,
     Evidence,
     ResearchEvent,
@@ -423,7 +423,7 @@ class SqliteResearchRepository:
                 sources=source_items,
                 evidence=evidence_items,
                 claims=claim_items,
-                citation_audit=self._citation_audit(claim_items, evidence_items, source_items),
+                citation_audit=build_citation_audit(claim_items, evidence_items, source_items),
             )
 
     async def append_event(
@@ -620,29 +620,4 @@ class SqliteResearchRepository:
             text=row.text,
             evidence_ids=evidence_ids,
             created_at=SqliteResearchRepository._as_utc(row.created_at),
-        )
-
-    @staticmethod
-    def _citation_audit(
-        claims: tuple[Claim, ...],
-        evidence: tuple[Evidence, ...],
-        sources: tuple[Source, ...],
-    ) -> CitationAudit:
-        evidence_ids = {item.id for item in evidence}
-        unsupported = tuple(
-            claim.id
-            for claim in claims
-            if not claim.evidence_ids
-            or not all(evidence_id in evidence_ids for evidence_id in claim.evidence_ids)
-        )
-        supported_count = len(claims) - len(unsupported)
-        counts = {source_type: 0 for source_type in SourceType}
-        for source in sources:
-            counts[source.source_type] += 1
-        return CitationAudit(
-            claim_count=len(claims),
-            supported_claim_count=supported_count,
-            coverage_percent=round(supported_count / len(claims) * 100) if claims else 0,
-            unsupported_claim_ids=unsupported,
-            source_type_counts=counts,
         )

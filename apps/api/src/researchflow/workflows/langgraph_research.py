@@ -37,7 +37,11 @@ from researchflow.integrations.web.base import (
     WebPageReader,
     WebResearchError,
 )
-from researchflow.workflows.base import ResearchWorkflowUpdate
+from researchflow.workflows.base import (
+    ResearchWorkflowUpdate,
+    workflow_failure_update,
+    workflow_started_update,
+)
 
 
 class _ResearchState(TypedDict, total=False):
@@ -88,18 +92,7 @@ class LangGraphResearchWorkflow:
         self._graph = builder.compile()
 
     async def execute(self, run_id: UUID, goal: str) -> AsyncIterator[ResearchWorkflowUpdate]:
-        yield ResearchWorkflowUpdate(
-            status=ResearchRunStatus.RUNNING,
-            progress=2,
-            started_at=datetime.now(UTC),
-            events=(
-                ResearchEventDraft(
-                    type="run.started",
-                    message="LangGraph 网页研究工作流开始执行",
-                    progress=2,
-                ),
-            ),
-        )
+        yield workflow_started_update("LangGraph 网页研究工作流开始执行")
         try:
             async for chunk in self._graph.astream(
                 {"run_id": str(run_id), "goal": goal, "warnings": ()},
@@ -109,7 +102,7 @@ class LangGraphResearchWorkflow:
                 if update is not None:
                     yield update
         except (LLMClientError, WebResearchError) as error:
-            yield self._failure(error.code, error.public_message)
+            yield workflow_failure_update(error.code, error.public_message)
 
     async def _planning(self, state: _ResearchState) -> dict[str, Any]:
         result = await self._llm_client.create_research_plan(state["goal"])
@@ -250,7 +243,18 @@ class LangGraphResearchWorkflow:
             state["documents"],
         )
         source_by_id = {source.id: source for source in state["sources"]}
-        valid_drafts = tuple(item for item in result.evidence if item.source_id in source_by_id)
+        question_ids = {question.id for question in plan.questions}
+        document_by_source_id = {document.source_id: document for document in state["documents"]}
+        valid_drafts = tuple(
+            item
+            for item in result.evidence
+            if item.source_id in source_by_id
+            and item.question_id in question_ids
+            and self._excerpt_occurs_in_document(
+                item.excerpt,
+                document_by_source_id[item.source_id].content,
+            )
+        )
         now = datetime.now(UTC)
         evidence = tuple(
             Evidence(
@@ -291,6 +295,12 @@ class LangGraphResearchWorkflow:
             "claims": claims,
             "evidence_drafts": valid_drafts,
         }
+
+    @staticmethod
+    def _excerpt_occurs_in_document(excerpt: str, content: str) -> bool:
+        normalized_excerpt = " ".join(excerpt.casefold().split())
+        normalized_content = " ".join(content.casefold().split())
+        return bool(normalized_excerpt) and normalized_excerpt in normalized_content
 
     async def _writing(self, state: _ResearchState) -> dict[str, Any]:
         plan = state["plan"]
@@ -512,23 +522,3 @@ class LangGraphResearchWorkflow:
                 )
             )
         return None
-
-    @staticmethod
-    def _failure(code: str, message: str) -> ResearchWorkflowUpdate:
-        return ResearchWorkflowUpdate(
-            outcome=ResearchRunOutcome(
-                status=ResearchRunStatus.FAILED,
-                progress=None,
-                stage=None,
-                report_markdown=None,
-                error_code=code,
-                error_message=message,
-                events=(
-                    ResearchEventDraft(
-                        type="run.failed",
-                        message=message,
-                        payload={"code": code},
-                    ),
-                ),
-            )
-        )
