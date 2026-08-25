@@ -144,6 +144,7 @@ Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completions`�
 ## 项目文档
 
 - [使用、开发与运维手册](docs/guides/development-and-operations.md)
+- [作品集在线 Demo 部署指南](docs/guides/online-demo-deployment.md)
 - [从零学习 ResearchFlow：前后端与 AI 工程课程](docs/learning/README.md)
 - [项目讨论记录](docs/product/project-discussion.md)
 - [项目路线图](docs/product/roadmap.md)
