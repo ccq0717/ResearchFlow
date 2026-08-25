@@ -12,7 +12,7 @@
 - 数据放在哪里，如何备份与重置；
 - 常见故障如何定位；
 - 如何在模拟、仅 LLM 规划和 LangGraph 网页研究模式之间切换；
-- 后续接入学术搜索、RAG 等服务后，运行方式会如何扩展。
+- 后续完善来源质量、可追溯引用和本地 RAG 后，运行方式会如何扩展。
 
 项目已完成 M2：真实链路可以规划、检索和读取开放 Web 中的公开资料、提取证据并生成报告。当前不包含专业学术元数据、Claim 级引用验证或本地 RAG。
 
@@ -26,7 +26,8 @@
 | 研究工作流 | 模拟、LLM 规划或 LangGraph 网页研究 | 后端进程内 | 由后端自动运行 |
 | LLM | OpenAI-compatible HTTP 适配器 | 远程或本地兼容服务 | `llm` / `langgraph` 需要 |
 | 网页搜索与读取 | Exa Search API / Search Result Reader | 公共 HTTPS API | 仅 `langgraph` 需要 |
-| 学术搜索 / 向量数据库 / RAG | 尚未接入 | 无 | 否 |
+| 专业学术元数据与引用验证 | 尚未接入 | 无 | 否 |
+| 本地知识库 / 向量数据库 / RAG | 尚未接入 | 无 | 否 |
 
 前端负责展示页面和接收操作，后端负责保存任务、运行工作流并通过 SSE 推送进度。关闭前端不会删除数据；关闭后端会让页面暂时无法读取或创建任务。
 
@@ -206,7 +207,7 @@ Get-NetTCPConnection -State Listen |
 | `RESEARCHFLOW_LLM_MODEL` | 模型名；`llm` / `langgraph` 必填 | 空 |
 | `RESEARCHFLOW_LLM_API_KEY` | 模型密钥；本地服务可留空 | 空 |
 | `RESEARCHFLOW_LLM_BASE_URL` | API 根地址 | `https://api.openai.com/v1` |
-| `RESEARCHFLOW_LLM_TIMEOUT_SECONDS` | 模型超时秒数 | `60` |
+| `RESEARCHFLOW_LLM_TIMEOUT_SECONDS` | 模型超时秒数；`.env.example` 推荐 `180` | `60`（代码内置兜底） |
 | `RESEARCHFLOW_WEB_SEARCH_PROVIDER` | 网页搜索适配器；当前支持 `exa` | `exa` |
 | `RESEARCHFLOW_WEB_SEARCH_BASE_URL` | 网页搜索 API 根地址 | `https://api.exa.ai` |
 | `RESEARCHFLOW_WEB_SEARCH_API_KEY` | 服务端 Exa 密钥；`langgraph` 必填 | 空 |

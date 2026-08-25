@@ -48,7 +48,7 @@
   <p>这个地址来自后端配置。三个斜杠后的相对路径以启动后端时的当前目录为基准，所以项目统一要求从仓库根目录启动。</p>
 
   <h2>4. 数据库何时出现</h2>
-  <p>后端启动时，<a href="../../../apps/api/src/researchflow/main.py"><code>main.py</code></a> 的生命周期函数调用 <code>create_schema(engine)</code>。<a href="../../../apps/api/src/researchflow/persistence/database.py"><code>database.py</code></a> 随后执行：</p>
+  <p>后端启动时，<a href="../../../apps/api/src/researchflow/app_factory.py"><code>app_factory.py</code></a> 创建的应用生命周期函数调用 <code>create_schema(engine)</code>。<a href="../../../apps/api/src/researchflow/persistence/database.py"><code>database.py</code></a> 随后执行：</p>
   <pre><code>await connection.run_sync(Base.metadata.create_all)</code></pre>
   <p>如果数据库文件或表不存在，SQLAlchemy 会根据模型创建它们；已经存在时则保留原数据。因此首次启动会自动生成文件，重启后历史记录仍然存在。</p>
 

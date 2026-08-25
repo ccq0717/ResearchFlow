@@ -42,7 +42,7 @@
   <p>工作流把节点状态转换成 <code>ResearchWorkflowUpdate</code>，Application 统一保存材料和事件。未来更换编排框架时，API 无需跟着改变。</p>
 
   <h2>6. 当前检查不是完整引用验证</h2>
-  <p>M2 只确认 Evidence 指向已有 Source，并检查报告包含来源链接。M3 才会加入 Claim—Evidence 关系、学术来源和引用覆盖检查。</p>
+  <p>M2 只确认 Evidence 指向已有 Source，并检查报告包含来源链接。M3 将加入来源分类与元数据、Claim—Evidence 关系、来源质量控制和引用覆盖检查。</p>
 
   <h2>7. 关联关系总结</h2>
   <p>六个 StateGraph 节点用固定边按顺序连接；FakeSearchProvider 与真实搜索实现遵守相同接口，因此测试无需访问互联网。数据关系从 Research Question 开始，经 ResearchTask 记录检索，再由 Source 保存实际读取的网页，最后由 Evidence 把原文片段关联回问题和来源。</p>

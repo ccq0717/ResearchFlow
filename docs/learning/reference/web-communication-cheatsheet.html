@@ -20,7 +20,7 @@
 <div class="callout success"><strong>当前选择：</strong>ResearchFlow 使用普通 REST 创建和读取任务，使用 SSE 接收执行进度。这不是二选一，而是各自处理适合的问题。</div>
 <h2>SSE 四个关键字段</h2>
 <table><tbody>
-<tr><th><code>event</code></th><td>事件名称，例如 <code>stage.progress</code></td></tr>
+<tr><th><code>event</code></th><td>SSE 事件名称；持久化研究事件统一使用 <code>research.event</code></td></tr>
 <tr><th><code>data</code></th><td>事件携带的数据；项目中使用 JSON 字符串</td></tr>
 <tr><th><code>id</code></th><td>事件序号；断线重连和去重时使用</td></tr>
 <tr><th><code>retry</code></th><td>建议浏览器断线后等待多久再重连，单位为毫秒</td></tr>

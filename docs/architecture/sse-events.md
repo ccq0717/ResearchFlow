@@ -12,7 +12,7 @@ SSE 从后端向 Research Workspace 单向推送运行进度。持久化事件�
 | `data.type` | 用途 |
 | --- | --- |
 | `run.queued` / `run.started` | 排队与开始 |
-| `stage.started` / `stage.progress` / `stage.completed` | 通用阶段进度 |
+| `stage.started` / `stage.completed` | 通用阶段开始与完成 |
 | `research.plan.completed` | 计划已保存，前端重新读取 `/plan` |
 | `research.tasks.completed` | 检索任务已保存 |
 | `research.sources.completed` | 来源正文已读取并保存 |

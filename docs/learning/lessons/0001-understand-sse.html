@@ -27,7 +27,7 @@
 <h2>3. 一条 SSE 消息长什么样</h2>
 <pre><code>id: 12
 event: research.event
-data: {"type":"stage.progress","stage":"retrieving","message":"正在检索资料","progress":35}
+data: {"type":"stage.completed","stage":"retrieving","message":"检索资料完成"}
 
 </code></pre>
 <ul>
@@ -41,7 +41,7 @@ data: {"type":"stage.progress","stage":"retrieving","message":"正在检索资�
 <h2>4. ResearchFlow 后端做了什么</h2>
 <p>后端入口在 <a href="../../../apps/api/src/researchflow/api/routes.py"><code>apps/api/src/researchflow/api/routes.py</code></a>。阅读时先只找下面四件事：</p>
 <ol>
-<li>路由 <code>/research-runs/{run_id}/events</code> 接受浏览器连接。</li>
+<li>路由 <code>/api/research-runs/{run_id}/events</code> 接受浏览器连接。</li>
 <li>异步生成器 <code>generate()</code> 从数据库读取尚未发送的事件。</li>
 <li><code>yield</code> 每执行一次，就向响应流交出一段文本。</li>
 <li><code>StreamingResponse</code> 使用 <code>text/event-stream</code> 返回持续响应。</li>

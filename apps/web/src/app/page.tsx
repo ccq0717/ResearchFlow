@@ -57,7 +57,7 @@ export default function Dashboard() {
           <div className="mb-10 flex items-center justify-between">
             <div className="text-lg font-semibold tracking-tight">ResearchFlow</div>
             <div className="rounded-full border border-white/25 px-3 py-1 text-xs text-white/75">
-              M1 · LLM Planning
+              M2 · Web Research
             </div>
           </div>
           <div className="max-w-3xl">
@@ -68,7 +68,7 @@ export default function Dashboard() {
               从研究目标到可追溯的方案文档
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/70">
-              从研究目标生成结构化计划并展示研究过程；网页、论文与知识库证据将在后续里程碑接入。
+              从研究目标生成结构化计划，检索开放 Web 中的公开资料，并展示可恢复的来源、证据与研究过程。
             </p>
           </div>
         </div>
@@ -89,7 +89,7 @@ export default function Dashboard() {
             />
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-[#6d746f]">
-                规划阶段可调用真实 LLM；检索、分析和报告阶段当前仍为演示流程。
+                使用 LangGraph 模式可调用真实 LLM 与 Exa，完成规划、检索、证据提取和报告生成。
               </p>
               <button
                 className="rounded-full bg-[#d96f32] px-6 py-3 font-semibold text-white transition hover:bg-[#bd5e2a] disabled:cursor-not-allowed disabled:opacity-50"

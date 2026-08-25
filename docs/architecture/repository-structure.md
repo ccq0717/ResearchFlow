@@ -112,7 +112,7 @@ LangGraphResearchWorkflow implementation
 - `LLMClient`：OpenAI-compatible 适配器 / Fake；
 - `SearchProvider`：Exa 通用 Web 适配器 / Fake；
 - `WebPageReader`：Provider 内容读取 / Fake，未来可替换为独立网页读取器；
-- `PaperProvider`：学术资料适配器 / 固定论文假实现；
+- 额外学术检索或元数据服务不是预设接口；只有固定查询证明现有能力不足且出现真实实现差异时，才新增对应 seam；
 - `KnowledgeRetriever`：本地向量检索 / 内存测试实现；
 - `SqliteResearchRepository` 当前只有一个真实 adapter，因此暂不提取假想的 Repository Protocol；测试使用临时 SQLite。出现第二种存储后再建立 seam。
 
