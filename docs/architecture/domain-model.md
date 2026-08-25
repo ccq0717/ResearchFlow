@@ -66,8 +66,8 @@ planning → retrieving → analyzing → writing → finalizing
 
 - `ResearchWorkflow`：模拟、仅 LLM 规划、LangGraph 网页研究；
 - `LLMClient`：Fake 与 OpenAI-compatible；
-- `SearchProvider`：Fake 与 Stack Exchange；
-- `WebPageReader`：Fake 与 Stack Exchange；
+- `SearchProvider`：Fake 与 Exa；
+- `WebPageReader`：Fake 与供应商无关的搜索结果正文读取器；
 - Repository 暂时只有 SQLite 真实实现，测试使用临时数据库，不提前抽象第二种存储。
 
 ## 8. 后续模型

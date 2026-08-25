@@ -83,7 +83,9 @@ class OpenAICompatibleLLMClient:
             system_prompt=(
                 "你是 ResearchFlow 的研究规划器。请把用户目标拆成可检索、"
                 "可验证的研究问题，并给出最终交付物。每个研究问题还要提供一条简洁的"
-                "英文 search_query，供 Stack Overflow 技术检索使用。不要捏造资料或结论。"
+                "英文 search_query，供通用网页搜索使用；查询应覆盖与问题相关的论文、"
+                "官方文档、企业技术博客和其他公开资料，不限定某个网站。"
+                "不要捏造资料或结论。"
             ),
             user_prompt=f"研究目标：{goal}",
             output_type=_PlanOutput,

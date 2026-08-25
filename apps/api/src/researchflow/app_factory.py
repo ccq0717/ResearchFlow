@@ -10,10 +10,8 @@ from researchflow.core.config import Settings, get_settings
 from researchflow.integrations.llm.base import LLMClient
 from researchflow.integrations.llm.openai_compatible import OpenAICompatibleLLMClient
 from researchflow.integrations.web.base import SearchProvider, WebPageReader
-from researchflow.integrations.web.stackexchange import (
-    StackExchangePageReader,
-    StackExchangeSearchProvider,
-)
+from researchflow.integrations.web.exa import ExaSearchProvider
+from researchflow.integrations.web.result_reader import SearchResultPageReader
 from researchflow.persistence.database import (
     create_engine,
     create_schema,
@@ -50,18 +48,26 @@ def create_app(
             provider=resolved_settings.llm_provider,
         )
     if resolved_settings.workflow_mode == "langgraph":
-        resolved_search = search_provider or StackExchangeSearchProvider(
-            base_url=str(resolved_settings.web_search_base_url),
-            site=resolved_settings.web_search_site,
-            timeout_seconds=resolved_settings.web_request_timeout_seconds,
-            user_agent=resolved_settings.web_user_agent,
-        )
-        resolved_reader = page_reader or StackExchangePageReader(
-            base_url=str(resolved_settings.web_search_base_url),
-            site=resolved_settings.web_search_site,
-            timeout_seconds=resolved_settings.web_request_timeout_seconds,
-            user_agent=resolved_settings.web_user_agent,
-            max_characters=resolved_settings.web_reader_max_characters,
+        if search_provider is None:
+            if resolved_settings.web_search_provider != "exa":
+                raise ValueError(
+                    f"不支持的网页搜索 Provider：{resolved_settings.web_search_provider}"
+                )
+            if resolved_settings.web_search_api_key is None:
+                raise ValueError("LangGraph 模式必须设置 RESEARCHFLOW_WEB_SEARCH_API_KEY")
+            api_key = resolved_settings.web_search_api_key.get_secret_value().strip()
+            if not api_key:
+                raise ValueError("LangGraph 模式必须设置 RESEARCHFLOW_WEB_SEARCH_API_KEY")
+            resolved_search = ExaSearchProvider(
+                base_url=str(resolved_settings.web_search_base_url),
+                api_key=api_key,
+                timeout_seconds=resolved_settings.web_request_timeout_seconds,
+                user_agent=resolved_settings.web_user_agent,
+            )
+        else:
+            resolved_search = search_provider
+        resolved_reader = page_reader or SearchResultPageReader(
+            max_characters=resolved_settings.web_content_max_characters,
         )
         workflow = LangGraphResearchWorkflow(
             llm_client=client,

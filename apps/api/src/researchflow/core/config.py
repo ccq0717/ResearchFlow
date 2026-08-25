@@ -25,10 +25,11 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr | None = None
     llm_base_url: AnyHttpUrl = AnyHttpUrl("https://api.openai.com/v1")
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
-    web_search_base_url: AnyHttpUrl = AnyHttpUrl("https://api.stackexchange.com/2.3")
-    web_search_site: str = Field(default="stackoverflow", min_length=1, max_length=80)
-    web_search_result_limit: int = Field(default=2, ge=1, le=5)
-    web_reader_max_characters: int = Field(default=16000, ge=2000, le=50000)
+    web_search_provider: str = Field(default="exa", min_length=1, max_length=80)
+    web_search_base_url: AnyHttpUrl = AnyHttpUrl("https://api.exa.ai")
+    web_search_api_key: SecretStr | None = None
+    web_search_result_limit: int = Field(default=3, ge=1, le=10)
+    web_content_max_characters: int = Field(default=16000, ge=2000, le=50000)
     web_request_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
     web_user_agent: str = Field(
         default="ResearchFlow/0.1 (portfolio research demo)",

@@ -14,7 +14,7 @@
 - 如何在模拟、仅 LLM 规划和 LangGraph 网页研究模式之间切换；
 - 后续接入学术搜索、RAG 等服务后，运行方式会如何扩展。
 
-项目已完成 M2：真实链路可以规划、检索和读取 Stack Overflow 网页、提取证据并生成报告。当前不包含学术论文检索、Claim 级引用验证或本地 RAG。
+项目已完成 M2：真实链路可以规划、检索和读取开放 Web 中的公开资料、提取证据并生成报告。当前不包含专业学术元数据、Claim 级引用验证或本地 RAG。
 
 ## 1. 当前产品由什么组成
 
@@ -25,7 +25,7 @@
 | 本地数据库 | SQLite | `var/researchflow.db` | 由后端自动使用 |
 | 研究工作流 | 模拟、LLM 规划或 LangGraph 网页研究 | 后端进程内 | 由后端自动运行 |
 | LLM | OpenAI-compatible HTTP 适配器 | 远程或本地兼容服务 | `llm` / `langgraph` 需要 |
-| 网页搜索与读取 | Stack Exchange API / Stack Overflow | 公共 HTTPS API | 仅 `langgraph` 需要 |
+| 网页搜索与读取 | Exa Search API / Search Result Reader | 公共 HTTPS API | 仅 `langgraph` 需要 |
 | 学术搜索 / 向量数据库 / RAG | 尚未接入 | 无 | 否 |
 
 前端负责展示页面和接收操作，后端负责保存任务、运行工作流并通过 SSE 推送进度。关闭前端不会删除数据；关闭后端会让页面暂时无法读取或创建任务。
@@ -45,7 +45,7 @@
 调研学术界和工业界对 AI 代码生成工具的评测方法，并设计一份覆盖代码质量、安全性和开发效率的评测方案。
 ```
 
-默认 `simulation` 模式输出模拟报告，不访问外部服务。`llm` 模式只真实生成研究计划。`langgraph` 模式会调用配置的 LLM，并通过 Stack Exchange API 检索和读取 Stack Overflow 技术问答；演示时应说明它不是通用 Web 或学术搜索。
+默认 `simulation` 模式输出模拟报告，不访问外部服务。`llm` 模式只真实生成研究计划。`langgraph` 模式会调用配置的 LLM，并通过 Exa Search API 检索论文页面、官方文档、企业技术博客和其他公开网页。它属于通用 Web 搜索，但尚未提供专业学术元数据和严格引用验证。
 
 ## 3. 第一次初始化开发环境
 
@@ -207,10 +207,11 @@ Get-NetTCPConnection -State Listen |
 | `RESEARCHFLOW_LLM_API_KEY` | 模型密钥；本地服务可留空 | 空 |
 | `RESEARCHFLOW_LLM_BASE_URL` | API 根地址 | `https://api.openai.com/v1` |
 | `RESEARCHFLOW_LLM_TIMEOUT_SECONDS` | 模型超时秒数 | `60` |
-| `RESEARCHFLOW_WEB_SEARCH_BASE_URL` | Stack Exchange API 根地址 | `https://api.stackexchange.com/2.3` |
-| `RESEARCHFLOW_WEB_SEARCH_SITE` | 目标站点 | `stackoverflow` |
-| `RESEARCHFLOW_WEB_SEARCH_RESULT_LIMIT` | 每个问题的结果上限 | `2` |
-| `RESEARCHFLOW_WEB_READER_MAX_CHARACTERS` | 单页正文最大字符数 | `16000` |
+| `RESEARCHFLOW_WEB_SEARCH_PROVIDER` | 网页搜索适配器；当前支持 `exa` | `exa` |
+| `RESEARCHFLOW_WEB_SEARCH_BASE_URL` | 网页搜索 API 根地址 | `https://api.exa.ai` |
+| `RESEARCHFLOW_WEB_SEARCH_API_KEY` | 服务端 Exa 密钥；`langgraph` 必填 | 空 |
+| `RESEARCHFLOW_WEB_SEARCH_RESULT_LIMIT` | 每个问题的结果上限 | `3` |
+| `RESEARCHFLOW_WEB_CONTENT_MAX_CHARACTERS` | 单个来源交给 LLM 的最大字符数 | `16000` |
 | `RESEARCHFLOW_WEB_REQUEST_TIMEOUT_SECONDS` | 搜索/阅读超时秒数 | `20` |
 | `RESEARCHFLOW_WEB_USER_AGENT` | 公共 API 请求标识 | ResearchFlow 默认值 |
 
@@ -253,11 +254,13 @@ RESEARCHFLOW_LLM_PROVIDER=openai-compatible
 RESEARCHFLOW_LLM_MODEL=供应商提供的模型名
 RESEARCHFLOW_LLM_API_KEY=本机真实密钥
 RESEARCHFLOW_LLM_BASE_URL=https://供应商地址/v1
-RESEARCHFLOW_WEB_SEARCH_SITE=stackoverflow
-RESEARCHFLOW_WEB_SEARCH_RESULT_LIMIT=2
+RESEARCHFLOW_WEB_SEARCH_PROVIDER=exa
+RESEARCHFLOW_WEB_SEARCH_BASE_URL=https://api.exa.ai
+RESEARCHFLOW_WEB_SEARCH_API_KEY=本机真实Exa密钥
+RESEARCHFLOW_WEB_SEARCH_RESULT_LIMIT=3
 ```
 
-Stack Exchange 搜索不需要 API Key，但运行设备必须能够访问 `api.stackexchange.com` 和模型服务。重启后端并检查 `/health` 的 `workflow_mode`。成功运行时，工作区会依次出现计划、检索任务、来源、证据和报告；网页或模型失败会进入 `failed` 并显示安全错误。
+Exa Key 只写入仓库根目录被 Git 忽略的 `.env`，不要发送到前端，也不要复制到 `.env.example`、文档、截图或 Commit。运行设备必须能够访问 `api.exa.ai` 和模型服务。重启后端并检查 `/health` 的 `workflow_mode`。成功运行时，工作区会依次出现计划、检索任务、来源、证据和报告；网页或模型失败会进入 `failed` 并显示安全错误。
 
 OpenCode Zen 的 MiMo 示例和数据使用注意事项见 [OpenCode Zen API 配置调研](../research/opencode-zen-api.md)。直接 API 不使用 `opencode/` 模型前缀。
 
@@ -271,7 +274,9 @@ RESEARCHFLOW_WORKFLOW_MODE=simulation
 
 ### 6.4 网页 Provider 边界
 
-当前 Provider 固定使用 Stack Exchange 官方 API 的 Stack Overflow 站点：搜索结果和正文读取共享一个客户端，支持超时与有限重试，正文会清理 HTML、限制长度并按 URL 去重。它适合普通编程技术问题，不覆盖任意网页、产品官网或学术论文。替换 Provider 时应实现 `SearchProvider` 和 `WebPageReader`，不要把供应商响应泄漏到工作流。
+当前默认 Provider 是 Exa：`ExaSearchProvider` 调用通用 `/search`，请求 token-efficient highlights，并把标题、URL、摘要、正文和可选元数据归一化成 `SearchResult`；`SearchResultPageReader` 再把 Provider 已提取的正文转换成 `WebDocument`。适配器支持超时与有限重试，并分别处理鉴权失败、额度限制、供应商错误和非法响应。
+
+LangGraph 只依赖 `SearchProvider` 和 `WebPageReader`，不认识 Exa 请求或响应。未来更换质量更高的付费搜索服务时，应新增或替换 adapter，继续返回 ResearchFlow DTO；如果新服务只返回 URL，可以为它注入独立网页 Reader，不需要修改工作流、领域模型或前端。
 
 
 ## 7. 本地数据、备份与重置

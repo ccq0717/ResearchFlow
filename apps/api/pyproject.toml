@@ -5,7 +5,6 @@ description = "FastAPI backend for ResearchFlow"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "aiosqlite>=0.21.0",
-    "beautifulsoup4>=4.15.0",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.116.0",
     "httpx>=0.28.0",
     "langgraph>=1.2.11",

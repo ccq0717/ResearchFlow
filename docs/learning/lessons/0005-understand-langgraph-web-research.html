@@ -20,7 +20,7 @@
   <h2>2. 为什么问题和检索词分开</h2>
   <table><thead><tr><th>字段</th><th>服务对象</th><th>示例</th></tr></thead><tbody>
     <tr><td><code>question</code></td><td>用户与报告</td><td>如何评估 AI 编程工具的真实开发体验？</td></tr>
-    <tr><td><code>search_query</code></td><td>Stack Overflow API</td><td>developer experience AI coding assistant</td></tr>
+    <tr><td><code>search_query</code></td><td>通用 Web Search API</td><td>developer experience AI coding assistant</td></tr>
   </tbody></table>
   <p>研究问题表达“想知道什么”，检索词表达“怎样向特定搜索系统提问”。</p>
 
@@ -29,7 +29,7 @@
 ├─ LLMClient
 ├─ SearchProvider
 └─ WebPageReader</code></pre>
-  <p>测试注入 Fake，真实运行注入 OpenAI-compatible 和 Stack Exchange 实现。节点不需要知道 HTTP 参数、重试或 HTML 清理细节。</p>
+  <p>测试注入 Fake，真实运行注入 OpenAI-compatible 和 Exa 实现。节点不需要知道 HTTP 参数、重试或 Exa 响应结构；SearchResult 和 WebDocument 负责隔离供应商。</p>
 
   <h2>4. Source 和 Evidence 的区别</h2>
   <ul>

@@ -1,6 +1,6 @@
 # ResearchFlow
 
-ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前版本能把开放式研究目标转成结构化计划，检索和读取多个技术网页，保存来源与证据，并展示可恢复的研究过程；后续将加入学术资料、严格引用和个人知识库。
+ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前版本能把开放式研究目标转成结构化计划，检索和读取开放 Web 中的公开资料，保存来源与证据，并展示可恢复的研究过程；后续将加入更严格的学术引用和个人知识库。
 
 项目的首个演示场景是：调研 AI 代码生成工具的现有评测方法，并产出一份可以实际执行的评测方案。
 
@@ -12,13 +12,13 @@ ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前
 - 使用 SQLite 持久化运行、事件、结构化计划、检索子任务、网页来源、证据和报告；
 - `simulation` 模式完全离线，`llm` 模式只生成真实计划；
 - `langgraph` 模式执行规划、搜索、阅读、证据提取、写作和检查六个节点；
-- 真实网页来源使用 Stack Exchange 官方 API 检索并读取 Stack Overflow 问答正文；
-- 中文研究问题与英文检索词分开保存，兼顾界面可读性和技术站点检索效果；
+- 真实网页来源使用 Exa Search API 检索论文页面、官方文档、企业技术博客和其他公开网页；
+- 中文研究问题与英文检索词分开保存，兼顾界面可读性和通用 Web 检索效果；
 - 前端展示研究计划、检索来源、证据摘要与原文片段，刷新后仍可恢复；
 - 外部能力均有 Fake/Mock，常规测试不联网、不消耗模型额度；
 - 后端、前端、Ruff、ESLint 和生产构建纳入 GitHub Actions。
 
-M2 的边界是普通技术问题的网页研究，不等同于完整的学术研究与引用系统。论文检索、Claim—Evidence 引用关系、黄金演示报告和引用覆盖检查属于 M3。
+M2 已建立通用网页研究闭环，但尚不等同于完整的学术研究与引用系统。专业学术元数据、Claim—Evidence 引用关系、黄金演示报告和引用覆盖检查属于 M3。
 
 ## 开发路线图
 
@@ -40,7 +40,7 @@ M2 的边界是普通技术问题的网页研究，不等同于完整的学术�
 - FastAPI、Python 3.12、SQLAlchemy、SQLite
 - LangGraph `StateGraph`
 - REST API 与 Server-Sent Events（SSE）
-- HTTPX、Beautiful Soup、Stack Exchange API
+- HTTPX、Exa Search API
 - OpenAI-compatible JSON Schema 结构化输出
 - ResearchFlow 自有 `ResearchWorkflow`、`LLMClient`、`SearchProvider` 与 `WebPageReader` 接口
 
@@ -138,9 +138,11 @@ RESEARCHFLOW_LLM_PROVIDER=openai-compatible
 RESEARCHFLOW_LLM_MODEL=你的模型名
 RESEARCHFLOW_LLM_API_KEY=你的密钥
 RESEARCHFLOW_LLM_BASE_URL=https://你的兼容服务/v1
+RESEARCHFLOW_WEB_SEARCH_PROVIDER=exa
+RESEARCHFLOW_WEB_SEARCH_API_KEY=你的Exa密钥
 ```
 
-Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completions`。`RESEARCHFLOW_LLM_PROVIDER` 当前是协议/来源标签，使用兼容服务时保持 `openai-compatible`。目标服务需支持 Chat Completions 和 JSON Schema 结构化输出；Stack Overflow 检索无需额外 API Key。本地兼容服务若不要求鉴权，可将 API Key 留空。修改配置后重启后端；真实密钥不得提交到 Git。完整说明见[使用、开发与运维手册](docs/guides/development-and-operations.md)。
+LLM Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completions`。`RESEARCHFLOW_LLM_PROVIDER` 当前是协议/来源标签，使用兼容服务时保持 `openai-compatible`。目标服务需支持 Chat Completions 和 JSON Schema 结构化输出；Exa Key 可从 Exa Dashboard 的免费 Starter 获取。本地兼容模型服务若不要求鉴权，LLM Key 可留空，但 `langgraph` 模式必须配置网页搜索 Key。修改配置后重启后端；真实密钥不得提交到 Git。完整说明见[使用、开发与运维手册](docs/guides/development-and-operations.md)。
 
 ## 项目文档
 
@@ -162,6 +164,7 @@ Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completions`�
 - [LangGraph 架构决策](docs/decisions/0001-use-langgraph-behind-workflow-interface.md)
 - [Hello-Agents 调研](docs/research/hello-agents-analysis.md)
 - [OpenCode Zen API 配置调研](docs/research/opencode-zen-api.md)
+- [通用网页搜索 Provider 比较](docs/research/general-web-search-provider-comparison.md)
 
 ## 许可证
 

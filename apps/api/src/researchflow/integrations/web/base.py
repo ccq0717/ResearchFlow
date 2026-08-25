@@ -7,6 +7,9 @@ class SearchResult:
     title: str
     url: str
     snippet: str
+    content: str | None = None
+    published_at: str | None = None
+    author: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

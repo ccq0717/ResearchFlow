@@ -247,10 +247,10 @@ M2 的实现与验证记录见 [M2 阶段复盘](retrospectives/m2.md)。
 已确认：
 
 - M1 首个 OpenAI-compatible 模型服务使用 OpenCode Zen，并已用 `mimo-v2.5-free` 完成真实 API 冒烟测试。
+- 通用网页搜索使用 Exa Search API，并通过 `SearchProvider` 保留未来更换付费服务的边界。
 
 尚待确认：
 
-- M2 网页搜索已确认使用 Stack Exchange 官方 API（`stackoverflow` 站点）；
 - 首个学术论文数据来源；
 - 首批文档格式和解析库；
 - Embedding Provider 与轻量向量检索方案；

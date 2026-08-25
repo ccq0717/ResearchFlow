@@ -1,18 +1,18 @@
 import asyncio
+import json
 from pathlib import Path
 
 import httpx
+import pytest
 from httpx import ASGITransport, AsyncClient
 
 from researchflow.app_factory import create_app
 from researchflow.core.config import Settings
 from researchflow.integrations.llm.fake import FakeLLMClient
-from researchflow.integrations.web.base import SearchResult
+from researchflow.integrations.web.base import SearchResult, WebResearchError
+from researchflow.integrations.web.exa import ExaSearchProvider
 from researchflow.integrations.web.fake import FakeSearchProvider, FakeWebPageReader
-from researchflow.integrations.web.stackexchange import (
-    StackExchangePageReader,
-    StackExchangeSearchProvider,
-)
+from researchflow.integrations.web.result_reader import SearchResultPageReader
 
 
 def _settings(database_path: Path) -> Settings:
@@ -98,74 +98,67 @@ async def test_langgraph_web_research_persists_materials_and_report(tmp_path: Pa
             assert len(materials["evidence"]) == 6
 
 
-async def test_stackexchange_search_and_reader_parse_external_responses() -> None:
-    async def search_handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path.endswith("/search/advanced")
-        assert request.url.params["q"] == "code generation evaluation"
+async def test_exa_search_and_reader_parse_external_response() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == "https://api.exa.ai/search"
+        assert request.headers["x-api-key"] == "test-exa-key"
+        assert json.loads(request.content) == {
+            "query": "code generation evaluation",
+            "type": "auto",
+            "numResults": 2,
+            "contents": {"highlights": True},
+        }
         return httpx.Response(
             200,
             json={
-                "items": [
+                "results": [
                     {
-                        "question_id": 42,
-                        "title": "How to evaluate generated code?",
-                        "link": "https://stackoverflow.com/questions/42/example",
-                        "tags": ["ai", "testing"],
+                        "title": "Evaluating AI-generated code",
+                        "url": "https://example.org/research/code-evaluation",
+                        "author": "Research Team",
+                        "publishedDate": "2026-07-01T00:00:00.000Z",
+                        "highlights": [
+                            "Use reproducible tests and security checks.",
+                            "Combine automated metrics with human review.",
+                        ],
                     }
                 ]
             },
         )
 
-    search = StackExchangeSearchProvider(
-        base_url="https://api.stackexchange.com/2.3",
-        site="stackoverflow",
+    search = ExaSearchProvider(
+        base_url="https://api.exa.ai",
+        api_key="test-exa-key",
         timeout_seconds=5,
         user_agent="ResearchFlow tests",
-        transport=httpx.MockTransport(search_handler),
+        transport=httpx.MockTransport(handler),
     )
     results = await search.search("code generation evaluation", limit=2)
     assert results == (
         SearchResult(
-            title="How to evaluate generated code?",
-            url="https://stackoverflow.com/questions/42/example",
-            snippet="标签：ai、testing",
+            title="Evaluating AI-generated code",
+            url="https://example.org/research/code-evaluation",
+            snippet=(
+                "Use reproducible tests and security checks.\n\n"
+                "Combine automated metrics with human review."
+            ),
+            content=(
+                "Use reproducible tests and security checks.\n\n"
+                "Combine automated metrics with human review."
+            ),
+            published_at="2026-07-01T00:00:00.000Z",
+            author="Research Team",
         ),
     )
 
-    async def page_handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path.endswith("/questions/42")
-        assert request.url.params["filter"] == "withbody"
-        return httpx.Response(
-            200,
-            json={
-                "items": [
-                    {
-                        "title": "How to evaluate generated code?",
-                        "link": "https://stackoverflow.com/questions/42/example",
-                        "body": (
-                            "<p>" + "Use reproducible tests and security checks. " * 10 + "</p>"
-                            "<script>secret()</script>"
-                        ),
-                    }
-                ]
-            },
-        )
-
-    reader = StackExchangePageReader(
-        base_url="https://api.stackexchange.com/2.3",
-        site="stackoverflow",
-        timeout_seconds=5,
-        user_agent="ResearchFlow tests",
-        max_characters=2000,
-        transport=httpx.MockTransport(page_handler),
-    )
+    reader = SearchResultPageReader(max_characters=2000)
     document = await reader.read(results[0])
-    assert document.title == "How to evaluate generated code?"
-    assert "reproducible tests" in document.content
-    assert "secret" not in document.content
+    assert document.title == "Evaluating AI-generated code"
+    assert document.url == "https://example.org/research/code-evaluation"
+    assert document.content == results[0].content
 
 
-async def test_stackexchange_retries_a_transient_failure_once() -> None:
+async def test_exa_retries_a_transient_failure_once() -> None:
     calls = 0
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -176,19 +169,19 @@ async def test_stackexchange_retries_a_transient_failure_once() -> None:
         return httpx.Response(
             200,
             json={
-                "items": [
+                "results": [
                     {
                         "title": "Retry succeeded",
-                        "link": "https://stackoverflow.com/questions/7/example",
-                        "tags": ["testing"],
+                        "url": "https://example.org/retry",
+                        "highlights": ["The retry returned a usable result."],
                     }
                 ]
             },
         )
 
-    provider = StackExchangeSearchProvider(
-        base_url="https://api.stackexchange.com/2.3",
-        site="stackoverflow",
+    provider = ExaSearchProvider(
+        base_url="https://api.exa.ai",
+        api_key="test-exa-key",
         timeout_seconds=5,
         user_agent="ResearchFlow tests",
         transport=httpx.MockTransport(handler),
@@ -198,3 +191,37 @@ async def test_stackexchange_retries_a_transient_failure_once() -> None:
 
     assert calls == 2
     assert results[0].title == "Retry succeeded"
+
+
+async def test_exa_maps_authentication_failure_without_leaking_key() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": "invalid api key"})
+
+    provider = ExaSearchProvider(
+        base_url="https://api.exa.ai",
+        api_key="secret-that-must-not-leak",
+        timeout_seconds=5,
+        user_agent="ResearchFlow tests",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(WebResearchError) as captured:
+        await provider.search("authentication failure", limit=1)
+
+    assert captured.value.code == "WEB_PROVIDER_AUTH_FAILED"
+    assert "secret-that-must-not-leak" not in captured.value.public_message
+
+
+async def test_search_result_reader_rejects_missing_content() -> None:
+    reader = SearchResultPageReader(max_characters=2000)
+
+    with pytest.raises(WebResearchError) as captured:
+        await reader.read(
+            SearchResult(
+                title="Metadata-only result",
+                url="https://example.org/metadata",
+                snippet="",
+            )
+        )
+
+    assert captured.value.code == "WEB_CONTENT_UNAVAILABLE"
