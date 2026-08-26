@@ -16,6 +16,9 @@
 - [第 3 课：SQLite、SQLAlchemy 和 aiosqlite 分别做什么](lessons/0003-understand-sqlite-persistence.html)
 - [第 4 课：真实 LLM 是怎样接入后端的](lessons/0004-understand-llm-adapters.html)
 - [第 5 课：网页与本地资料怎样穿过 LangGraph](lessons/0005-understand-langgraph-web-research.html)
+- [第 6 课：RAG 与 Embedding 在 ResearchFlow 中怎样工作](lessons/0006-understand-rag-embeddings.html)
+- [第 7 课：检索结果怎样变成可追溯结论](lessons/0007-understand-evidence-and-citations.html)
+- [第 8 课：Fake、Mock、集成测试与真实评测](lessons/0008-understand-testing-and-evaluation.html)
 
 ## 速查资料
 
@@ -34,7 +37,9 @@
 6. SSE、任务进度和断线重连（已有入门课）
 7. LLM 接口、适配器与结构化输出（已有入门课）
 8. Agent 工作流、LangGraph 与状态管理（已有入门课）
-9. RAG、Embedding 检索、证据和引用（已有入门课）
-10. 测试、日志、Docker 与部署
+9. RAG、Embedding 检索、证据和引用（已有专题课）
+10. Fake、Mock、集成测试与真实评测（已有专题课）
+11. 后台任务、失败恢复、日志与可靠性
+12. Docker、Secret、持久化与在线部署
 
 学习方向由 [MISSION.md](MISSION.md) 约束，资料来源记录在 [RESOURCES.md](RESOURCES.md)。

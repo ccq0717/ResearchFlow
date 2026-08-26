@@ -109,7 +109,7 @@ RESEARCHFLOW_EMBEDDING_DIMENSIONS=768
 
 LLM Base URL 填 API 根地址，不要包含 `/chat/completions`；客户端会自动追加该路径。LLM 服务必须支持 Chat Completions 和严格 JSON Schema 结构化输出。
 
-Gemini 原生适配器默认使用 `https://generativelanguage.googleapis.com/v1beta`，文档和查询分别使用 `RETRIEVAL_DOCUMENT` 与 `RETRIEVAL_QUERY`。也可以改用 `openai-compatible` Embedding 适配器，并同时覆盖 Base URL。模型没有锁定为 `gemini-embedding-2`，但更换 Provider、模型或维度后必须在 Dashboard 重新处理已有文档。
+Gemini 原生适配器默认使用 `https://generativelanguage.googleapis.com/v1beta`。它会按模型版本处理检索用途：`gemini-embedding-2` 使用官方推荐的文本任务指令，`gemini-embedding-001` 使用 `RETRIEVAL_DOCUMENT` / `RETRIEVAL_QUERY` 任务类型。也可以改用 `openai-compatible` Embedding 适配器，并同时覆盖 Base URL。更换 Provider、模型、维度或指令策略后必须在 Dashboard 重新处理已有文档。
 
 ### 常用高级设置
 
@@ -217,7 +217,7 @@ npm run build --prefix apps/web
 
 - `EMBEDDING_NOT_CONFIGURED`：填写 Provider、模型和密钥后重新处理文档；
 - HTTP 401/403：检查密钥和模型权限；
-- `EMBEDDING_REPROCESS_REQUIRED`：当前向量与模型或维度不匹配；
+- `EMBEDDING_REPROCESS_REQUIRED`：当前向量与模型、维度或检索指令策略不匹配；
 - `EMBEDDING_DIMENSION_MISMATCH`：确认查询与文档使用相同配置并重新处理；
 - 模型不支持指定维度：删除或修改 `RESEARCHFLOW_EMBEDDING_DIMENSIONS`。
 

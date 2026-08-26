@@ -11,6 +11,8 @@ from researchflow.integrations.embedding.base import EmbeddingClientError, Embed
 class GeminiEmbeddingClient:
     """通过 Gemini batchEmbedContents 生成区分文档与查询用途的向量。"""
 
+    _INSTRUCTION_BASED_MODELS = frozenset({"gemini-embedding-2"})
+
     def __init__(
         self,
         *,
@@ -28,6 +30,7 @@ class GeminiEmbeddingClient:
         encoded_model = quote(normalized_model, safe="-._")
         self._endpoint = f"{base_url.rstrip('/')}/models/{encoded_model}:batchEmbedContents"
         self._model = normalized_model
+        self._uses_instruction_prefix = normalized_model in self._INSTRUCTION_BASED_MODELS
         self._api_key = api_key
         self._timeout = timeout_seconds
         self._dimensions = dimensions
@@ -37,7 +40,8 @@ class GeminiEmbeddingClient:
     @property
     def model(self) -> str:
         dimensions = self._dimensions if self._dimensions is not None else "default"
-        return f"gemini:{self._model}:{dimensions}"
+        strategy = "search-prefix-v1" if self._uses_instruction_prefix else "task-type-v1"
+        return f"gemini:{self._model}:{dimensions}:{strategy}"
 
     async def embed(
         self,
@@ -57,14 +61,19 @@ class GeminiEmbeddingClient:
         texts: tuple[str, ...],
         task: EmbeddingTask,
     ) -> tuple[tuple[float, ...], ...]:
-        task_type = "RETRIEVAL_DOCUMENT" if task is EmbeddingTask.DOCUMENT else "RETRIEVAL_QUERY"
-        config: dict[str, Any] = {"taskType": task_type}
+        config: dict[str, Any] = {}
+        if not self._uses_instruction_prefix:
+            config["taskType"] = (
+                "RETRIEVAL_DOCUMENT"
+                if task is EmbeddingTask.DOCUMENT
+                else "RETRIEVAL_QUERY"
+            )
         if self._dimensions is not None:
             config["outputDimensionality"] = self._dimensions
         requests = [
             {
                 "model": f"models/{self._model}",
-                "content": {"parts": [{"text": text}]},
+                "content": {"parts": [{"text": self._prepare_text(text, task)}]},
                 "embedContentConfig": config,
             }
             for text in texts
@@ -103,6 +112,13 @@ class GeminiEmbeddingClient:
             raise EmbeddingClientError(
                 "EMBEDDING_INVALID_RESPONSE", "Gemini Embedding 返回的数据格式无效"
             ) from error
+
+    def _prepare_text(self, text: str, task: EmbeddingTask) -> str:
+        if not self._uses_instruction_prefix:
+            return text
+        if task is EmbeddingTask.DOCUMENT:
+            return f"title: none | text: {text}"
+        return f"task: search result | query: {text}"
 
     @staticmethod
     def _parse_vectors(payload: object, expected_count: int) -> tuple[tuple[float, ...], ...]:

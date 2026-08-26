@@ -26,7 +26,11 @@
       <tr><td>LangGraph 工作流</td><td>编排搜索、阅读、证据与报告</td><td><code>workflows/langgraph_research.py</code></td><td>材料 API 和领域事件</td></tr>
       <tr><td>Web 适配器</td><td>封装 Exa 通用搜索和 highlights 正文读取</td><td><code>integrations/web/</code></td><td>Provider 测试和网页错误</td></tr>
       <tr><td>LLM 适配器</td><td>封装 HTTP、鉴权、Schema 和解析</td><td><code>integrations/llm/</code></td><td>适配器测试和后端错误</td></tr>
+      <tr><td>知识库用例</td><td>上传校验、解析、分块、向量化、重处理和删除</td><td><code>application/knowledge_library.py</code></td><td>文档状态和知识库测试</td></tr>
+      <tr><td>Embedding 适配器</td><td>封装 Gemini 或 OpenAI-compatible 向量请求</td><td><code>integrations/embedding/</code></td><td>适配器测试和 Embedding 错误</td></tr>
+      <tr><td>本地检索</td><td>查询向量、模型匹配、余弦排序与 Top-K</td><td><code>ingestion/retrieval.py</code></td><td>检索评测和本地 Source</td></tr>
       <tr><td>Repository</td><td>保存、查询运行、计划、材料和事件</td><td><code>persistence/repository.py</code></td><td>数据库记录和测试</td></tr>
+      <tr><td>知识库 Repository</td><td>保存文档、片段、向量和运行选择关系</td><td><code>persistence/knowledge_repository.py</code></td><td>文档、片段和向量表</td></tr>
       <tr><td>数据库连接</td><td>创建 Engine、Session 和表</td><td><code>persistence/database.py</code></td><td>后端启动和数据库文件</td></tr>
       <tr><td>SQLite 文件</td><td>持久保存运行、计划、材料、事件和报告</td><td><code>var/researchflow.db</code></td><td>文件存在性和只读查询</td></tr>
     </tbody>
@@ -53,8 +57,19 @@
   → React 状态更新
   → 进度条和研究事件重绘</code></pre>
 
+  <h2>本地 RAG 的主路径</h2>
+  <pre><code>Dashboard 上传文件
+  → KnowledgeLibrary 校验、解析和分块
+  → EmbeddingClient 生成文档向量
+  → document_chunks + document_chunk_embeddings
+
+LangGraph 研究问题
+  → KnowledgeRetriever 生成查询向量
+  → 余弦相似度 Top-K
+  → local Source → Evidence → Claim → Citation Audit</code></pre>
+
   <div class="callout success"><strong>定位原则：</strong>页面样式先看组件；请求失败先看 Network 和路由；状态错误看应用层与工作流；刷新后数据错误看 Repository 和 SQLite；实时更新错误看事件表与 SSE。</div>
-  <p class="footer"><a href="../lessons/0002-follow-a-research-request.html">学习完整请求链路</a> · <a href="../lessons/0003-understand-sqlite-persistence.html">学习 SQLite 持久化</a> · <a href="../lessons/0004-understand-llm-adapters.html">学习 LLM 适配器</a> · <a href="../../guides/development-and-operations.md">查看运维手册</a></p>
+  <p class="footer"><a href="../lessons/0002-follow-a-research-request.html">学习完整请求链路</a> · <a href="../lessons/0006-understand-rag-embeddings.html">学习 RAG 与 Embedding</a> · <a href="../lessons/0007-understand-evidence-and-citations.html">学习证据与引用</a> · <a href="../../guides/development-and-operations.md">查看运维手册</a></p>
 </main>
 </body>
 </html>

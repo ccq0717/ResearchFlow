@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 7 课：Source、Evidence、Claim 与 Citation · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0007 · 约 25 分钟</p>
+  <h1>检索结果怎样变成可追溯结论</h1>
+  <p class="lead">这节课解释为什么“搜到了网页”“找到了一段话”“报告写了一句话”和“这句话有证据支持”是四件不同的事。</p>
+  <div class="callout"><strong>先记结论：</strong>RAG 负责把相关资料带到模型面前；Evidence 和 Claim 的显式关系负责说明报告中的关键结论由什么支持。</div>
+
+  <h2>1. 四个概念不要混用</h2>
+  <table><thead><tr><th>概念</th><th>回答的问题</th><th>ResearchFlow 中的例子</th></tr></thead><tbody>
+    <tr><td>Search Result</td><td>搜索服务返回了什么候选？</td><td>标题、URL、摘要、highlights</td></tr>
+    <tr><td>Source</td><td>这次研究实际读取了什么？</td><td>网页正文或本地文档片段</td></tr>
+    <tr><td>Evidence</td><td>来源中的哪段原文与问题有关？</td><td>原文 excerpt、解释、source_id</td></tr>
+    <tr><td>Claim</td><td>报告准备表达什么关键结论？</td><td>结论文本和 evidence_ids</td></tr>
+  </tbody></table>
+
+  <h2>2. 为什么 Search Result 不能直接当引用</h2>
+  <p>搜索结果通常只有标题和摘要，可能被截断，也可能只是排序算法认为相关。ResearchFlow 先把实际读取内容转换成 Source，并记录来源类型、作者、发布时间、网页 URL，或者本地文件名和页码/行号。</p>
+  <p>Source 表示“研究过程看过它”，不表示“它支持某条结论”。</p>
+
+  <h2>3. Evidence 为什么同时关联问题和来源</h2>
+  <p>同一来源可能回答多个研究问题，一条研究问题也可能需要多个来源。Evidence 保存：</p>
+  <ul>
+    <li><code>question_id</code>：它在回答哪个问题；</li>
+    <li><code>source_id</code>：原文来自哪里；</li>
+    <li><code>excerpt</code>：可在 Source 正文中找到的原文片段；</li>
+    <li><code>summary</code>：这段原文与问题的关系。</li>
+  </ul>
+  <p>工作流会过滤无法在对应正文中找到的 excerpt，避免模型只给出一段看似合理、实际上并不存在于来源中的“引文”。</p>
+
+  <h2>4. Claim 为什么需要显式 evidence_ids</h2>
+  <p>Claim 是报告希望表达的关键陈述，例如“依赖漏洞扫描应同时覆盖直接依赖和传递依赖”。如果只把全部 Evidence 一次性交给模型，之后无法确定是哪条 Evidence 支持哪句话。</p>
+  <p><a href="../../../apps/api/src/researchflow/domain/research.py"><code>Claim</code></a> 保存明确的 <code>evidence_ids</code>，形成：</p>
+  <pre><code>Claim
+  → Evidence
+    → Source
+      → 网页 URL 或本地文件定位</code></pre>
+  <p>这条链路让前端能够展示“结论—证据—原始来源”，也让后端能够确定性检查关联是否完整。</p>
+
+  <h2>5. Citation Audit 检查什么</h2>
+  <p><code>CitationAudit</code> 统计：</p>
+  <ul>
+    <li>Claim 总数；</li>
+    <li>拥有有效 Evidence—Source 链路的 Claim 数；</li>
+    <li>引用覆盖率；</li>
+    <li>未获得支持的 Claim ID；</li>
+    <li>学术、官方、工业、社区等来源类型数量。</li>
+  </ul>
+  <p>覆盖率 100% 只表示每条结构化 Claim 都建立了完整关联，不自动证明证据在语义上足够强，也不证明报告正文每个普通句子都正确。</p>
+
+  <h2>6. 本地来源为什么也转换成 Source</h2>
+  <p>Evidence 没有设计成“网页 source_id 或本地 chunk_id 二选一”。本地检索命中先转换成 <code>origin=local</code> 的 Source，网页和文件随后共用同一套 Evidence、Claim、审计和前端展示逻辑。</p>
+  <p>这减少了两套并行数据模型：区别保留在 Source 的 URL、文件 ID 和 locator 字段中，而不是扩散到整个工作流。</p>
+
+  <h2>7. 引用正确性有三个层次</h2>
+  <table><thead><tr><th>层次</th><th>当前怎样处理</th><th>仍可能失败</th></tr></thead><tbody>
+    <tr><td>结构完整</td><td>检查 Claim—Evidence—Source ID 都存在</td><td>关联存在但语义不充分</td></tr>
+    <tr><td>原文可定位</td><td>excerpt 必须出现在来源正文，本地保留页码/行号</td><td>原文可能被断章取义</td></tr>
+    <tr><td>语义支持</td><td>LLM 提取并由黄金样例人工抽查</td><td>尚无自动事实裁判保证正确</td></tr>
+  </tbody></table>
+  <p>可靠的研究产品不能把“有链接”误称为“结论已被证明”。当前项目明确展示能够确定性验证的部分，并把语义充分性保留为评测问题。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>项目没有把 RAG 命中直接当成引用，而是建立 Source、Evidence、Claim 三层领域模型和显式关系；确定性审计检查结构完整与原文定位，同时承认语义支持仍需要模型评估和人工抽查。</div>
+
+  <p class="footer"><a href="0006-understand-rag-embeddings.html">上一课：RAG 与 Embedding</a> · <a href="0008-understand-testing-and-evaluation.html">下一课：测试与评测</a> · <a href="../README.md">返回学习区</a></p>
+</main>
+</body>
+</html>

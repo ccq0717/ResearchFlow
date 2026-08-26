@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 6 课：RAG 与 Embedding 检索 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0006 · 约 30 分钟</p>
+  <h1>RAG 与 Embedding 在 ResearchFlow 中怎样工作</h1>
+  <p class="lead">这节课从一份上传文档出发，解释它怎样变成向量、怎样被查询命中，以及为什么命中结果还不是最终答案。</p>
+  <div class="callout"><strong>先记结论：</strong>RAG 不是“让模型记住文件”，而是在生成答案前，先从外部资料中找出相关片段，再把这些片段作为上下文交给模型。</div>
+
+  <h2>1. RAG 解决什么问题</h2>
+  <p>LLM 的参数不会因为用户上传一个 PDF 就自动改变。只把问题发给模型，它看不到本地文件，也无法引用文件中的具体页码。Retrieval-Augmented Generation（检索增强生成）把流程拆成两部分：</p>
+  <div class="flow"><span>Retrieval 检索</span><b>→</b><span>Augmentation 补充上下文</span><b>→</b><span>Generation 生成</span></div>
+  <p>ResearchFlow 先从用户选定的文档中取回相关片段，把命中转换成带文件名和定位的 Source，再让 LLM 从这些 Source 中提取 Evidence、形成 Claim 并写报告。</p>
+
+  <h2>2. 一份文档怎样进入检索库</h2>
+  <pre><code>上传文件
+  → 校验扩展名、大小、数量与安全文件名
+  → 解析 PDF / Markdown / UTF-8 文本
+  → 按长度切成 DocumentChunk
+  → 按模型要求加入文档检索指令并生成 Embedding
+  → 原文件写入 var/uploads
+  → 文档、片段和向量写入 SQLite</code></pre>
+  <p><a href="../../../apps/api/src/researchflow/application/knowledge_library.py"><code>KnowledgeLibrary</code></a> 封装了整个生命周期。调用方只需要上传、重新处理或删除文档，不需要分别协调文件系统、解析器、Embedding 服务和数据库事务。</p>
+
+  <h2>3. 为什么必须分块</h2>
+  <p>一整本论文或长报告通常比单个研究问题包含更多主题。整篇只生成一个向量，会把多个主题压缩到一个表示中；整篇交给 LLM 又会浪费上下文和费用。因此项目把文档切成较小的 <code>DocumentChunk</code>。</p>
+  <ul>
+    <li>块太大：主题混杂，命中后给 LLM 的无关内容更多；</li>
+    <li>块太小：上下文断裂，单个片段可能不能完整表达事实；</li>
+    <li>当前按字符数切分，是适合作品集规模的简单方案，不代表所有语料的最佳参数。</li>
+  </ul>
+  <p>每个片段还保存 PDF 页码或文本行号。检索负责“找到什么”，定位信息负责“回到哪里核对”。</p>
+
+  <h2>4. Embedding 是什么</h2>
+  <p>Embedding 模型把文本转换成一串浮点数，例如：</p>
+  <pre><code>"生成代码中的依赖漏洞" → [0.012, -0.084, 0.137, ...]</code></pre>
+  <p>单个数字通常没有可直接解释的业务含义；整个向量的位置用于表达模型学到的语义关系。语义相近的文本通常会落在更接近的方向，因此“软件供应链风险”可能命中包含“第三方依赖漏洞”的片段，即使两边没有完全相同的词。</p>
+  <p>这正是当前方案相对旧词法匹配的主要价值：检索不再只依赖字面重合。</p>
+
+  <h2>5. 文档向量和查询向量</h2>
+  <p>检索是非对称任务：一边是等待被搜索的资料，另一边是表达信息需求的问题。ResearchFlow 用统一的 <code>DOCUMENT</code> / <code>QUERY</code> 语义告诉适配器输入用途，再由适配器翻译成供应商当前模型要求的格式。</p>
+  <table><thead><tr><th>模型</th><th>文档</th><th>查询</th></tr></thead><tbody>
+    <tr><td><code>gemini-embedding-2</code></td><td><code>title: none | text: …</code></td><td><code>task: search result | query: …</code></td></tr>
+    <tr><td><code>gemini-embedding-001</code></td><td><code>RETRIEVAL_DOCUMENT</code></td><td><code>RETRIEVAL_QUERY</code></td></tr>
+  </tbody></table>
+  <p>这是模型版本差异，不是业务层应该到处知道的细节。Gemini Embedding 2 不支持旧的 <code>task_type</code> 字段，而是要求把任务指令写进文本；旧模型使用任务类型字段。把差异封装在适配器里，知识库和工作流无需随供应商 API 改写。</p>
+  <p><a href="../../../apps/api/src/researchflow/integrations/embedding/base.py"><code>EmbeddingClient</code></a> 只暴露“文本、用途 → 同序向量”。Gemini、OpenAI-compatible 和 Fake 是这个 seam 上的不同适配器。</p>
+
+  <h2>6. 余弦相似度怎样排序</h2>
+  <p><a href="../../../apps/api/src/researchflow/ingestion/retrieval.py"><code>EmbeddingKnowledgeRetriever</code></a> 为查询生成一个向量，再与候选片段逐个计算余弦相似度：</p>
+  <pre><code>cosine(a, b) = (a · b) / (||a|| × ||b||)</code></pre>
+  <p>点积衡量两个向量方向的一致程度，分母消除向量长度影响。项目按分数从高到低排列，只保留 Top-K。当前规模很小，所以直接在 Python 中计算；当片段达到大规模、并发查询增多或需要高效索引时，才有理由引入专门向量数据库。</p>
+
+  <h2>7. 为什么向量保存在 SQLite</h2>
+  <p>当前每个片段的向量以 JSON 浮点数组保存在 <code>document_chunk_embeddings</code>。这不是最高效的海量向量方案，但它有三个现实优势：</p>
+  <ul>
+    <li>不需要额外数据库进程，Windows 本地启动简单；</li>
+    <li>文档、片段、向量和研究引用可以在同一个事务模型中管理；</li>
+    <li>作品集规模下，顺序扫描和余弦计算足以演示完整 RAG。</li>
+  </ul>
+  <p>技术选型要回答当前约束，而不是因为“RAG 项目通常使用向量数据库”就预先增加基础设施。</p>
+
+  <h2>8. 为什么换模型后必须重新处理</h2>
+  <p>不同模型、Provider、输出维度或检索指令策略产生的坐标空间不能假定兼容。ResearchFlow 把这些信息组合成向量身份，只允许查询当前身份对应的文档向量。</p>
+  <p>如果配置改变，旧文档仍然存在，但创建研究任务时会得到 <code>EMBEDDING_REPROCESS_REQUIRED</code>。点击“重新处理”后，系统重新解析文档、生成向量并原子替换旧片段与向量，避免把不同空间的数字混在一起比较。</p>
+
+  <h2>9. 检索命中为什么还不是证据</h2>
+  <p>Top-K 只表示“这些片段相对更相似”，不保证它们正确、充分或真的支持某条结论。ResearchFlow 还要经过 Source、Evidence、Claim 和 Citation Audit。RAG 提高模型看到相关资料的机会，证据链负责限制模型怎样使用资料。</p>
+  <div class="callout success"><strong>面试表达：</strong>项目使用真正的云端 Embedding 和余弦相似度完成小规模语义检索，但把向量保存在 SQLite，避免为作品集过早引入向量数据库；模型配置变化会强制重建索引，保证查询与文档向量兼容。</div>
+
+  <p class="footer"><a href="0005-understand-langgraph-web-research.html">上一课：LangGraph 联合研究</a> · <a href="0007-understand-evidence-and-citations.html">下一课：证据与引用</a> · <a href="../README.md">返回学习区</a> · <a href="../../research/rag-embedding-learning-sources.md">本课资料依据</a></p>
+</main>
+</body>
+</html>

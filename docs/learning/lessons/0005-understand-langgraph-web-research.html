@@ -31,7 +31,7 @@
 ├─ WebPageReader
 └─ KnowledgeRetriever
    └─ EmbeddingClient</code></pre>
-  <p>测试注入 Fake，真实运行注入 OpenAI-compatible LLM、Exa、Gemini Embedding 和本地检索实现。文档使用 <code>RETRIEVAL_DOCUMENT</code>，查询使用 <code>RETRIEVAL_QUERY</code>，再以余弦相似度排列 SQLite 中的片段向量。节点不需要知道 HTTP 参数、上传存储、分块算法或供应商响应结构；这些接口和 ResearchFlow DTO 隔离细节。</p>
+  <p>测试注入 Fake，真实运行注入 OpenAI-compatible LLM、Exa、Gemini Embedding 和本地检索实现。Embedding 适配器按模型版本区分文档与查询用途，再以余弦相似度排列 SQLite 中的片段向量。节点不需要知道 HTTP 参数、任务指令、上传存储、分块算法或供应商响应结构；这些接口和 ResearchFlow DTO 隔离细节。</p>
 
   <h2>4. Source 和 Evidence 的区别</h2>
   <ul>

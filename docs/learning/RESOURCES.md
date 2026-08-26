@@ -22,6 +22,14 @@
   SQLAlchemy 官方异步 Engine、Connection 和 Session 文档。用于理解项目的数据访问基础。
 - [aiosqlite — OmniLib](https://github.com/omnilib/aiosqlite)
   aiosqlite 官方项目说明。用于理解它如何把标准 sqlite3 操作桥接到 asyncio，而不是提供独立数据库服务。
+- [Retrieval-Augmented Generation — NeurIPS 2020](https://papers.nips.cc/paper/2020/hash/6b493230205f780e1bc26945df7481e5-Abstract.html)
+  RAG 原始论文。用于区分参数化记忆、外部非参数记忆、检索器和生成器。
+- [Gemini Embeddings — Google AI for Developers](https://ai.google.dev/gemini-api/docs/embeddings)
+  Gemini Embedding 的当前官方指南。用于确认模型版本、检索任务指令和输出维度。
+- [Introduction to Information Retrieval — Stanford](https://nlp.stanford.edu/IR-book/)
+  信息检索教材。用于理解余弦相似度、相关性判断和常见检索指标。
+- [Text REtrieval Conference — NIST](https://trec.nist.gov/)
+  TREC 官方入口。用于理解查询集、语料、qrels 和可复现检索评测。
 
 ## Wisdom (Communities)
 
@@ -32,5 +40,5 @@
 
 ## Gaps
 
-- LangGraph 的基础资料已随现有课程补充；后续讲解 RAG 和 Agent 评估前，还需要加入对应的官方文档与高质量论文。
+- Agent 工作流可靠性与线上部署将在对应功能实现后补充课程，避免课程先于真实代码。
 - 学习者暂未选择是否参与开发者社区，当前以阅读高质量讨论为主。

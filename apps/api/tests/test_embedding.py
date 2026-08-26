@@ -69,7 +69,7 @@ async def test_openai_compatible_embedding_rejects_invalid_dimensions() -> None:
     assert captured.value.code == "EMBEDDING_INVALID_RESPONSE"
 
 
-async def test_gemini_embedding_uses_retrieval_task_types_and_native_batch() -> None:
+async def test_gemini_embedding_2_uses_search_instructions_and_native_batch() -> None:
     requests: list[tuple[httpx.Request, dict[str, object]]] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -101,9 +101,41 @@ async def test_gemini_embedding_uses_retrieval_task_types_and_native_batch() -> 
     assert request.url.path.endswith("/models/gemini-embedding-2:batchEmbedContents")
     assert request.headers["x-goog-api-key"] == "gemini-secret"
     assert all(
-        item["embedContentConfig"] == {"taskType": "RETRIEVAL_DOCUMENT", "outputDimensionality": 2}
+        item["embedContentConfig"] == {"outputDimensionality": 2}
         for item in body["requests"]
     )
+    assert [item["content"]["parts"][0]["text"] for item in body["requests"]] == [
+        "title: none | text: doc one",
+        "title: none | text: doc two",
+    ]
+    assert client.model == "gemini:gemini-embedding-2:2:search-prefix-v1"
 
     await client.embed(("query",), task=EmbeddingTask.QUERY)
-    assert requests[1][1]["requests"][0]["embedContentConfig"]["taskType"] == "RETRIEVAL_QUERY"
+    query_request = requests[1][1]["requests"][0]
+    assert query_request["content"]["parts"][0]["text"] == "task: search result | query: query"
+    assert "taskType" not in query_request["embedContentConfig"]
+
+
+async def test_gemini_embedding_1_uses_retrieval_task_types() -> None:
+    requests: list[dict[str, object]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        requests.append(body)
+        return httpx.Response(200, json={"embeddings": [{"values": [1.0, 0.0]}]})
+
+    client = GeminiEmbeddingClient(
+        base_url="https://generativelanguage.googleapis.com/v1beta",
+        model="gemini-embedding-001",
+        api_key="gemini-secret",
+        timeout_seconds=5,
+        dimensions=2,
+        transport=httpx.MockTransport(handler),
+    )
+
+    await client.embed(("document",), task=EmbeddingTask.DOCUMENT)
+    await client.embed(("query",), task=EmbeddingTask.QUERY)
+
+    assert requests[0]["requests"][0]["embedContentConfig"]["taskType"] == "RETRIEVAL_DOCUMENT"
+    assert requests[1]["requests"][0]["embedContentConfig"]["taskType"] == "RETRIEVAL_QUERY"
+    assert client.model == "gemini:gemini-embedding-001:2:task-type-v1"

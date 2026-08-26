@@ -58,7 +58,7 @@ LLM 保持 `LLM_TIMEOUT`、`LLM_CONNECTION_ERROR`、`LLM_HTTP_ERROR`、`LLM_INVA
 
 - 当前网页 Provider 覆盖通用公开 Web，但结果质量和数量受 Exa 免费额度影响；
 - 本地文档片段和查询默认使用同一个 Gemini Embedding 2 模型，分别标记为文档与查询用途；也保留 OpenAI-compatible 适配器。向量保存在 SQLite 并用余弦相似度排序，不要求本地 GPU 或独立向量数据库；
-- 更换 Embedding 模型或维度后必须重新处理已有文档，系统不会混算不同模型的向量；
+- 更换 Embedding 模型、维度或检索指令策略后必须重新处理已有文档，系统不会混算不兼容的向量；
 - PDF 只提取已有文本层，不执行 OCR；扫描件会进入明确的失败状态；
 - 已保存 Exa 可用的作者与发布时间并分类来源，但没有 DOI、卷期、被引量等专业学术元数据；
 - LangGraph 尚未配置持久 checkpoint；进程中断的运行会被标记为 `RUN_INTERRUPTED`；
