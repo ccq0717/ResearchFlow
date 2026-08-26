@@ -34,7 +34,7 @@
 6. SSE、任务进度和断线重连（已有入门课）
 7. LLM 接口、适配器与结构化输出（已有入门课）
 8. Agent 工作流、LangGraph 与状态管理（已有入门课）
-9. RAG、轻量检索、证据和引用（已有入门课）
+9. RAG、Embedding 检索、证据和引用（已有入门课）
 10. 测试、日志、Docker 与部署
 
 学习方向由 [MISSION.md](MISSION.md) 约束，资料来源记录在 [RESOURCES.md](RESOURCES.md)。

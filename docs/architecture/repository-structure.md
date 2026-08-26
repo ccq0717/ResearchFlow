@@ -1,159 +1,85 @@
-# ResearchFlow 仓库结构设计
+# ResearchFlow 仓库结构
 
 > 状态：当前实现
+>
 > 更新日期：2026-08-26
 
-## 1. 设计目标
-
-当前工作空间 `E:\VScodeProjects\ResearchFlow` 将直接作为 GitHub 仓库根目录，不在其中再嵌套一层同名项目目录。
-
-目录结构需要同时满足：
-
-- 前后端职责清楚；
-- 适合个人学习和面试讲解；
-- 不引入不必要的 monorepo 工具；
-- 能在 Windows 上分别或统一启动；
-- 文档、测试、部署配置和源码都有稳定位置；
-- 密钥、本地数据库、上传文件和生成报告不会进入 Git。
-
-## 2. 推荐目录结构
+## 1. 顶层目录
 
 ```text
 ResearchFlow/
-├── .github/
-│   └── workflows/                 # CI：检查、测试与构建
-├── apps/
-│   ├── web/                       # Next.js 前端应用
-│   │   ├── public/
-│   │   ├── src/
-│   │   │   ├── app/              # 路由和页面
-│   │   │   ├── components/       # 通用 UI
-│   │   │   ├── features/         # 按业务功能组织的前端模块
-│   │   │   ├── lib/              # HTTP、SSE、配置等基础代码
-│   │   │   └── types/            # 前端共享类型
-│   │   ├── tests/
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   └── api/                       # FastAPI 后端应用
-│       ├── src/
-│       │   └── researchflow/
-│       │       ├── api/           # HTTP/SSE 路由和请求模型
-│       │       ├── domain/        # 研究任务、证据、来源等领域模型
-│       │       ├── application/   # 用例编排，不依赖 Web 框架
-│       │       ├── workflows/     # ResearchWorkflow 与 LangGraph 实现
-│       │       ├── integrations/  # LLM 与 Web 外部适配器
-│       │       ├── ingestion/     # 文件解析、切分与本地检索
-│       │       ├── persistence/   # SQLAlchemy 仓储和数据库模型
-│       │       └── core/          # 配置、日志和通用错误
-│       ├── tests/
-│       │   ├── unit/
-│       │   └── integration/
-│       └── pyproject.toml
-├── docs/
-│   ├── product/                   # 定位、范围、用户旅程和 MVP
-│   ├── architecture/              # 架构、数据模型和接口设计
-│   ├── decisions/                 # 重要架构决策记录（ADR）
-│   └── research/                  # 对外部项目和技术的调研
-├── examples/                      # 可公开的演示输入和样例资料
-├── infra/
-│   └── docker/                    # 可选的容器和部署配置
-├── scripts/                       # Windows/跨平台开发辅助脚本
-├── .editorconfig
-├── .env.example                   # 可提交的配置模板，不含真实密钥
-├── .gitignore
-├── LICENSE
-├── README.md
-└── CONTRIBUTING.md                # 可在需要时添加
+├── .github/workflows/       CI
+├── apps/web/                Next.js 前端
+├── apps/api/                FastAPI 后端
+├── docs/                    产品、架构、决策、调研与学习资料
+├── examples/                可公开演示输入
+├── scripts/                 评测与辅助脚本
+├── var/                     本地数据库和上传文件，不提交
+├── .env.example             无密钥配置示例
+├── pyproject.toml           Python workspace
+├── uv.lock                  Python 锁文件
+└── README.md
 ```
 
-空目录不应只为追求结构完整而提前创建。实现某个模块时再创建相应目录和文件，让仓库结构反映真实代码。
+前后端使用各自的 `src`，避免 TypeScript 和 Python 构建边界混在根目录。空目录和假想基础设施不提前创建。
 
-## 3. 为什么不使用根目录 `src/`
+## 2. 后端模块
 
-本项目同时包含 TypeScript 前端和 Python 后端。若只建立一个根目录 `src/`，两套语言、构建工具和依赖会混在一起，降低可读性。
+```text
+apps/api/src/researchflow/
+├── api/             HTTP、SSE 路由和请求响应模型
+├── application/     研究任务与知识库用例
+├── core/            配置
+├── domain/          领域对象和不变量
+├── ingestion/       文件解析、分块与本地检索
+├── integrations/    LLM、搜索、网页读取和 Embedding 适配器
+├── persistence/     SQLAlchemy 表和仓储
+└── workflows/       模拟、规划与 LangGraph 工作流
+```
 
-因此采用：
+FastAPI 路由只负责协议转换。Application 编排用例，领域模块保存业务语义，外部协议和数据库细节分别留在 integrations 与 persistence。
 
-- `apps/web/src`：前端源码；
-- `apps/api/src/researchflow`：后端 Python 包源码。
-
-这种布局仍然遵循“源码放在 src 下”的习惯，同时明确两个可独立运行的应用。
-
-## 4. LangGraph 的位置与接口
-
-LangGraph 放在后端 `workflows/` 模块内部。FastAPI 路由不直接导入 Graph、Node 或 LangGraph State，也不把 LangGraph 的事件结构直接返回给前端。
+## 3. 工作流 seam
 
 ```text
 FastAPI Route
-    ↓
-Research Application Use Case
-    ↓
-ResearchWorkflow interface
-    ↓
-LangGraphResearchWorkflow implementation
-    ├─ LLMClient
-    ├─ SearchProvider
-    ├─ WebPageReader
-    └─ KnowledgeRetriever
+  → ResearchRunApplication
+    → ResearchWorkflow
+      → LangGraphResearchWorkflow
+        ├─ LLMClient
+        ├─ SearchProvider
+        ├─ WebPageReader
+        └─ KnowledgeRetriever
+             └─ EmbeddingClient
 ```
 
-`ResearchWorkflow` 是框架隔离的 seam。它对调用方暴露少量 ResearchFlow 自己的输入、事件和结果类型，并在内部处理：
+LangGraph 的 Graph、Node 和 State 不进入 FastAPI、领域模型或前端事件。`ResearchWorkflow` 对调用方只暴露 ResearchFlow 自己的输入和更新类型。
 
-- 节点顺序与条件分支；
-- 搜索、阅读、证据提取、写作与检查节点；
-- 外部请求的有限重试与超时；
-- LangGraph 状态到领域事件的转换。
+真实外部能力都有测试替身：
 
-这一模块应保持较深：调用方只学习一个小接口，就能获得完整研究流程，而不需要理解 LangGraph 的实现细节。
+- `LLMClient`：OpenAI-compatible / Fake；
+- `SearchProvider`：Exa / Fake；
+- `WebPageReader`：搜索结果正文读取器 / Fake；
+- `EmbeddingClient`：Gemini、OpenAI-compatible / Fake；
+- `KnowledgeRetriever`：封装查询向量、模型匹配和余弦排序。
 
-## 5. 外部依赖的 seam
+额外学术搜索、OCR、独立向量数据库或新仓储只在出现实际需求和第二种实现时增加，不预设空接口。
 
-只有确实需要生产实现和测试替身的外部能力才建立接口，例如：
-
-- `LLMClient`：OpenAI-compatible 适配器 / Fake；
-- `SearchProvider`：Exa 通用 Web 适配器 / Fake；
-- `WebPageReader`：Provider 内容读取 / Fake，未来可替换为独立网页读取器；
-- 额外学术检索或元数据服务不是预设接口；只有固定查询证明现有能力不足且出现真实实现差异时，才新增对应 seam；
-- `EmbeddingClient`：Gemini 原生适配器 / OpenAI-compatible 备选适配器 / Fake；
-- `KnowledgeRetriever`：隐藏查询向量生成、模型匹配和余弦相似度排序；
-- `KnowledgeLibrary`：对调用方隐藏上传校验、安全落盘、解析、处理状态、重处理和删除；
-- `SqliteResearchRepository` 与 `SqliteKnowledgeRepository` 按运行材料和可复用知识文档拆分职责；它们当前都只有 SQLite 真实实现，不提取假想的持久化 Protocol。
-
-这些接口由工作流和应用用例接收，而不是在模块内部临时创建真实客户端。测试通过相同 seam 运行完整流程。
-
-## 6. GitHub 仓库要求
-
-正式初始化仓库时至少加入：
-
-- `README.md`：项目价值、截图、架构、启动与演示；
-- `LICENSE`：明确开源许可；
-- `.gitignore`：忽略密钥、依赖、缓存、数据库和用户文件；
-- `.env.example`：列出配置项，不保存真实 API Key；
-- GitHub Actions：运行前端检查、后端检查和测试；
-- `examples/`：提供不受版权限制的演示输入；
-- 清晰、分阶段的提交记录。
-
-本地运行数据建议统一放到被 Git 忽略的 `var/` 中，例如：
+## 4. 运行数据
 
 ```text
 var/
 ├── researchflow.db
-├── uploads/
-├── indexes/
-└── reports/
+└── uploads/
 ```
 
-`var/` 不作为源码结构的一部分提交，只在 README 中说明它会在运行时自动生成。
+数据库与上传目录必须一起备份。`.env`、`var/`、虚拟环境、前端依赖和构建产物不提交；锁文件、`.env.example`、公开样例和 CI 配置应提交。
 
-## 7. 暂不引入的复杂度
+## 5. 暂不引入
 
-初始仓库不需要：
+- Nx、Turborepo 等额外 monorepo 编排；
+- 微服务、Redis、消息队列和 Kubernetes；
+- 按 LangGraph 节点机械拆分文件；
+- 为只有一个实现的简单类建立形式化接口。
 
-- Nx、Turborepo 等 monorepo 编排工具；
-- 独立共享包目录；
-- 微服务拆分；
-- Redis、消息队列和 Kubernetes 配置；
-- 为每个简单类建立独立接口；
-- 按 LangGraph 节点机械地一文件一目录。
-
-只有出现真实的第二个调用方、第二个实现或明确部署需求时，才增加新的 seam 和基础设施。
+这些选择让仓库保持适合个人作品集的规模，同时保留更换真实 Provider 和工作流实现所需的 seam。

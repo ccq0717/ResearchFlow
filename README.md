@@ -146,22 +146,7 @@ LLM Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completio
 
 ## 项目文档
 
-- [使用、开发与运维手册](docs/guides/development-and-operations.md)
-- [作品集在线 Demo 部署指南](docs/guides/online-demo-deployment.md)
-- [从零学习 ResearchFlow：前后端与 AI 工程课程](docs/learning/README.md)
-- [项目讨论记录](docs/product/project-discussion.md)
-- [项目路线图](docs/product/roadmap.md)
-- [项目实施复盘](docs/product/retrospectives/)
-- [MVP 技术规格](docs/product/mvp-spec.md)
-- [领域词汇表](CONTEXT.md)
-- [核心数据模型](docs/architecture/domain-model.md)
-- [LLM 接入架构](docs/architecture/llm-integration.md)
-- [SSE 事件契约](docs/architecture/sse-events.md)
-- [仓库结构设计](docs/architecture/repository-structure.md)
-- [LangGraph 架构决策](docs/decisions/0001-use-langgraph-behind-workflow-interface.md)
-- [Hello-Agents 调研](docs/research/hello-agents-analysis.md)
-- [通用网页搜索 Provider 比较](docs/research/general-web-search-provider-comparison.md)
-- [本地检索方案评测](docs/research/m4-local-retrieval-evaluation.md)
+按“使用与部署、产品、架构、调研、学习、实施历史”分类的入口见[文档索引](docs/README.md)。日常启动和排错直接阅读[使用、开发与运维手册](docs/guides/development-and-operations.md)。
 
 ## 许可证
 
