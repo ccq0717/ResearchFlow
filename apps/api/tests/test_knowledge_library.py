@@ -7,6 +7,7 @@ from pypdf import PdfWriter
 
 from researchflow.app_factory import create_app
 from researchflow.core.config import Settings
+from researchflow.integrations.embedding.fake import FakeEmbeddingClient
 from researchflow.integrations.llm.fake import FakeLLMClient
 from researchflow.integrations.web.fake import FakeSearchProvider, FakeWebPageReader
 
@@ -25,7 +26,7 @@ async def test_text_document_upload_persists_chunks_and_uses_safe_storage_name(
     tmp_path: Path,
 ) -> None:
     settings = _settings(tmp_path)
-    app = create_app(settings)
+    app = create_app(settings, embedding_client=FakeEmbeddingClient())
     content = (
         "# AI 代码评测\n\n正确性需要可重复执行的测试。\n安全性需要独立的静态与动态检查。\n"
     ).encode()
@@ -56,7 +57,7 @@ async def test_text_document_upload_persists_chunks_and_uses_safe_storage_name(
     assert stored_files[0].name != "evaluation.md"
     assert stored_files[0].suffix == ".md"
 
-    reopened = create_app(settings)
+    reopened = create_app(settings, embedding_client=FakeEmbeddingClient())
     async with reopened.router.lifespan_context(reopened):
         async with AsyncClient(
             transport=ASGITransport(app=reopened), base_url="http://test"
@@ -69,7 +70,10 @@ async def test_text_document_upload_persists_chunks_and_uses_safe_storage_name(
 async def test_duplicate_unsupported_and_oversized_documents_are_rejected(
     tmp_path: Path,
 ) -> None:
-    app = create_app(_settings(tmp_path, max_bytes=1024))
+    app = create_app(
+        _settings(tmp_path, max_bytes=1024),
+        embedding_client=FakeEmbeddingClient(),
+    )
     async with app.router.lifespan_context(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             first = await client.post(
@@ -98,11 +102,78 @@ async def test_duplicate_unsupported_and_oversized_documents_are_rejected(
             assert oversized.json()["code"] == "DOCUMENT_TOO_LARGE"
 
 
+async def test_unconfigured_embedding_is_a_reprocessable_document_failure(
+    tmp_path: Path,
+) -> None:
+    app = create_app(_settings(tmp_path))
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            uploaded = await client.post(
+                "/api/knowledge-documents",
+                files={"file": ("notes.txt", b"semantic retrieval notes", "text/plain")},
+            )
+
+            assert uploaded.status_code == 201
+            assert uploaded.json()["status"] == "failed"
+            assert uploaded.json()["error_code"] == "EMBEDDING_NOT_CONFIGURED"
+
+
+async def test_embedding_configuration_change_requires_document_reprocessing(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    first_app = create_app(
+        settings,
+        embedding_client=FakeEmbeddingClient(model="first-model", dimensions=32),
+    )
+    async with first_app.router.lifespan_context(first_app):
+        async with AsyncClient(
+            transport=ASGITransport(app=first_app), base_url="http://test"
+        ) as client:
+            uploaded = await client.post(
+                "/api/knowledge-documents",
+                files={"file": ("notes.txt", b"semantic retrieval notes", "text/plain")},
+            )
+            document_id = uploaded.json()["id"]
+            assert uploaded.json()["status"] == "ready"
+
+    changed_app = create_app(
+        settings,
+        embedding_client=FakeEmbeddingClient(model="second-model", dimensions=64),
+    )
+    async with changed_app.router.lifespan_context(changed_app):
+        async with AsyncClient(
+            transport=ASGITransport(app=changed_app), base_url="http://test"
+        ) as client:
+            rejected = await client.post(
+                "/api/research-runs",
+                json={
+                    "goal": "使用已上传的资料完成一次语义研究",
+                    "document_ids": [document_id],
+                },
+            )
+            assert rejected.status_code == 400
+            assert rejected.json()["code"] == "EMBEDDING_REPROCESS_REQUIRED"
+
+            reprocessed = await client.post(f"/api/knowledge-documents/{document_id}/reprocess")
+            assert reprocessed.status_code == 200
+            assert reprocessed.json()["status"] == "ready"
+
+            created = await client.post(
+                "/api/research-runs",
+                json={
+                    "goal": "使用已上传的资料完成一次语义研究",
+                    "document_ids": [document_id],
+                },
+            )
+            assert created.status_code == 201
+
+
 async def test_text_pdf_is_ready_and_scanned_pdf_can_be_reprocessed_then_deleted(
     tmp_path: Path,
 ) -> None:
     settings = _settings(tmp_path)
-    app = create_app(settings)
+    app = create_app(settings, embedding_client=FakeEmbeddingClient())
     text_pdf = _text_pdf("AI evaluation requires reproducible tests.")
     blank_pdf_stream = BytesIO()
     writer = PdfWriter()
@@ -168,6 +239,7 @@ async def test_selected_local_document_joins_web_research_and_keeps_locator(
     app = create_app(
         settings,
         llm_client=FakeLLMClient(),
+        embedding_client=FakeEmbeddingClient(),
         search_provider=FakeSearchProvider(),
         page_reader=FakeWebPageReader(),
     )

@@ -28,7 +28,7 @@
   <p>模式由 <code>RESEARCHFLOW_WORKFLOW_MODE</code> 决定。默认值是 <code>simulation</code>，所以拉取仓库后不会意外产生模型费用。</p>
 
   <h2>2. 接口和适配器是什么</h2>
-  <p><code>LLMClient</code> 在 M2 提供计划生成、证据提取和报告写作三个领域操作。调用方不需要知道 URL、Authorization Header、提示词和厂商 JSON。</p>
+  <p><code>LLMClient</code> 提供计划生成、证据提取和报告写作三个领域操作。调用方不需要知道 URL、Authorization Header、提示词和厂商 JSON。</p>
   <pre><code>研究工作流 → LLMClient → 研究计划
                     ├─ FakeLLMClient
                     └─ OpenAICompatibleLLMClient</code></pre>
@@ -89,8 +89,8 @@
   <h2>8. 失败时会发生什么</h2>
   <p>超时、连接失败、HTTP 错误和格式错误会转换成稳定错误代码。前端得到的是安全、可理解的消息，而不是可能包含内部地址、响应正文或密钥的异常堆栈。Research Run 会进入 <code>failed</code> 终态。</p>
 
-  <h2>9. M1 阶段的能力边界</h2>
-  <p>本课对应的 M1 工作流只让真实 LLM 生成计划，后面的检索、分析和写作仍是演示逻辑，所以不能把 M1 报告描述为经过真实网页调研的结论。M2 已在此接口基础上把计划送入 LangGraph 和网页检索。</p>
+  <h2>9. 规划模式的能力边界</h2>
+  <p><code>llm</code> 工作流只让真实 LLM 生成计划，后面的检索、分析和写作仍是演示逻辑，所以不能把该模式的报告描述为经过真实网页调研的结论。<code>langgraph</code> 模式会在同一接口基础上把计划送入网页与本地资料检索。</p>
 
   <h2>10. 三个适配器边界</h2>
   <div class="card"><ul>

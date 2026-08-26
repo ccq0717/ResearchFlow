@@ -171,7 +171,7 @@ OpenAI-compatible LLM abstraction
 
 Storage (MVP)
 SQLite + 本地文件存储
-轻量词法检索，可替换的检索接口
+Gemini Embedding + SQLite 向量存储，可替换的检索接口
 
 Communication
 REST API + SSE
@@ -181,7 +181,7 @@ Windows 原生运行
 Docker 作为可选部署方式
 ```
 
-低资源原则：默认调用云端 LLM，不要求本地 GPU，不把 Embedding API、Redis、独立向量数据库或 Docker Desktop 作为本地开发前提。只有固定评测证明语义检索有收益时才增加 Embedding 服务。
+低资源原则：默认调用云端 LLM 与 Gemini Embedding，不要求本地 GPU，不把 Redis、独立向量数据库或 Docker Desktop 作为本地开发前提。
 
 ## 8. 简历价值要求
 
@@ -215,7 +215,7 @@ ResearchFlow 只有在体现独立设计与工程能力时，才比复刻教程�
 - 资源策略：云端模型、本地轻量服务、可选生产化组件；
 - 产品策略：先完成可演示的单机 MVP，再逐步加入工程化能力；
 - 资料来源：Exa 通用 Web 搜索与 PDF、Markdown、UTF-8 文本本地知识库；
-- 本地检索：默认词法检索，不预先引入 Embedding 或独立向量数据库；
+- 本地检索：Gemini Embedding + SQLite 余弦相似度，不引入独立向量数据库；
 - 工作流编排：使用 LangGraph，但通过 ResearchFlow 自己的工作流接口隔离框架；
 - 仓库形式：以前后端分离的 monorepo 组织，工作空间根目录即 GitHub 仓库根目录；
 - 目录原则：应用放在 `apps/`，各应用源码放在自己的 `src/`，项目资料统一放在 `docs/`。

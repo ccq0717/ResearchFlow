@@ -39,6 +39,13 @@ class DocumentChunk:
 
 
 @dataclass(frozen=True, slots=True)
+class ChunkEmbedding:
+    chunk_id: str
+    model: str
+    vector: tuple[float, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class KnowledgeSearchHit:
     document_id: UUID
     chunk_id: str

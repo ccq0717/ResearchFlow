@@ -162,7 +162,7 @@ class LLMResearchWorkflow:
             for index, question in enumerate(plan.questions, start=1)
         )
         deliverables = "\n".join(f"- {deliverable}" for deliverable in plan.deliverables)
-        return f"""# AI 研究方案（M1 演示结果）
+        return f"""# AI 研究方案（规划模式演示结果）
 
 ## 研究目标
 

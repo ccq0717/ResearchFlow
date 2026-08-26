@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -6,6 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
 from researchflow.domain.knowledge import (
+    ChunkEmbedding,
     DocumentChunk,
     KnowledgeDocument,
     KnowledgeDocumentStatus,
@@ -42,6 +44,17 @@ class DocumentChunkRow(Base):
     page_number: Mapped[int | None] = mapped_column(Integer)
     start_line: Mapped[int | None] = mapped_column(Integer)
     end_line: Mapped[int | None] = mapped_column(Integer)
+
+
+class DocumentChunkEmbeddingRow(Base):
+    __tablename__ = "document_chunk_embeddings"
+
+    chunk_id: Mapped[str] = mapped_column(
+        String(80), ForeignKey("document_chunks.id", ondelete="CASCADE"), primary_key=True
+    )
+    model: Mapped[str] = mapped_column(String(200), index=True)
+    dimensions: Mapped[int] = mapped_column(Integer)
+    vector_json: Mapped[str] = mapped_column(Text)
 
 
 class ResearchRunDocumentRow(Base):
@@ -137,6 +150,64 @@ class SqliteKnowledgeRepository:
             ).all()
             return tuple((title, self._chunk_to_domain(row)) for title, row in rows)
 
+    async def list_embedded_chunks_for_documents(
+        self,
+        document_ids: tuple[UUID, ...],
+        *,
+        model: str,
+    ) -> tuple[tuple[str, DocumentChunk, ChunkEmbedding], ...]:
+        if not document_ids:
+            return ()
+        async with self._sessions() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        KnowledgeDocumentRow.original_filename,
+                        DocumentChunkRow,
+                        DocumentChunkEmbeddingRow,
+                    )
+                    .join(
+                        DocumentChunkRow,
+                        DocumentChunkRow.document_id == KnowledgeDocumentRow.id,
+                    )
+                    .join(
+                        DocumentChunkEmbeddingRow,
+                        DocumentChunkEmbeddingRow.chunk_id == DocumentChunkRow.id,
+                    )
+                    .where(
+                        KnowledgeDocumentRow.id.in_([str(item) for item in document_ids]),
+                        KnowledgeDocumentRow.status == KnowledgeDocumentStatus.READY,
+                        DocumentChunkEmbeddingRow.model == model,
+                    )
+                    .order_by(KnowledgeDocumentRow.id, DocumentChunkRow.ordinal)
+                )
+            ).all()
+            return tuple(
+                (
+                    title,
+                    self._chunk_to_domain(chunk_row),
+                    self._embedding_to_domain(embedding_row),
+                )
+                for title, chunk_row, embedding_row in rows
+            )
+
+    async def document_has_embeddings(self, document_id: UUID, *, model: str) -> bool:
+        async with self._sessions() as session:
+            chunk_count = await session.scalar(
+                select(func.count(DocumentChunkRow.id)).where(
+                    DocumentChunkRow.document_id == str(document_id)
+                )
+            )
+            embedding_count = await session.scalar(
+                select(func.count(DocumentChunkEmbeddingRow.chunk_id))
+                .join(DocumentChunkRow, DocumentChunkRow.id == DocumentChunkEmbeddingRow.chunk_id)
+                .where(
+                    DocumentChunkRow.document_id == str(document_id),
+                    DocumentChunkEmbeddingRow.model == model,
+                )
+            )
+            return bool(chunk_count) and chunk_count == embedding_count
+
     async def link_run(self, run_id: UUID, document_ids: tuple[UUID, ...]) -> None:
         async with self._sessions() as session:
             session.add_all(
@@ -163,6 +234,15 @@ class SqliteKnowledgeRepository:
             if row is None:
                 raise KeyError(str(document_id))
             await session.execute(
+                delete(DocumentChunkEmbeddingRow).where(
+                    DocumentChunkEmbeddingRow.chunk_id.in_(
+                        select(DocumentChunkRow.id).where(
+                            DocumentChunkRow.document_id == str(document_id)
+                        )
+                    )
+                )
+            )
+            await session.execute(
                 delete(DocumentChunkRow).where(DocumentChunkRow.document_id == str(document_id))
             )
             row.status = KnowledgeDocumentStatus.FAILED
@@ -175,11 +255,23 @@ class SqliteKnowledgeRepository:
         self,
         document_id: UUID,
         chunks: tuple[DocumentChunk, ...],
+        embeddings: tuple[ChunkEmbedding, ...],
     ) -> None:
+        if len(chunks) != len(embeddings):
+            raise ValueError("每个文档片段必须对应一个 Embedding")
         async with self._sessions() as session:
             row = await session.get(KnowledgeDocumentRow, str(document_id))
             if row is None:
                 raise KeyError(str(document_id))
+            await session.execute(
+                delete(DocumentChunkEmbeddingRow).where(
+                    DocumentChunkEmbeddingRow.chunk_id.in_(
+                        select(DocumentChunkRow.id).where(
+                            DocumentChunkRow.document_id == str(document_id)
+                        )
+                    )
+                )
+            )
             await session.execute(
                 delete(DocumentChunkRow).where(DocumentChunkRow.document_id == str(document_id))
             )
@@ -196,6 +288,15 @@ class SqliteKnowledgeRepository:
                 )
                 for chunk in chunks
             )
+            session.add_all(
+                DocumentChunkEmbeddingRow(
+                    chunk_id=embedding.chunk_id,
+                    model=embedding.model,
+                    dimensions=len(embedding.vector),
+                    vector_json=json.dumps(embedding.vector, separators=(",", ":")),
+                )
+                for embedding in embeddings
+            )
             row.status = KnowledgeDocumentStatus.READY
             row.error_code = None
             row.error_message = None
@@ -207,6 +308,15 @@ class SqliteKnowledgeRepository:
             row = await session.get(KnowledgeDocumentRow, str(document_id))
             if row is None:
                 return False
+            await session.execute(
+                delete(DocumentChunkEmbeddingRow).where(
+                    DocumentChunkEmbeddingRow.chunk_id.in_(
+                        select(DocumentChunkRow.id).where(
+                            DocumentChunkRow.document_id == str(document_id)
+                        )
+                    )
+                )
+            )
             await session.execute(
                 delete(DocumentChunkRow).where(DocumentChunkRow.document_id == str(document_id))
             )
@@ -289,6 +399,17 @@ class SqliteKnowledgeRepository:
             page_number=row.page_number,
             start_line=row.start_line,
             end_line=row.end_line,
+        )
+
+    @staticmethod
+    def _embedding_to_domain(row: DocumentChunkEmbeddingRow) -> ChunkEmbedding:
+        raw_vector = json.loads(row.vector_json)
+        if not isinstance(raw_vector, list) or len(raw_vector) != row.dimensions:
+            raise ValueError("数据库中的 Embedding 向量无效")
+        return ChunkEmbedding(
+            chunk_id=row.chunk_id,
+            model=row.model,
+            vector=tuple(float(value) for value in raw_vector),
         )
 
     @staticmethod

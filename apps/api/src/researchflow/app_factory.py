@@ -8,7 +8,10 @@ from researchflow.api.routes import router
 from researchflow.application.knowledge_library import KnowledgeLibrary
 from researchflow.application.research_runs import ResearchRunApplication
 from researchflow.core.config import Settings, get_settings
-from researchflow.ingestion.retrieval import LocalKnowledgeRetriever, RetrievalMode
+from researchflow.ingestion.retrieval import EmbeddingKnowledgeRetriever
+from researchflow.integrations.embedding.base import EmbeddingClient, UnconfiguredEmbeddingClient
+from researchflow.integrations.embedding.gemini import GeminiEmbeddingClient
+from researchflow.integrations.embedding.openai_compatible import OpenAICompatibleEmbeddingClient
 from researchflow.integrations.llm.base import LLMClient
 from researchflow.integrations.llm.openai_compatible import OpenAICompatibleLLMClient
 from researchflow.integrations.web.base import SearchProvider, WebPageReader
@@ -30,6 +33,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     llm_client: LLMClient | None = None,
+    embedding_client: EmbeddingClient | None = None,
     search_provider: SearchProvider | None = None,
     page_reader: WebPageReader | None = None,
 ) -> FastAPI:
@@ -39,8 +43,43 @@ def create_app(
     session_factory = create_session_factory(engine)
     repository = SqliteResearchRepository(session_factory)
     knowledge_repository = SqliteKnowledgeRepository(session_factory)
+    if embedding_client is not None:
+        resolved_embedding = embedding_client
+    elif resolved_settings.embedding_model.strip():
+        if resolved_settings.embedding_provider == "gemini":
+            if resolved_settings.embedding_api_key is None:
+                raise ValueError("Gemini Embedding 必须设置 RESEARCHFLOW_EMBEDDING_API_KEY")
+            embedding_api_key = resolved_settings.embedding_api_key.get_secret_value().strip()
+            if not embedding_api_key:
+                raise ValueError("Gemini Embedding 必须设置 RESEARCHFLOW_EMBEDDING_API_KEY")
+            resolved_embedding = GeminiEmbeddingClient(
+                base_url=str(resolved_settings.embedding_base_url),
+                model=resolved_settings.embedding_model,
+                api_key=embedding_api_key,
+                timeout_seconds=resolved_settings.embedding_timeout_seconds,
+                dimensions=resolved_settings.embedding_dimensions,
+                batch_size=resolved_settings.embedding_batch_size,
+            )
+        elif resolved_settings.embedding_provider == "openai-compatible":
+            resolved_embedding = OpenAICompatibleEmbeddingClient(
+                base_url=str(resolved_settings.embedding_base_url),
+                model=resolved_settings.embedding_model,
+                api_key=(
+                    resolved_settings.embedding_api_key.get_secret_value()
+                    if resolved_settings.embedding_api_key is not None
+                    else None
+                ),
+                timeout_seconds=resolved_settings.embedding_timeout_seconds,
+                dimensions=resolved_settings.embedding_dimensions,
+                batch_size=resolved_settings.embedding_batch_size,
+            )
+        else:
+            raise ValueError(f"不支持的 Embedding Provider：{resolved_settings.embedding_provider}")
+    else:
+        resolved_embedding = UnconfiguredEmbeddingClient()
     knowledge_library = KnowledgeLibrary(
         knowledge_repository,
+        embedding_client=resolved_embedding,
         upload_directory=resolved_settings.knowledge_upload_directory,
         max_document_bytes=resolved_settings.knowledge_max_document_bytes,
         max_document_count=resolved_settings.knowledge_max_document_count,
@@ -50,9 +89,9 @@ def create_app(
         max_pdf_pages=resolved_settings.knowledge_max_pdf_pages,
         max_pdf_page_stream_bytes=resolved_settings.knowledge_max_pdf_page_stream_bytes,
     )
-    knowledge_retriever = LocalKnowledgeRetriever(
+    knowledge_retriever = EmbeddingKnowledgeRetriever(
         knowledge_repository,
-        mode=RetrievalMode(resolved_settings.knowledge_retrieval_mode),
+        embedding_client=resolved_embedding,
     )
 
     if resolved_settings.workflow_mode in {"llm", "langgraph"}:

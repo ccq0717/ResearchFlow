@@ -5,11 +5,17 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from researchflow.domain.knowledge import (
+    ChunkEmbedding,
     DocumentChunk,
     KnowledgeDocument,
     KnowledgeDocumentStatus,
 )
 from researchflow.ingestion.documents import DocumentParsingError, parse_document
+from researchflow.integrations.embedding.base import (
+    EmbeddingClient,
+    EmbeddingClientError,
+    EmbeddingTask,
+)
 from researchflow.persistence.knowledge_repository import SqliteKnowledgeRepository
 
 _MEDIA_TYPES = {
@@ -34,6 +40,7 @@ class KnowledgeLibrary:
         self,
         repository: SqliteKnowledgeRepository,
         *,
+        embedding_client: EmbeddingClient,
         upload_directory: Path,
         max_document_bytes: int,
         max_document_count: int,
@@ -44,6 +51,7 @@ class KnowledgeLibrary:
         max_pdf_page_stream_bytes: int,
     ) -> None:
         self._repository = repository
+        self._embedding_client = embedding_client
         self._upload_directory = upload_directory.resolve()
         self._max_document_bytes = max_document_bytes
         self._max_document_count = max_document_count
@@ -124,6 +132,14 @@ class KnowledgeLibrary:
                     "KNOWLEDGE_DOCUMENT_NOT_READY",
                     f"文档“{document.original_filename}”尚未成功处理",
                 )
+            if not await self._repository.document_has_embeddings(
+                document_id,
+                model=self._embedding_client.model,
+            ):
+                raise KnowledgeLibraryError(
+                    "EMBEDDING_REPROCESS_REQUIRED",
+                    f"文档“{document.original_filename}”需要用当前 Embedding 模型重新处理",
+                )
         return unique_ids
 
     async def link_run(self, run_id: UUID, document_ids: tuple[UUID, ...]) -> None:
@@ -201,8 +217,27 @@ class KnowledgeLibrary:
                 )
                 for index, item in enumerate(parsed, start=1)
             )
-            await self._repository.replace_chunks(document.id, chunks)
+            vectors = await self._embedding_client.embed(
+                tuple(chunk.content for chunk in chunks),
+                task=EmbeddingTask.DOCUMENT,
+            )
+            if len(vectors) != len(chunks):
+                raise EmbeddingClientError(
+                    "EMBEDDING_INVALID_RESPONSE",
+                    "Embedding 服务返回的向量数量与文档片段不一致",
+                )
+            embeddings = tuple(
+                ChunkEmbedding(
+                    chunk_id=chunk.id,
+                    model=self._embedding_client.model,
+                    vector=vector,
+                )
+                for chunk, vector in zip(chunks, vectors, strict=True)
+            )
+            await self._repository.replace_chunks(document.id, chunks, embeddings)
         except DocumentParsingError as error:
+            await self._repository.mark_failed(document.id, error.code, error.public_message)
+        except EmbeddingClientError as error:
             await self._repository.mark_failed(document.id, error.code, error.public_message)
         except OSError:
             await self._repository.mark_failed(

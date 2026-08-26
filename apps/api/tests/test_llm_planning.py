@@ -48,7 +48,7 @@ async def test_llm_workflow_generates_and_persists_plan(tmp_path: Path) -> None:
                 await asyncio.sleep(0.01)
 
             assert detail.json()["status"] == "completed"
-            assert "M1 演示结果" in detail.json()["report_markdown"]
+            assert "规划模式演示结果" in detail.json()["report_markdown"]
 
             plan_response = await client.get(f"/api/research-runs/{run_id}/plan")
             assert plan_response.status_code == 200

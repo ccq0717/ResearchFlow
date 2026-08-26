@@ -57,8 +57,14 @@ class Settings(BaseSettings):
         ge=64 * 1024,
         le=50 * 1024 * 1024,
     )
-    knowledge_retrieval_mode: Literal["lexical", "vector", "hybrid"] = "lexical"
     knowledge_results_per_question: int = Field(default=2, ge=1, le=10)
+    embedding_provider: str = Field(default="gemini", min_length=1, max_length=80)
+    embedding_model: str = ""
+    embedding_api_key: SecretStr | None = None
+    embedding_base_url: AnyHttpUrl = AnyHttpUrl("https://generativelanguage.googleapis.com/v1beta")
+    embedding_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    embedding_batch_size: int = Field(default=32, ge=1, le=256)
+    embedding_dimensions: int | None = Field(default=None, ge=1, le=65536)
 
     @model_validator(mode="after")
     def validate_llm_configuration(self) -> "Settings":

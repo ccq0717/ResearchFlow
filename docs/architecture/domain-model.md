@@ -1,6 +1,6 @@
 # ResearchFlow 核心数据模型
 
-> 状态：M4 实现基线
+> 状态：当前实现
 > 更新日期：2026-08-26
 
 ## 1. 建模原则
@@ -23,9 +23,9 @@
 | `rationale` | 为什么调查该问题 |
 | `search_query` | 面向当前网页 Provider 的英文检索词 |
 
-问题不是证据；检索词也不是新的研究问题。旧数据库中没有 `search_query` 的 M1 计划会回退使用原问题文本。
+问题不是证据；检索词也不是新的研究问题。旧数据库中没有 `search_query` 的计划会回退使用原问题文本。
 
-## 3. M2～M4 研究材料与可追溯引用
+## 3. 研究材料与可追溯引用
 
 | 模型 | 关键字段 | 语义 |
 | --- | --- | --- |
@@ -35,11 +35,11 @@
 | `Claim` | `question_id`、`text`、`evidence_ids` | 报告中需要证据支持、可以独立检查的关键主张 |
 | `CitationAudit` | 主张数、已支持主张数、覆盖率、来源类型计数 | 从当前材料确定性计算的引用完整性摘要 |
 
-Evidence 必须同时关联已有 Source 和 Research Question，且原文片段必须能在对应来源正文中找到；Claim 通过显式关系关联一条或多条 Evidence。M4 检查保证每条结构化 Claim 都有完整的 Claim—Evidence—Source 链路，并且报告的可追溯章节包含相邻的网页链接或本地文件定位。
+Evidence 必须同时关联已有 Source 和 Research Question，且原文片段必须能在对应来源正文中找到；Claim 通过显式关系关联一条或多条 Evidence。确定性检查保证每条结构化 Claim 都有完整的 Claim—Evidence—Source 链路，并且报告的可追溯章节包含相邻的网页链接或本地文件定位。
 
 来源类型是 `academic`、`official`、`industry`、`community` 或保守回退的 `other`。分类使用可解释的 URL 规则，作者和发布时间来自 Provider 可用元数据，发布机构从来源域名归一化；缺失值不会由模型猜测补齐。
 
-M4 增加 `KnowledgeDocument` 与 `DocumentChunk`。文档保存原始文件名、系统生成的存储名、内容哈希、大小和 `processing` / `ready` / `failed` 状态；片段保存正文、顺序以及 PDF 页码或文本行号。用户为一次运行选择文档后，`research_run_documents` 固定该范围。本地检索命中会先转换成 `origin=local` 的运行内 Source，再进入原有 Evidence 与 Claim 链路，因此引用检查不需要维护两套模型。删除知识文档会清理片段和运行选择关系；已完成运行中的 Source、Evidence 与报告快照仍保留，但原文件不再可打开。
+`KnowledgeDocument`、`DocumentChunk` 与 `ChunkEmbedding` 描述可复用本地资料。文档保存原始文件名、系统生成的存储名、内容哈希、大小和 `processing` / `ready` / `failed` 状态；片段保存正文、顺序以及 PDF 页码或文本行号；Embedding 保存模型名、维度和浮点向量。用户为一次运行选择文档后，`research_run_documents` 固定该范围。本地检索命中会先转换成 `origin=local` 的运行内 Source，再进入原有 Evidence 与 Claim 链路，因此引用检查不需要维护两套模型。删除知识文档会清理片段、向量和运行选择关系；已完成运行中的 Source、Evidence 与报告快照仍保留，但原文件不再可打开。
 
 ## 4. 阶段与事件
 
@@ -71,6 +71,7 @@ planning → retrieving → analyzing → writing → finalizing
 - `research_claim_evidence`
 - `knowledge_documents`
 - `document_chunks`
+- `document_chunk_embeddings`
 - `research_run_documents`
 
 后端启动时使用 SQLAlchemy `create_all` 补齐新表。当前没有正式迁移工具，因此公开部署前仍需加入迁移和回滚方案。
@@ -81,10 +82,11 @@ planning → retrieving → analyzing → writing → finalizing
 - `LLMClient`：Fake 与 OpenAI-compatible；
 - `SearchProvider`：Fake 与 Exa；
 - `WebPageReader`：Fake 与供应商无关的搜索结果正文读取器；
-- `KnowledgeRetriever`：本地词法、字符 n-gram 稀疏向量与混合检索；
+- `EmbeddingClient`：Fake、Gemini 原生与 OpenAI-compatible；
+- `KnowledgeRetriever`：基于持久化 Embedding 的余弦相似度检索；
 - `KnowledgeLibrary`：封装上传校验、安全存储、解析、状态、重处理和删除生命周期；
 - SQLite 研究仓储与知识库仓储按职责拆分，测试使用临时数据库，不提前抽象不存在的第二种持久化实现。
 
 ## 8. 后续模型
 
-`WorkflowAttempt` 继续留到 M5，只有任务重试和失败恢复真正实现时才引入。
+`WorkflowAttempt` 只有在任务重试和失败恢复真正实现时才引入。

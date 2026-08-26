@@ -83,7 +83,7 @@ class FakeLLMClient:
         findings = "\n".join(
             f"- {item.summary}（证据 {index}）" for index, item in enumerate(evidence, start=1)
         )
-        report = f"""# AI 研究报告（M4 联合研究）
+        report = f"""# AI 联合研究报告
 
 ## 研究目标
 

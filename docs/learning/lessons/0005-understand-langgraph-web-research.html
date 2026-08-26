@@ -29,8 +29,9 @@
 ├─ LLMClient
 ├─ SearchProvider
 ├─ WebPageReader
-└─ KnowledgeRetriever</code></pre>
-  <p>测试注入 Fake，真实运行注入 OpenAI-compatible、Exa 和本地检索实现。节点不需要知道 HTTP 参数、上传存储、分块算法或 Exa 响应结构；这些接口和 ResearchFlow DTO 隔离细节。</p>
+└─ KnowledgeRetriever
+   └─ EmbeddingClient</code></pre>
+  <p>测试注入 Fake，真实运行注入 OpenAI-compatible LLM、Exa、Gemini Embedding 和本地检索实现。文档使用 <code>RETRIEVAL_DOCUMENT</code>，查询使用 <code>RETRIEVAL_QUERY</code>，再以余弦相似度排列 SQLite 中的片段向量。节点不需要知道 HTTP 参数、上传存储、分块算法或供应商响应结构；这些接口和 ResearchFlow DTO 隔离细节。</p>
 
   <h2>4. Source 和 Evidence 的区别</h2>
   <ul>
@@ -43,7 +44,7 @@
   <p>工作流把节点状态转换成 <code>ResearchWorkflowUpdate</code>，Application 统一保存材料和事件。未来更换编排框架时，API 无需跟着改变。</p>
 
   <h2>6. 当前怎样检查引用</h2>
-  <p>M4 要求每条 Claim 至少关联一条已有 Evidence、每条 Evidence 指向已有 Source，并检查报告的主张小节包含对应来源定位。网页使用可点击 URL，本地资料使用文件名与页码或行号。界面显示主张覆盖率和来源类型计数；DOI、OCR、卷期和被引量等能力仍不在当前范围。</p>
+  <p>当前实现要求每条 Claim 至少关联一条已有 Evidence、每条 Evidence 指向已有 Source，并检查报告的主张小节包含对应来源定位。网页使用可点击 URL，本地资料使用文件名与页码或行号。界面显示主张覆盖率和来源类型计数；DOI、OCR、卷期和被引量等能力仍不在当前范围。</p>
 
   <h2>7. 关联关系总结</h2>
   <p>六个 StateGraph 节点用固定边按顺序连接；Fake 与真实搜索/本地检索实现遵守相同接口，因此测试无需访问互联网。数据关系从 Research Question 开始，经 ResearchTask 记录检索，再由 Source 保存实际读取的网页或本地片段，Evidence 把原文关联回问题和来源，Claim 最后把报告中的关键陈述关联到一条或多条 Evidence。</p>

@@ -1,6 +1,6 @@
 # ResearchFlow 使用、开发与运维手册
 
-> 适用阶段：M4 本地知识库与联合检索闭环
+> 适用范围：本地使用、开发、测试与运维
 > 主要平台：Windows 10 / 11 + PowerShell
 > 最后更新：2026-08-26
 
@@ -14,7 +14,7 @@
 - 如何在模拟、仅 LLM 规划和 LangGraph 联合研究模式之间切换；
 - 如何管理本地知识文档并备份其数据。
 
-项目已完成 M4：真实链路可以联合检索开放 Web 与用户选择的本地资料，保存来源定位，建立 Claim—Evidence 关系，检查引用覆盖并生成报告。当前不包含 OCR、DOI/被引量等专业学术元数据或大规模向量数据库。
+真实链路可以联合检索开放 Web 与用户选择的本地资料，保存来源定位，建立 Claim—Evidence 关系，检查引用覆盖并生成报告。当前不包含 OCR、DOI/被引量等专业学术元数据或大规模向量数据库。
 
 ## 1. 当前产品由什么组成
 
@@ -27,7 +27,7 @@
 | LLM | OpenAI-compatible HTTP 适配器 | 远程或本地兼容服务 | `llm` / `langgraph` 需要 |
 | 网页搜索与读取 | Exa Search API / Search Result Reader | 公共 HTTPS API | 仅 `langgraph` 需要 |
 | 来源质量与可追溯引用 | 来源分类、Claim—Evidence、引用检查 | 后端与前端 | `langgraph` 使用 |
-| 本地知识库 | PDF / Markdown / UTF-8 文本解析与轻量检索 | `var/uploads` + SQLite | 按需使用 |
+| 本地知识库 | PDF / Markdown / UTF-8 文本解析与 Embedding 检索 | `var/uploads` + SQLite | 按需使用 |
 
 前端负责展示页面和接收操作，后端负责保存任务、运行工作流并通过 SSE 推送进度。关闭前端不会删除数据；关闭后端会让页面暂时无法读取或创建任务。
 
@@ -223,8 +223,16 @@ Get-NetTCPConnection -State Listen |
 | `RESEARCHFLOW_KNOWLEDGE_MAX_EXTRACTED_CHARACTERS` | 单文档最大解析文本字符数 | `2000000` |
 | `RESEARCHFLOW_KNOWLEDGE_MAX_PDF_PAGES` | PDF 最大页数 | `200` |
 | `RESEARCHFLOW_KNOWLEDGE_MAX_PDF_PAGE_STREAM_BYTES` | 单页 PDF 内容流上限 | `5242880` |
-| `RESEARCHFLOW_KNOWLEDGE_RETRIEVAL_MODE` | `lexical`、`vector` 或 `hybrid` | `lexical` |
 | `RESEARCHFLOW_KNOWLEDGE_RESULTS_PER_QUESTION` | 每个问题最多本地命中数 | `2` |
+| `RESEARCHFLOW_EMBEDDING_PROVIDER` | `gemini` 或 `openai-compatible` | `gemini` |
+| `RESEARCHFLOW_EMBEDDING_MODEL` | 文档与查询必须使用的同一 Embedding 模型 | 空 |
+| `RESEARCHFLOW_EMBEDDING_API_KEY` | 服务端 Embedding 密钥；Gemini 必填 | 空 |
+| `RESEARCHFLOW_EMBEDDING_BASE_URL` | Embedding API 根地址 | Gemini `v1beta` |
+| `RESEARCHFLOW_EMBEDDING_TIMEOUT_SECONDS` | 单次 Embedding 请求超时 | `60` |
+| `RESEARCHFLOW_EMBEDDING_BATCH_SIZE` | 文档片段批量请求大小 | `32` |
+| `RESEARCHFLOW_EMBEDDING_DIMENSIONS` | 可选输出维度；模板为 Gemini 推荐的低存储配置 | 代码默认使用模型维度，模板为 `768` |
+
+`.env.example` 有意只列出日常启动真实流程通常需要填写的核心项。上表中的其余设置仍可通过环境变量覆盖，但不填写时会使用 `Settings` 集中维护的安全默认值，避免让初次使用者面对大量内部调节参数。Embedding 模型并未锁定为 `gemini-embedding-2`：Gemini 原生适配器可使用对应接口支持的其他模型，`openai-compatible` 适配器也可连接兼容服务；更换 Provider、模型或维度后必须重新处理已有知识文档。
 
 修改 `.env` 后应重启后端。`llm` 与 `langgraph` 模式都必须配置非空模型名。Base URL 填 API 根地址，不要包含末尾的 `/chat/completions`。
 
@@ -246,7 +254,7 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 修改后应重启前端。`.env.local` 已被仓库的忽略规则覆盖，不应提交。
 
-### 6.3 启用真实 LLM 或 M4 联合研究
+### 6.3 启用真实 LLM 或联合研究
 
 目标 LLM 服务需支持 Chat Completions 和 `response_format.type=json_schema`。只验证真实规划时使用：
 
@@ -257,7 +265,7 @@ RESEARCHFLOW_LLM_API_KEY=本机真实密钥
 RESEARCHFLOW_LLM_BASE_URL=https://供应商地址/v1
 ```
 
-要运行 M4 完整链路，把模式改为：
+要运行完整联合研究链路，把模式改为：
 
 ```dotenv
 RESEARCHFLOW_WORKFLOW_MODE=langgraph
@@ -269,21 +277,26 @@ RESEARCHFLOW_WEB_SEARCH_PROVIDER=exa
 RESEARCHFLOW_WEB_SEARCH_BASE_URL=https://api.exa.ai
 RESEARCHFLOW_WEB_SEARCH_API_KEY=本机真实Exa密钥
 RESEARCHFLOW_WEB_SEARCH_RESULT_LIMIT=3
+RESEARCHFLOW_EMBEDDING_PROVIDER=gemini
+RESEARCHFLOW_EMBEDDING_MODEL=gemini-embedding-2
+RESEARCHFLOW_EMBEDDING_API_KEY=本机真实Gemini密钥
+RESEARCHFLOW_EMBEDDING_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+RESEARCHFLOW_EMBEDDING_DIMENSIONS=768
 ```
 
-Exa Key 只写入仓库根目录被 Git 忽略的 `.env`，不要发送到前端，也不要复制到 `.env.example`、文档、截图或 Commit。运行设备必须能够访问 `api.exa.ai` 和模型服务。重启后端并检查 `/health` 的 `workflow_mode`。成功运行时，工作区会依次出现计划、检索任务、分类来源、证据、关键主张、引用覆盖率和报告；网页或模型失败会进入 `failed` 并显示安全错误。
+Exa、LLM 和 Gemini Key 只写入仓库根目录被 Git 忽略的 `.env`，不要发送到前端，也不要复制到 `.env.example`、文档、截图或 Commit。运行设备必须能够访问 `api.exa.ai`、模型服务和 `generativelanguage.googleapis.com`。重启后端并检查 `/health` 的 `workflow_mode`。成功运行时，工作区会依次出现计划、检索任务、分类来源、证据、关键主张、引用覆盖率和报告；外部服务失败会进入明确的失败状态并显示安全错误。
 
-OpenCode Zen 的 MiMo 示例和数据使用注意事项见 [OpenCode Zen API 配置调研](../research/opencode-zen-api.md)。直接 API 不使用 `opencode/` 模型前缀。
+本地资料不需要独立向量数据库或 GPU，但需要 Embedding 服务。推荐的 Gemini 原生适配器会批量发送文档片段并标记为 `RETRIEVAL_DOCUMENT`，查询标记为 `RETRIEVAL_QUERY`；向量和模型/维度标识保存在 SQLite。PDF 必须已有可提取文本层；扫描 PDF 会显示 `DOCUMENT_NO_TEXT`，当前版本不会自动 OCR。文档正文会发送给 Embedding 服务，命中片段还会发送给 LLM，因此不要上传不允许交给这些供应商处理的私人或受限资料。
 
-本地资料不需要额外 API Key、向量数据库或 GPU。PDF 必须已有可提取文本层；扫描 PDF 会显示 `DOCUMENT_NO_TEXT`，当前版本不会自动 OCR。上传内容会发送给所配置的 LLM 参与证据提取和写作，因此不要上传不允许交给该模型供应商处理的私人或受限资料。
+未配置 Embedding 时应用仍可启动，模拟和纯网页研究也可运行，但新上传文档会进入 `EMBEDDING_NOT_CONFIGURED` 失败状态。配置完成后在 Dashboard 点击“重新处理”。更换 Embedding 模型或维度后，所有要继续使用的旧文档也必须重新处理。
 
-要回到完全离线、无费用模式：
+要让研究工作流回到离线、无费用模式：
 
 ```dotenv
 RESEARCHFLOW_WORKFLOW_MODE=simulation
 ```
 
-不要把真实密钥复制到 `.env.example`、README、截图或 Commit。
+此模式不会调用 Embedding，但上传并处理知识文档仍是独立操作；未配置 Embedding 时上传会明确失败。不要把真实密钥复制到 `.env.example`、README、截图或 Commit。
 
 ### 6.4 网页 Provider 边界
 
@@ -336,7 +349,7 @@ var/uploads/
 .\.venv\Scripts\python.exe -c 'import sqlite3; db=sqlite3.connect("file:var/researchflow.db?mode=ro", uri=True); print(db.execute("SELECT COUNT(*) FROM research_runs").fetchone()[0]); db.close()'
 ```
 
-两个命令都使用 Python 自带的 `sqlite3` 接口和只读模式，不会修改数据库。当前共有十三张业务表，包含研究运行、来源扩展、Claim—Evidence、知识文档、片段和运行选择关系。完整列表见[核心数据模型](../architecture/domain-model.md)，概念解释见 [SQLite 与数据持久化课程](../learning/lessons/0003-understand-sqlite-persistence.html)。
+两个命令都使用 Python 自带的 `sqlite3` 接口和只读模式，不会修改数据库。当前共有十四张业务表，包含研究运行、来源扩展、Claim—Evidence、知识文档、片段、Embedding 向量和运行选择关系。完整列表见[核心数据模型](../architecture/domain-model.md)，概念解释见 [SQLite 与数据持久化课程](../learning/lessons/0003-understand-sqlite-persistence.html)。
 
 ### 7.3 备份
 
@@ -376,21 +389,21 @@ Move-Item .\var\uploads .\var\uploads.bak
 .\.venv\Scripts\ruff.exe format --check apps/api scripts
 ```
 
-M3 Exa 来源覆盖度评测会执行 3 次真实搜索，只在需要重新验证供应商覆盖时手动运行：
+Exa 来源覆盖度评测会执行 3 次真实搜索，只在需要重新验证供应商覆盖时手动运行：
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\evaluate_exa_coverage.py
 ```
 
-验收查询、阈值和最近结果见 [M3 Exa 来源覆盖度评测](../research/exa-m3-source-coverage.md)。该命令会读取本地 `.env` 并消耗少量 Exa 额度，不属于 CI。
+验收查询、阈值和最近结果见 [Exa 来源覆盖度评测](../research/exa-m3-source-coverage.md)。该命令会读取本地 `.env` 并消耗少量 Exa 额度，不属于 CI。
 
-M4 本地检索固定评测完全离线，不读取 `.env`，也不消耗外部额度：
+本地检索固定评测读取 `.env` 中的真实 Embedding 配置，并消耗少量额度：
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\evaluate_local_retrieval.py
 ```
 
-样例、指标和选型结论见 [M4 本地检索方案评测](../research/m4-local-retrieval-evaluation.md)。
+样例、指标、历史基线和当前验证状态见 [本地检索方案评测](../research/m4-local-retrieval-evaluation.md)。常规测试使用 Fake Embedding，不访问外部服务。
 
 前端基础测试：
 
@@ -484,7 +497,7 @@ npm run build --prefix apps/web
 6. `LLM_TIMEOUT`：确认服务状态，必要时谨慎提高超时；
 7. 若请求路径出现重复的 `/chat/completions/chat/completions`，说明 Base URL 填成了完整端点，应改回 API 根地址。
 
-模型错误事件不会包含密钥或原始响应正文。真实服务兼容性、隐私规则与费用需要使用者根据供应商文档自行确认。OpenCode Zen 的当前核对记录见 [OpenCode Zen API 配置调研](../research/opencode-zen-api.md)。
+模型错误事件不会包含密钥或原始响应正文。真实服务兼容性、隐私规则与费用需要使用者根据所选供应商文档自行确认。
 
 ## 10. Git 与敏感信息
 

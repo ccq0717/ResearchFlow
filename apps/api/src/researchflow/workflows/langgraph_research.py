@@ -27,6 +27,7 @@ from researchflow.domain.source_quality import (
     parse_published_at,
 )
 from researchflow.ingestion.retrieval import KnowledgeRetriever
+from researchflow.integrations.embedding.base import EmbeddingClientError
 from researchflow.integrations.llm.base import (
     EvidenceDraft,
     LLMClient,
@@ -121,7 +122,7 @@ class LangGraphResearchWorkflow:
                 update = self._to_workflow_update(chunk)
                 if update is not None:
                     yield update
-        except (LLMClientError, WebResearchError) as error:
+        except (EmbeddingClientError, LLMClientError, WebResearchError) as error:
             yield workflow_failure_update(error.code, error.public_message)
 
     async def _planning(self, state: _ResearchState) -> dict[str, Any]:

@@ -52,7 +52,7 @@
   <pre><code>await connection.run_sync(Base.metadata.create_all)</code></pre>
   <p>如果数据库文件或表不存在，SQLAlchemy 会根据模型创建它们；已经存在时则保留原数据。因此首次启动会自动生成文件，重启后历史记录仍然存在。</p>
 
-  <h2>5. 当前十三张表怎样分工</h2>
+  <h2>5. 当前十四张表怎样分工</h2>
   <table>
     <thead><tr><th>表</th><th>保存什么</th><th>关系</th></tr></thead>
     <tbody>
@@ -68,10 +68,11 @@
       <tr><td><code>research_claim_evidence</code></td><td>主张与证据的显式关联</td><td>支持一条主张由多条证据共同支撑</td></tr>
       <tr><td><code>knowledge_documents</code></td><td>上传文件的安全存储信息、哈希和处理状态</td><td>一份可复用文档一行</td></tr>
       <tr><td><code>document_chunks</code></td><td>解析后的可检索正文及页码或行号</td><td>一个文档对应多个片段</td></tr>
+      <tr><td><code>document_chunk_embeddings</code></td><td>片段的 Embedding 模型、维度和浮点向量</td><td>每个成功处理的片段对应一个向量</td></tr>
       <tr><td><code>research_run_documents</code></td><td>一次研究选择的知识文档范围</td><td>连接研究运行和知识文档</td></tr>
     </tbody>
   </table>
-  <p><code>research_plans.run_id</code> 和 <code>research_events.run_id</code> 都指向所属任务。计划以任务 ID 为主键；事件序号和任务 ID 共同构成主键，使每个任务的事件能按顺序补发。检索任务、来源、证据和主张也用 run_id 归属到同一次运行。M3/M4 把来源元数据和网页/本地来源属性放在独立扩展表中，因此旧数据库无需给原来源表破坏性加列。知识文档可跨运行复用，本地命中进入某次运行后仍转换成普通 Source，继续使用同一 Evidence 链路。</p>
+  <p><code>research_plans.run_id</code> 和 <code>research_events.run_id</code> 都指向所属任务。计划以任务 ID 为主键；事件序号和任务 ID 共同构成主键，使每个任务的事件能按顺序补发。检索任务、来源、证据和主张也用 run_id 归属到同一次运行。来源元数据和网页/本地来源属性放在独立扩展表中，因此旧数据库无需给原来源表破坏性加列。知识文档可跨运行复用，片段向量记录生成它的模型与维度；本地命中进入某次运行后仍转换成普通 Source，继续使用同一 Evidence 链路。</p>
 
   <h2>6. SQLAlchemy 帮了什么忙</h2>
   <p>没有 ORM 时，代码需要手写大量 SQL，并手动把查询结果转换成 Python 对象。当前项目用 <code>ResearchRunRow</code> 和 <code>ResearchEventRow</code> 描述表结构，再通过异步 Session 执行查询与提交。SQLAlchemy 的异步接口由官方 <a href="https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html">Asyncio 文档</a>定义。</p>

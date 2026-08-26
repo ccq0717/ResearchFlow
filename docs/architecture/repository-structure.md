@@ -1,6 +1,6 @@
 # ResearchFlow 仓库结构设计
 
-> 状态：M4 实现基线
+> 状态：当前实现
 > 更新日期：2026-08-26
 
 ## 1. 设计目标
@@ -114,7 +114,8 @@ LangGraphResearchWorkflow implementation
 - `SearchProvider`：Exa 通用 Web 适配器 / Fake；
 - `WebPageReader`：Provider 内容读取 / Fake，未来可替换为独立网页读取器；
 - 额外学术检索或元数据服务不是预设接口；只有固定查询证明现有能力不足且出现真实实现差异时，才新增对应 seam；
-- `KnowledgeRetriever`：词法、字符 n-gram 稀疏向量和混合检索共用的本地检索边界；
+- `EmbeddingClient`：Gemini 原生适配器 / OpenAI-compatible 备选适配器 / Fake；
+- `KnowledgeRetriever`：隐藏查询向量生成、模型匹配和余弦相似度排序；
 - `KnowledgeLibrary`：对调用方隐藏上传校验、安全落盘、解析、处理状态、重处理和删除；
 - `SqliteResearchRepository` 与 `SqliteKnowledgeRepository` 按运行材料和可复用知识文档拆分职责；它们当前都只有 SQLite 真实实现，不提取假想的持久化 Protocol。
 

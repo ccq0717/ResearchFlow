@@ -36,6 +36,10 @@ _Avoid_: Source、附件
 Knowledge Document 解析后形成的可检索文本单元，保留页码或行号等原文定位信息。
 _Avoid_: Evidence、模型摘要
 
+**Chunk Embedding（片段向量）**:
+Embedding 模型为 Document Chunk 生成的语义向量，必须记录模型与维度，并且只能与同一配置生成的查询向量比较。
+_Avoid_: Document Chunk、Evidence、模型结论
+
 **Source（研究来源）**:
 某次研究过程中实际读取并保留用于溯源的资料，可以来自公开网页，也可以是所选 Knowledge Document 的命中片段；它可以形成 Evidence，也可以作为已检查但未采用的材料保留。
 _Avoid_: 搜索结果、链接

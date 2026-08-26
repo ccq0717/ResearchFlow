@@ -66,7 +66,7 @@ async def create_research_run(body, request):
   <p><a href="../../../apps/api/src/researchflow/persistence/repository.py"><code>SqliteResearchRepository</code></a> 隔离了业务代码和数据库代码。它把 Python 领域对象转换为 SQLAlchemy Row，然后执行提交：</p>
   <pre><code>session.add(row)
 await session.commit()</code></pre>
-  <p>当前共有十三张业务表。下面先列出贯穿一次请求的六张核心表：</p>
+  <p>当前共有十四张业务表。下面先列出贯穿一次请求的六张核心表：</p>
   <ul>
     <li><code>research_runs</code>：一行代表一个研究任务及其当前状态和报告；</li>
     <li><code>research_plans</code>：保存 LLM 模式生成的结构化研究计划；</li>
@@ -75,7 +75,7 @@ await session.commit()</code></pre>
     <li><code>research_sources</code>：保存实际读取的网页或本地来源；</li>
     <li><code>research_evidence</code>：保存来源原文片段及其问题关联。</li>
   </ul>
-  <p>其余表保存来源扩展、Claim—Evidence 关系、知识文档、文档片段和运行选择关系。它们最终保存在 <code>var/researchflow.db</code> 文件中，原始上传文件保存在 <code>var/uploads</code>。</p>
+  <p>其余表保存来源扩展、Claim—Evidence 关系、知识文档、文档片段、Embedding 向量和运行选择关系。它们最终保存在 <code>var/researchflow.db</code> 文件中，原始上传文件保存在 <code>var/uploads</code>。</p>
 
   <h2>7. 第六步：响应回到前端</h2>
   <p>后端返回 HTTP 201 和任务 JSON。前端拿到 <code>run.id</code> 后跳转到 <code>/research/{id}</code>。工作区先通过普通 REST 读取任务快照，再建立 SSE 连接接收后续事件。</p>

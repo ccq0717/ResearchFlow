@@ -125,7 +125,7 @@ export default function Dashboard() {
           <div className="mb-10 flex items-center justify-between">
             <div className="text-lg font-semibold tracking-tight">ResearchFlow</div>
             <div className="rounded-full border border-white/25 px-3 py-1 text-xs text-white/75">
-              M4 · Local Knowledge + Web
+              Local Knowledge + Web
             </div>
           </div>
           <div className="max-w-3xl">
@@ -272,15 +272,13 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="mt-4 flex gap-3 text-xs">
-                  {document.status === "failed" && (
-                    <button
-                      className="text-[#2f6f5e] underline"
-                      onClick={() => reprocessDocument(document.id)}
-                      type="button"
-                    >
-                      重新处理
-                    </button>
-                  )}
+                  <button
+                    className="text-[#2f6f5e] underline"
+                    onClick={() => reprocessDocument(document.id)}
+                    type="button"
+                  >
+                    重新处理
+                  </button>
                   <button
                     className="text-[#9a5540] underline"
                     onClick={() => removeDocument(document.id)}

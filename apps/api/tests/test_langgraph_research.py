@@ -55,7 +55,7 @@ async def test_langgraph_web_research_persists_materials_and_report(tmp_path: Pa
                 await asyncio.sleep(0.01)
 
             assert detail.json()["status"] == "completed", detail.json()
-            assert "M4 联合研究" in detail.json()["report_markdown"]
+            assert "AI 联合研究报告" in detail.json()["report_markdown"]
             assert "## 可追溯主张与证据" in detail.json()["report_markdown"]
             assert "https://arxiv.org/" in detail.json()["report_markdown"]
 
