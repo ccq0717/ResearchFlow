@@ -36,8 +36,9 @@ class LLMPlanResult:
 class ResearchDocumentInput:
     source_id: str
     title: str
-    url: str
+    url: str | None
     content: str
+    locator: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

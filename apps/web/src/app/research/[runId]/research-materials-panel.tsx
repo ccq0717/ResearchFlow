@@ -1,4 +1,8 @@
-import type { ResearchMaterials, ResearchSource } from "@/lib/api";
+import {
+  apiBaseUrl,
+  type ResearchMaterials,
+  type ResearchSource,
+} from "../../../lib/api";
 
 const sourceTypeLabels: Record<ResearchSource["source_type"], string> = {
   academic: "学术",
@@ -38,30 +42,50 @@ export function ResearchMaterialsPanel({
 
       {sources.length === 0 ? (
         <p className="mt-4 text-sm leading-6 text-[#737a75]">
-          真实网页研究模式会在这里展示已读取的来源和提取证据。
+          联合研究模式会在这里展示已读取的网页、本地来源和提取证据。
         </p>
       ) : (
         <div className="mt-5 space-y-6">
           <div>
-            <h3 className="text-sm font-semibold text-[#7b4f2f]">网页来源</h3>
+            <h3 className="text-sm font-semibold text-[#7b4f2f]">研究来源</h3>
             <ul className="mt-3 space-y-3">
               {sources.map((source) => (
                 <li className="rounded-2xl bg-[#f6f3ec] p-3" key={source.id}>
                   <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
                     <span className="rounded-full bg-[#dfeae5] px-2 py-0.5 font-semibold text-[#2f6f5e]">
-                      {sourceTypeLabels[source.source_type]}
+                      {source.origin === "local"
+                        ? "本地"
+                        : sourceTypeLabels[source.source_type]}
                     </span>
                     {source.publisher && <span>{source.publisher}</span>}
                     {source.published_at && <span>{source.published_at.slice(0, 10)}</span>}
                   </div>
-                  <a
-                    className="text-sm font-medium text-[#2f6f5e] underline decoration-[#9cb8ac] underline-offset-2"
-                    href={source.url}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {source.title}
-                  </a>
+                  {source.url ? (
+                    <a
+                      className="text-sm font-medium text-[#2f6f5e] underline decoration-[#9cb8ac] underline-offset-2"
+                      href={source.url}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {source.title}
+                    </a>
+                  ) : source.knowledge_document_id ? (
+                    <a
+                      className="text-sm font-medium text-[#2f6f5e] underline decoration-[#9cb8ac] underline-offset-2"
+                      href={`${apiBaseUrl}/api/knowledge-documents/${source.knowledge_document_id}/content`}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {source.title}
+                    </a>
+                  ) : (
+                    <p className="text-sm font-medium text-[#2f6f5e]">{source.title}</p>
+                  )}
+                  {source.locator && (
+                    <p className="mt-1 text-xs font-medium text-[#7b4f2f]">
+                      定位：{source.locator}
+                    </p>
+                  )}
                   {source.snippet && (
                     <p className="mt-1 line-clamp-3 text-xs leading-5 text-[#737a75]">
                       {source.snippet}
@@ -85,7 +109,7 @@ export function ResearchMaterialsPanel({
                     {claim.evidence_ids.map((evidenceId) => {
                       const item = evidenceById.get(evidenceId);
                       const source = item ? sourceById.get(item.source_id) : undefined;
-                      return source ? (
+                      return source?.url ? (
                         <a
                           className="text-xs text-[#2f6f5e] underline"
                           href={source.url}
@@ -94,6 +118,16 @@ export function ResearchMaterialsPanel({
                           target="_blank"
                         >
                           {evidenceId} · {source.title}
+                        </a>
+                      ) : source?.knowledge_document_id ? (
+                        <a
+                          className="text-xs text-[#2f6f5e] underline"
+                          href={`${apiBaseUrl}/api/knowledge-documents/${source.knowledge_document_id}/content`}
+                          key={evidenceId}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {evidenceId} · {source.title} · {source.locator}
                         </a>
                       ) : (
                         <span className="text-xs text-[#9a5540]" key={evidenceId}>
@@ -121,7 +155,7 @@ export function ResearchMaterialsPanel({
                     <blockquote className="mt-2 text-xs leading-5 text-[#737a75]">
                       “{item.excerpt}”
                     </blockquote>
-                    {source && (
+                    {source?.url ? (
                       <a
                         className="mt-2 inline-block text-xs text-[#2f6f5e] underline"
                         href={source.url}
@@ -130,7 +164,16 @@ export function ResearchMaterialsPanel({
                       >
                         查看来源：{source.title}
                       </a>
-                    )}
+                    ) : source?.knowledge_document_id ? (
+                      <a
+                        className="mt-2 inline-block text-xs text-[#2f6f5e] underline"
+                        href={`${apiBaseUrl}/api/knowledge-documents/${source.knowledge_document_id}/content`}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        本地来源：{source.title} · {source.locator}
+                      </a>
+                    ) : null}
                   </li>
                 );
               })}

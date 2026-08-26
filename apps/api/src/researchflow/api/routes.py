@@ -1,13 +1,19 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from typing import Annotated
+from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile, status
+from fastapi.responses import Response, StreamingResponse
 
 from researchflow.api.schemas import (
     CreateResearchRunRequest,
+    DocumentChunkListResponse,
+    DocumentChunkResponse,
+    KnowledgeDocumentListResponse,
+    KnowledgeDocumentResponse,
     ResearchEventListResponse,
     ResearchEventResponse,
     ResearchMaterialsResponse,
@@ -16,6 +22,7 @@ from researchflow.api.schemas import (
     ResearchRunListResponse,
     ResearchRunResponse,
 )
+from researchflow.application.knowledge_library import KnowledgeLibrary, KnowledgeLibraryError
 from researchflow.application.research_runs import ResearchRunApplication
 from researchflow.domain.research import ResearchEvent
 
@@ -26,6 +33,124 @@ def _application(request: Request) -> ResearchRunApplication:
     return request.app.state.research_runs
 
 
+def _knowledge_library(request: Request) -> KnowledgeLibrary:
+    return request.app.state.knowledge_library
+
+
+def _knowledge_error(error: KnowledgeLibraryError) -> HTTPException:
+    status_code = {
+        "KNOWLEDGE_DOCUMENT_NOT_FOUND": status.HTTP_404_NOT_FOUND,
+        "KNOWLEDGE_DOCUMENT_DUPLICATE": status.HTTP_409_CONFLICT,
+        "KNOWLEDGE_DOCUMENT_LIMIT_REACHED": status.HTTP_409_CONFLICT,
+        "DOCUMENT_TOO_LARGE": status.HTTP_413_CONTENT_TOO_LARGE,
+    }.get(error.code, status.HTTP_400_BAD_REQUEST)
+    return HTTPException(
+        status_code=status_code,
+        detail={"code": error.code, "message": error.public_message},
+    )
+
+
+@router.post(
+    "/knowledge-documents",
+    response_model=KnowledgeDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_knowledge_document(
+    file: Annotated[UploadFile, File(description="PDF、Markdown 或 UTF-8 纯文本")],
+    request: Request,
+) -> KnowledgeDocumentResponse:
+    library = _knowledge_library(request)
+    try:
+        data = await file.read(library.max_document_bytes + 1)
+    finally:
+        await file.close()
+    try:
+        document = await library.upload(file.filename, data)
+    except KnowledgeLibraryError as error:
+        raise _knowledge_error(error) from error
+    return KnowledgeDocumentResponse.from_domain(document)
+
+
+@router.get("/knowledge-documents", response_model=KnowledgeDocumentListResponse)
+async def list_knowledge_documents(request: Request) -> KnowledgeDocumentListResponse:
+    documents = await _knowledge_library(request).list_documents()
+    return KnowledgeDocumentListResponse(
+        items=[KnowledgeDocumentResponse.from_domain(document) for document in documents]
+    )
+
+
+@router.get("/knowledge-documents/{document_id}", response_model=KnowledgeDocumentResponse)
+async def get_knowledge_document(
+    document_id: UUID,
+    request: Request,
+) -> KnowledgeDocumentResponse:
+    document = await _knowledge_library(request).get(document_id)
+    if document is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "KNOWLEDGE_DOCUMENT_NOT_FOUND"},
+        )
+    return KnowledgeDocumentResponse.from_domain(document)
+
+
+@router.get(
+    "/knowledge-documents/{document_id}/chunks",
+    response_model=DocumentChunkListResponse,
+)
+async def list_knowledge_document_chunks(
+    document_id: UUID,
+    request: Request,
+) -> DocumentChunkListResponse:
+    try:
+        chunks = await _knowledge_library(request).list_chunks(document_id)
+    except KnowledgeLibraryError as error:
+        raise _knowledge_error(error) from error
+    return DocumentChunkListResponse(
+        items=[DocumentChunkResponse.from_domain(chunk) for chunk in chunks]
+    )
+
+
+@router.get("/knowledge-documents/{document_id}/content")
+async def get_knowledge_document_content(document_id: UUID, request: Request) -> Response:
+    try:
+        document, content = await _knowledge_library(request).read_content(document_id)
+    except KnowledgeLibraryError as error:
+        raise _knowledge_error(error) from error
+    encoded_filename = quote(document.original_filename)
+    return Response(
+        content=content,
+        media_type=document.media_type,
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"},
+    )
+
+
+@router.post(
+    "/knowledge-documents/{document_id}/reprocess",
+    response_model=KnowledgeDocumentResponse,
+)
+async def reprocess_knowledge_document(
+    document_id: UUID,
+    request: Request,
+) -> KnowledgeDocumentResponse:
+    try:
+        document = await _knowledge_library(request).reprocess(document_id)
+    except KnowledgeLibraryError as error:
+        raise _knowledge_error(error) from error
+    return KnowledgeDocumentResponse.from_domain(document)
+
+
+@router.delete(
+    "/knowledge-documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_knowledge_document(document_id: UUID, request: Request) -> Response:
+    try:
+        await _knowledge_library(request).delete(document_id)
+    except KnowledgeLibraryError as error:
+        raise _knowledge_error(error) from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post(
     "/research-runs",
     response_model=ResearchRunResponse,
@@ -34,7 +159,10 @@ def _application(request: Request) -> ResearchRunApplication:
 async def create_research_run(
     body: CreateResearchRunRequest, request: Request
 ) -> ResearchRunResponse:
-    run = await _application(request).create_run(body.goal)
+    try:
+        run = await _application(request).create_run(body.goal, body.document_ids)
+    except KnowledgeLibraryError as error:
+        raise _knowledge_error(error) from error
     return ResearchRunResponse.from_domain(run)
 
 

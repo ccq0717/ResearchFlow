@@ -124,19 +124,21 @@ class OpenAICompatibleLLMClient:
         document_text = "\n\n".join(
             (
                 f"SOURCE {document.source_id}\n"
-                f"标题：{document.title}\n网址：{document.url}\n正文：{document.content}"
+                f"标题：{document.title}\n"
+                f"定位：{document.url or document.locator or '未提供'}\n"
+                f"正文：{document.content}"
             )
             for document in documents
         )
         output, usage, duration_ms = await self._request_structured(
             system_prompt=(
-                "你是 ResearchFlow 的证据提取器。只从提供的网页正文提取证据。"
+                "你是 ResearchFlow 的证据提取器。只从提供的网页或本地资料正文提取证据。"
                 "每条证据必须引用现有 source_id 和 question_id；excerpt 必须是正文中的短原文，"
                 "claim 是该证据直接支持、可以写入报告的单一主张，summary 说明证据怎样支持主张。"
                 "不要使用外部知识或编造原文。相同主张可以由多个来源共同支持。"
             ),
             user_prompt=(
-                f"研究目标：{goal}\n\n研究问题：\n{question_text}\n\n网页资料：\n{document_text}"
+                f"研究目标：{goal}\n\n研究问题：\n{question_text}\n\n研究资料：\n{document_text}"
             ),
             output_type=_EvidenceOutput,
             schema_name="research_evidence",
@@ -170,7 +172,12 @@ class OpenAICompatibleLLMClient:
         documents: tuple[ResearchDocumentInput, ...],
     ) -> LLMReportResult:
         sources = "\n".join(
-            f"{document.source_id}: [{document.title}]({document.url})" for document in documents
+            (
+                f"{document.source_id}: [{document.title}]({document.url})"
+                if document.url
+                else f"{document.source_id}: {document.title}（{document.locator or '本地文档'}）"
+            )
+            for document in documents
         )
         evidence_text = "\n".join(
             (

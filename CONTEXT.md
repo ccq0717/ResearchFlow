@@ -28,8 +28,16 @@ _Avoid_: Task、搜索词
 为回答一个 Research Question 而执行的具体检索活动，记录查询内容和完成状态。
 _Avoid_: Research Run、搜索结果
 
+**Knowledge Document（知识文档）**:
+用户上传并可跨 Research Run 复用的原始 PDF、Markdown 或纯文本资料，具有独立的处理状态和安全存储名。
+_Avoid_: Source、附件
+
+**Document Chunk（文档片段）**:
+Knowledge Document 解析后形成的可检索文本单元，保留页码或行号等原文定位信息。
+_Avoid_: Evidence、模型摘要
+
 **Source（研究来源）**:
-研究过程中实际读取并保留用于溯源的资料；它可以形成 Evidence，也可以作为已检查但未采用的材料保留。
+某次研究过程中实际读取并保留用于溯源的资料，可以来自公开网页，也可以是所选 Knowledge Document 的命中片段；它可以形成 Evidence，也可以作为已检查但未采用的材料保留。
 _Avoid_: 搜索结果、链接
 
 **Evidence（研究证据）**:

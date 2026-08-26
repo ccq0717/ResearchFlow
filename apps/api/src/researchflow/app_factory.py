@@ -5,8 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from researchflow.api.errors import register_error_handlers
 from researchflow.api.routes import router
+from researchflow.application.knowledge_library import KnowledgeLibrary
 from researchflow.application.research_runs import ResearchRunApplication
 from researchflow.core.config import Settings, get_settings
+from researchflow.ingestion.retrieval import LocalKnowledgeRetriever, RetrievalMode
 from researchflow.integrations.llm.base import LLMClient
 from researchflow.integrations.llm.openai_compatible import OpenAICompatibleLLMClient
 from researchflow.integrations.web.base import SearchProvider, WebPageReader
@@ -17,6 +19,7 @@ from researchflow.persistence.database import (
     create_schema,
     create_session_factory,
 )
+from researchflow.persistence.knowledge_repository import SqliteKnowledgeRepository
 from researchflow.persistence.repository import SqliteResearchRepository
 from researchflow.workflows.langgraph_research import LangGraphResearchWorkflow
 from researchflow.workflows.llm_research import LLMResearchWorkflow
@@ -33,7 +36,24 @@ def create_app(
     resolved_settings = settings or get_settings()
     resolved_settings.ensure_runtime_directories()
     engine = create_engine(resolved_settings.database_url)
-    repository = SqliteResearchRepository(create_session_factory(engine))
+    session_factory = create_session_factory(engine)
+    repository = SqliteResearchRepository(session_factory)
+    knowledge_repository = SqliteKnowledgeRepository(session_factory)
+    knowledge_library = KnowledgeLibrary(
+        knowledge_repository,
+        upload_directory=resolved_settings.knowledge_upload_directory,
+        max_document_bytes=resolved_settings.knowledge_max_document_bytes,
+        max_document_count=resolved_settings.knowledge_max_document_count,
+        max_selection_count=resolved_settings.knowledge_max_selection_count,
+        chunk_size=resolved_settings.knowledge_chunk_size,
+        max_extracted_characters=resolved_settings.knowledge_max_extracted_characters,
+        max_pdf_pages=resolved_settings.knowledge_max_pdf_pages,
+        max_pdf_page_stream_bytes=resolved_settings.knowledge_max_pdf_page_stream_bytes,
+    )
+    knowledge_retriever = LocalKnowledgeRetriever(
+        knowledge_repository,
+        mode=RetrievalMode(resolved_settings.knowledge_retrieval_mode),
+    )
 
     if resolved_settings.workflow_mode in {"llm", "langgraph"}:
         client = llm_client or OpenAICompatibleLLMClient(
@@ -74,13 +94,15 @@ def create_app(
             search_provider=resolved_search,
             page_reader=resolved_reader,
             results_per_question=resolved_settings.web_search_result_limit,
+            knowledge_retriever=knowledge_retriever,
+            knowledge_results_per_question=resolved_settings.knowledge_results_per_question,
         )
     elif resolved_settings.workflow_mode == "llm":
         workflow = LLMResearchWorkflow(client, resolved_settings.simulation_step_delay)
     else:
         workflow = SimulatedResearchWorkflow(resolved_settings.simulation_step_delay)
 
-    application = ResearchRunApplication(repository, workflow)
+    application = ResearchRunApplication(repository, workflow, knowledge_library)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -96,6 +118,7 @@ def create_app(
 
     app = FastAPI(title=resolved_settings.app_name, lifespan=lifespan)
     app.state.research_runs = application
+    app.state.knowledge_library = knowledge_library
     register_error_handlers(app)
     app.add_middleware(
         CORSMiddleware,

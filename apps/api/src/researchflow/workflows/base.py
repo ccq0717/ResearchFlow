@@ -56,7 +56,12 @@ class ResearchWorkflowUpdate:
 class ResearchWorkflow(Protocol):
     """研究工作流对应用层暴露的最小接口。"""
 
-    def execute(self, run_id: UUID, goal: str) -> AsyncIterator[ResearchWorkflowUpdate]: ...
+    def execute(
+        self,
+        run_id: UUID,
+        goal: str,
+        document_ids: tuple[UUID, ...] = (),
+    ) -> AsyncIterator[ResearchWorkflowUpdate]: ...
 
 
 def workflow_started_update(message: str) -> ResearchWorkflowUpdate:

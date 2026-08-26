@@ -39,6 +39,11 @@ class SourceType(StrEnum):
     OTHER = "other"
 
 
+class SourceOrigin(StrEnum):
+    WEB = "web"
+    LOCAL = "local"
+
+
 @dataclass(frozen=True, slots=True)
 class ResearchRun:
     id: UUID
@@ -127,13 +132,16 @@ class Source:
     run_id: UUID
     task_id: str
     title: str
-    url: str
+    url: str | None
     snippet: str
     retrieved_at: datetime
     source_type: SourceType = SourceType.OTHER
     author: str | None = None
     published_at: datetime | None = None
     publisher: str | None = None
+    origin: SourceOrigin = SourceOrigin.WEB
+    knowledge_document_id: UUID | None = None
+    locator: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

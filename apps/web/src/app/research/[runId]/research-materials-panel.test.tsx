@@ -19,6 +19,9 @@ const materials: ResearchMaterials = {
       author: "Research Team",
       published_at: "2026-07-01T00:00:00Z",
       publisher: "arxiv.org",
+      origin: "web",
+      knowledge_document_id: null,
+      locator: null,
     },
   ],
   evidence: [
@@ -66,5 +69,33 @@ describe("ResearchMaterialsPanel", () => {
     expect(html).toContain("引用覆盖 100%");
     expect(html).toContain("Evaluation should use reproducible tasks.");
     expect(html).toContain('href="https://arxiv.org/abs/2401.00001"');
+  });
+
+  it("renders local document locators without an external link", () => {
+    const localMaterials: ResearchMaterials = {
+      ...materials,
+      sources: [
+        {
+          ...materials.sources[0],
+          title: "team-notes.md",
+          url: null,
+          source_type: "other",
+          origin: "local",
+          knowledge_document_id: "document-1",
+          locator: "第 12–18 行",
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      <ResearchMaterialsPanel materials={localMaterials} />,
+    );
+
+    expect(html).toContain("本地");
+    expect(html).toContain("第 12–18 行");
+    expect(html).toContain(
+      'href="http://localhost:8000/api/knowledge-documents/document-1/content"',
+    );
+    expect(html).not.toContain('href="null"');
   });
 });

@@ -2,10 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import {
   createResearchRun,
+  deleteKnowledgeDocument,
+  listKnowledgeDocuments,
   listResearchRuns,
+  reprocessKnowledgeDocument,
+  uploadKnowledgeDocument,
+  type KnowledgeDocument,
   type ResearchRun,
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
@@ -21,17 +26,29 @@ const statusLabel: Record<ResearchRun["status"], string> = {
   cancelled: "已取消",
 };
 
+const documentStatusLabel: Record<KnowledgeDocument["status"], string> = {
+  processing: "处理中",
+  ready: "可使用",
+  failed: "处理失败",
+};
+
 export default function Dashboard() {
   const router = useRouter();
   const [goal, setGoal] = useState(exampleGoal);
   const [runs, setRuns] = useState<ResearchRun[]>([]);
+  const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    listResearchRuns()
-      .then(setRuns)
+    Promise.all([listResearchRuns(), listKnowledgeDocuments()])
+      .then(([nextRuns, nextDocuments]) => {
+        setRuns(nextRuns);
+        setDocuments(nextDocuments);
+      })
       .catch(() => setError("无法读取研究历史，请确认后端已经启动。"))
       .finally(() => setLoading(false));
   }, []);
@@ -41,13 +58,64 @@ export default function Dashboard() {
     setError(null);
     setSubmitting(true);
     try {
-      const run = await createResearchRun(goal);
+      const run = await createResearchRun(goal, selectedDocumentIds);
       router.push("/research/" + run.id);
     } catch {
       setError("创建研究任务失败，请检查后端连接。");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function uploadDocument(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const document = await uploadKnowledgeDocument(file);
+      setDocuments((current) => [
+        document,
+        ...current.filter((item) => item.id !== document.id),
+      ]);
+    } catch {
+      setError("上传知识文档失败，请检查格式、体积和后端状态。");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeDocument(documentId: string) {
+    if (!window.confirm("删除该文档及其分块？已生成报告中的证据快照不会被删除。")) return;
+    setError(null);
+    try {
+      await deleteKnowledgeDocument(documentId);
+      setDocuments((current) => current.filter((item) => item.id !== documentId));
+      setSelectedDocumentIds((current) => current.filter((id) => id !== documentId));
+    } catch {
+      setError("删除知识文档失败。");
+    }
+  }
+
+  async function reprocessDocument(documentId: string) {
+    setError(null);
+    try {
+      const document = await reprocessKnowledgeDocument(documentId);
+      setDocuments((current) =>
+        current.map((item) => (item.id === document.id ? document : item)),
+      );
+    } catch {
+      setError("重新处理知识文档失败。");
+    }
+  }
+
+  function toggleDocument(documentId: string) {
+    setSelectedDocumentIds((current) =>
+      current.includes(documentId)
+        ? current.filter((id) => id !== documentId)
+        : [...current, documentId],
+    );
   }
 
   return (
@@ -57,7 +125,7 @@ export default function Dashboard() {
           <div className="mb-10 flex items-center justify-between">
             <div className="text-lg font-semibold tracking-tight">ResearchFlow</div>
             <div className="rounded-full border border-white/25 px-3 py-1 text-xs text-white/75">
-              M3 · Traceable Research
+              M4 · Local Knowledge + Web
             </div>
           </div>
           <div className="max-w-3xl">
@@ -89,7 +157,8 @@ export default function Dashboard() {
             />
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-[#6d746f]">
-                使用 LangGraph 模式可调用真实 LLM 与 Exa，完成规划、检索、证据提取和报告生成。
+                已选择 {selectedDocumentIds.length} 个本地文档；LangGraph 模式会联合 Exa
+                公开网页形成证据。
               </p>
               <button
                 className="rounded-full bg-[#d96f32] px-6 py-3 font-semibold text-white transition hover:bg-[#bd5e2a] disabled:cursor-not-allowed disabled:opacity-50"
@@ -146,6 +215,81 @@ export default function Dashboard() {
                   />
                 </div>
               </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-[#d8d3c7] bg-white p-6 shadow-sm sm:p-8 lg:col-span-2">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-[#7b4f2f]">LOCAL KNOWLEDGE</p>
+              <h2 className="mt-2 text-2xl font-semibold">本地知识库</h2>
+              <p className="mt-2 text-sm text-[#6d746f]">
+                支持 PDF、Markdown 和 UTF-8 纯文本；体积与数量限制由后端配置。
+              </p>
+            </div>
+            <label className="cursor-pointer rounded-full bg-[#2f6f5e] px-5 py-3 text-center text-sm font-semibold text-white hover:bg-[#275d4f]">
+              {uploading ? "正在处理…" : "上传文档"}
+              <input
+                accept=".pdf,.md,.markdown,.txt"
+                className="sr-only"
+                disabled={uploading}
+                onChange={uploadDocument}
+                type="file"
+              />
+            </label>
+          </div>
+
+          <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {!loading && documents.length === 0 && (
+              <p className="text-sm text-[#6d746f]">尚未上传本地资料。</p>
+            )}
+            {documents.map((document) => (
+              <article
+                className="rounded-2xl border border-[#d8d3c7] bg-[#fbfaf7] p-4"
+                key={document.id}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    aria-label={`选择 ${document.original_filename}`}
+                    checked={selectedDocumentIds.includes(document.id)}
+                    className="mt-1 h-4 w-4 accent-[#2f6f5e]"
+                    disabled={document.status !== "ready"}
+                    onChange={() => toggleDocument(document.id)}
+                    type="checkbox"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-medium">{document.original_filename}</h3>
+                    <p className="mt-1 text-xs text-[#6d746f]">
+                      {documentStatusLabel[document.status]} · {document.chunk_count} 个片段 ·{" "}
+                      {(document.size_bytes / 1024).toFixed(1)} KB
+                    </p>
+                    {document.error_message && (
+                      <p className="mt-2 text-xs leading-5 text-[#9a5540]">
+                        {document.error_message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-3 text-xs">
+                  {document.status === "failed" && (
+                    <button
+                      className="text-[#2f6f5e] underline"
+                      onClick={() => reprocessDocument(document.id)}
+                      type="button"
+                    >
+                      重新处理
+                    </button>
+                  )}
+                  <button
+                    className="text-[#9a5540] underline"
+                    onClick={() => removeDocument(document.id)}
+                    type="button"
+                  >
+                    删除
+                  </button>
+                </div>
+              </article>
             ))}
           </div>
         </section>

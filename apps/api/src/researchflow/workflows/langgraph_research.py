@@ -5,6 +5,7 @@ from uuid import UUID
 
 from langgraph.graph import END, START, StateGraph
 
+from researchflow.domain.knowledge import KnowledgeSearchHit
 from researchflow.domain.research import (
     Claim,
     Evidence,
@@ -17,12 +18,15 @@ from researchflow.domain.research import (
     ResearchTask,
     ResearchTaskStatus,
     Source,
+    SourceOrigin,
+    SourceType,
 )
 from researchflow.domain.source_quality import (
     classify_source,
     infer_publisher,
     parse_published_at,
 )
+from researchflow.ingestion.retrieval import KnowledgeRetriever
 from researchflow.integrations.llm.base import (
     EvidenceDraft,
     LLMClient,
@@ -57,11 +61,13 @@ class _ResearchState(TypedDict, total=False):
     evidence_drafts: tuple[EvidenceDraft, ...]
     report_markdown: str
     warnings: tuple[str, ...]
+    document_ids: tuple[UUID, ...]
+    local_hits: tuple[tuple[str, KnowledgeSearchHit], ...]
     check_passed: bool
 
 
 class LangGraphResearchWorkflow:
-    """在 ResearchWorkflow seam 后编排第一条真实网页研究链路。"""
+    """在 ResearchWorkflow seam 后编排网页与本地资料联合研究链路。"""
 
     def __init__(
         self,
@@ -70,11 +76,15 @@ class LangGraphResearchWorkflow:
         search_provider: SearchProvider,
         page_reader: WebPageReader,
         results_per_question: int,
+        knowledge_retriever: KnowledgeRetriever,
+        knowledge_results_per_question: int,
     ) -> None:
         self._llm_client = llm_client
         self._search_provider = search_provider
         self._page_reader = page_reader
         self._results_per_question = results_per_question
+        self._knowledge_retriever = knowledge_retriever
+        self._knowledge_results_per_question = knowledge_results_per_question
         builder = StateGraph(_ResearchState)
         builder.add_node("planning", self._planning)
         builder.add_node("searching", self._searching)
@@ -91,11 +101,21 @@ class LangGraphResearchWorkflow:
         builder.add_edge("checking", END)
         self._graph = builder.compile()
 
-    async def execute(self, run_id: UUID, goal: str) -> AsyncIterator[ResearchWorkflowUpdate]:
-        yield workflow_started_update("LangGraph 网页研究工作流开始执行")
+    async def execute(
+        self,
+        run_id: UUID,
+        goal: str,
+        document_ids: tuple[UUID, ...] = (),
+    ) -> AsyncIterator[ResearchWorkflowUpdate]:
+        yield workflow_started_update("LangGraph 联合研究工作流开始执行")
         try:
             async for chunk in self._graph.astream(
-                {"run_id": str(run_id), "goal": goal, "warnings": ()},
+                {
+                    "run_id": str(run_id),
+                    "goal": goal,
+                    "document_ids": document_ids,
+                    "warnings": (),
+                },
                 stream_mode="updates",
             ):
                 update = self._to_workflow_update(chunk)
@@ -135,6 +155,7 @@ class LangGraphResearchWorkflow:
         now = datetime.now(UTC)
         tasks: list[ResearchTask] = []
         results: list[tuple[str, SearchResult]] = []
+        local_hits: list[tuple[str, KnowledgeSearchHit]] = []
         warnings = list(state.get("warnings", ()))
         for index, question in enumerate(state["plan"].questions, start=1):
             task_id = f"t{index}"
@@ -146,22 +167,33 @@ class LangGraphResearchWorkflow:
             except WebResearchError as error:
                 warnings.append(f"{question.id}: {error.public_message}")
                 found = ()
+            local_found = await self._knowledge_retriever.search(
+                f"{question.question} {question.search_query}",
+                state.get("document_ids", ()),
+                limit=self._knowledge_results_per_question,
+            )
             tasks.append(
                 ResearchTask(
                     id=task_id,
                     run_id=run_id,
                     question_id=question.id,
                     query=question.search_query,
-                    status=(ResearchTaskStatus.COMPLETED if found else ResearchTaskStatus.FAILED),
+                    status=(
+                        ResearchTaskStatus.COMPLETED
+                        if found or local_found
+                        else ResearchTaskStatus.FAILED
+                    ),
                     created_at=now,
                 )
             )
             results.extend((task_id, item) for item in found)
-        if not results:
-            raise WebResearchError("SEARCH_NO_RESULTS", "没有找到可用于本次研究的网页来源")
+            local_hits.extend((task_id, item) for item in local_found)
+        if not results and not local_hits:
+            raise WebResearchError("SEARCH_NO_RESULTS", "没有找到可用于本次研究的网页或本地资料")
         return {
             "tasks": tuple(tasks),
             "search_results": tuple(results),
+            "local_hits": tuple(local_hits),
             "warnings": tuple(warnings),
         }
 
@@ -205,8 +237,41 @@ class LangGraphResearchWorkflow:
                     content=document.content,
                 )
             )
+        seen_chunks: set[str] = set()
+        for task_id, hit in state.get("local_hits", ()):
+            if hit.chunk_id in seen_chunks:
+                continue
+            seen_chunks.add(hit.chunk_id)
+            source_id = f"s{len(sources) + 1}"
+            sources.append(
+                Source(
+                    id=source_id,
+                    run_id=run_id,
+                    task_id=task_id,
+                    title=hit.document_title,
+                    url=None,
+                    snippet=hit.content[:500],
+                    retrieved_at=datetime.now(UTC),
+                    source_type=SourceType.OTHER,
+                    publisher="本地知识库",
+                    origin=SourceOrigin.LOCAL,
+                    knowledge_document_id=hit.document_id,
+                    locator=hit.locator,
+                )
+            )
+            documents.append(
+                ResearchDocumentInput(
+                    source_id=source_id,
+                    title=hit.document_title,
+                    url=None,
+                    content=hit.content,
+                    locator=hit.locator,
+                )
+            )
         if not documents:
-            raise WebResearchError("WEB_CONTENT_UNAVAILABLE", "搜索结果中没有可读取的网页正文")
+            raise WebResearchError(
+                "WEB_CONTENT_UNAVAILABLE", "搜索结果中没有可读取的网页或本地正文"
+            )
         valid_task_ids = {source.task_id for source in sources}
         tasks = tuple(
             task
@@ -270,7 +335,7 @@ class LangGraphResearchWorkflow:
             for index, item in enumerate(valid_drafts, start=1)
         )
         if not evidence:
-            raise LLMClientError("EVIDENCE_NOT_FOUND", "没有从网页资料中提取到有效证据")
+            raise LLMClientError("EVIDENCE_NOT_FOUND", "没有从网页或本地资料中提取到有效证据")
         evidence_ids_by_claim: dict[tuple[str, str], list[str]] = {}
         for item, evidence_item in zip(valid_drafts, evidence, strict=True):
             claim_text = " ".join(item.claim.split())
@@ -351,6 +416,16 @@ class LangGraphResearchWorkflow:
             for evidence_id in claim.evidence_ids
             if evidence_id in evidence_by_id
             and evidence_by_id[evidence_id].source_id in source_by_id
+            and source_by_id[evidence_by_id[evidence_id].source_id].origin is SourceOrigin.WEB
+            and source_by_id[evidence_by_id[evidence_id].source_id].url
+        }
+        cited_local_sources = {
+            source_by_id[evidence_by_id[evidence_id].source_id]
+            for claim in state["claims"]
+            for evidence_id in claim.evidence_ids
+            if evidence_id in evidence_by_id
+            and evidence_by_id[evidence_id].source_id in source_by_id
+            and source_by_id[evidence_by_id[evidence_id].source_id].origin is SourceOrigin.LOCAL
         }
         has_claim_sections = all(
             f"### {claim.id.upper()}" in state["report_markdown"] for claim in state["claims"]
@@ -361,6 +436,12 @@ class LangGraphResearchWorkflow:
             and not has_missing_evidence_source
             and has_claim_sections
             and all(url in state["report_markdown"] for url in cited_source_urls)
+            and all(
+                source.locator
+                and source.title in state["report_markdown"]
+                and source.locator in state["report_markdown"]
+                for source in cited_local_sources
+            )
         )
         if not passed:
             raise LLMClientError(
@@ -395,9 +476,12 @@ class LangGraphResearchWorkflow:
                 source = source_by_id.get(item.source_id)
                 if source is None:
                     continue
-                sections.append(
-                    f"- {item.id.upper()}：{item.summary}（[{source.title}]({source.url})）"
+                citation = (
+                    f"[{source.title}]({source.url})"
+                    if source.url
+                    else f"{source.title}，{source.locator or '本地文档'}"
                 )
+                sections.append(f"- {item.id.upper()}：{item.summary}（{citation}）")
             sections.append("")
         return "\n".join(sections).rstrip() + "\n"
 
@@ -432,7 +516,7 @@ class LangGraphResearchWorkflow:
                     ResearchEventDraft(
                         type="research.tasks.completed",
                         stage=ResearchStage.RETRIEVING,
-                        message=f"已完成 {len(tasks)} 个网页检索任务",
+                        message=f"已完成 {len(tasks)} 个网页与本地资料检索任务",
                         progress=38,
                         payload={"task_count": len(tasks)},
                     ),
@@ -448,7 +532,7 @@ class LangGraphResearchWorkflow:
                     ResearchEventDraft(
                         type="research.sources.completed",
                         stage=ResearchStage.RETRIEVING,
-                        message=f"已读取并保存 {len(state_update['sources'])} 个网页来源",
+                        message=f"已读取并保存 {len(state_update['sources'])} 个网页或本地来源",
                         progress=56,
                         payload={
                             "source_count": len(state_update["sources"]),
@@ -515,7 +599,7 @@ class LangGraphResearchWorkflow:
                         ResearchEventDraft(
                             type="run.completed",
                             stage=ResearchStage.FINALIZING,
-                            message="真实网页研究任务已完成",
+                            message="网页与本地资料联合研究任务已完成",
                             progress=100,
                         ),
                     ),

@@ -25,6 +25,7 @@ from researchflow.domain.research import (
     ResearchTask,
     ResearchTaskStatus,
     Source,
+    SourceOrigin,
     SourceType,
 )
 from researchflow.persistence.database import Base
@@ -119,6 +120,18 @@ class SourceMetadataRow(Base):
     author: Mapped[str | None] = mapped_column(Text)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     publisher: Mapped[str | None] = mapped_column(Text)
+
+
+class SourceOriginRow(Base):
+    __tablename__ = "research_source_origins"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("research_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    source_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    origin: Mapped[SourceOrigin] = mapped_column(Enum(SourceOrigin))
+    knowledge_document_id: Mapped[str | None] = mapped_column(String(36))
+    locator: Mapped[str | None] = mapped_column(String(160))
 
 
 class EvidenceRow(Base):
@@ -331,7 +344,7 @@ class SqliteResearchRepository:
                         id=source.id,
                         task_id=source.task_id,
                         title=source.title,
-                        url=source.url,
+                        url=source.url or "",
                         snippet=source.snippet,
                         retrieved_at=source.retrieved_at,
                     )
@@ -344,6 +357,19 @@ class SqliteResearchRepository:
                         author=source.author,
                         published_at=source.published_at,
                         publisher=source.publisher,
+                    )
+                )
+                await session.merge(
+                    SourceOriginRow(
+                        run_id=str(source.run_id),
+                        source_id=source.id,
+                        origin=source.origin,
+                        knowledge_document_id=(
+                            str(source.knowledge_document_id)
+                            if source.knowledge_document_id is not None
+                            else None
+                        ),
+                        locator=source.locator,
                     )
                 )
             for item in evidence:
@@ -392,6 +418,9 @@ class SqliteResearchRepository:
             metadata_rows = await session.scalars(
                 select(SourceMetadataRow).where(SourceMetadataRow.run_id == str(run_id))
             )
+            origin_rows = await session.scalars(
+                select(SourceOriginRow).where(SourceOriginRow.run_id == str(run_id))
+            )
             evidence_rows = await session.scalars(
                 select(EvidenceRow)
                 .where(EvidenceRow.run_id == str(run_id))
@@ -406,12 +435,18 @@ class SqliteResearchRepository:
                 .order_by(ClaimEvidenceRow.claim_id, ClaimEvidenceRow.evidence_id)
             )
             metadata_by_source = {row.source_id: row for row in metadata_rows}
+            origin_by_source = {row.source_id: row for row in origin_rows}
             evidence_items = tuple(self._row_to_evidence(row) for row in evidence_rows)
             evidence_by_claim: dict[str, list[str]] = {}
             for row in claim_evidence_rows:
                 evidence_by_claim.setdefault(row.claim_id, []).append(row.evidence_id)
             source_items = tuple(
-                self._row_to_source(row, metadata_by_source.get(row.id)) for row in source_rows
+                self._row_to_source(
+                    row,
+                    metadata_by_source.get(row.id),
+                    origin_by_source.get(row.id),
+                )
+                for row in source_rows
             )
             claim_items = tuple(
                 self._row_to_claim(row, tuple(evidence_by_claim.get(row.id, ())))
@@ -581,13 +616,18 @@ class SqliteResearchRepository:
         )
 
     @staticmethod
-    def _row_to_source(row: SourceRow, metadata: SourceMetadataRow | None = None) -> Source:
+    def _row_to_source(
+        row: SourceRow,
+        metadata: SourceMetadataRow | None = None,
+        origin: SourceOriginRow | None = None,
+    ) -> Source:
+        source_origin = origin.origin if origin else SourceOrigin.WEB
         return Source(
             id=row.id,
             run_id=UUID(row.run_id),
             task_id=row.task_id,
             title=row.title,
-            url=row.url,
+            url=row.url if source_origin is SourceOrigin.WEB else None,
             snippet=row.snippet,
             retrieved_at=SqliteResearchRepository._as_utc(row.retrieved_at),
             source_type=metadata.source_type if metadata else SourceType.OTHER,
@@ -596,6 +636,13 @@ class SqliteResearchRepository:
                 SqliteResearchRepository._as_utc(metadata.published_at) if metadata else None
             ),
             publisher=metadata.publisher if metadata else None,
+            origin=source_origin,
+            knowledge_document_id=(
+                UUID(origin.knowledge_document_id)
+                if origin is not None and origin.knowledge_document_id is not None
+                else None
+            ),
+            locator=origin.locator if origin else None,
         )
 
     @staticmethod

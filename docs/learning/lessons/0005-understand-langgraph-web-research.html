@@ -3,19 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>第 5 课：LangGraph 网页研究链路 · ResearchFlow</title>
+  <title>第 5 课：LangGraph 联合研究链路 · ResearchFlow</title>
   <link rel="stylesheet" href="../assets/course.css">
 </head>
 <body>
 <main>
   <p class="eyebrow">Lesson 0005 · 约 20 分钟</p>
-  <h1>一次网页研究怎样穿过 LangGraph</h1>
+  <h1>网页与本地资料怎样穿过 LangGraph</h1>
   <p class="lead">学完后，你应该能解释节点、状态、适配器、来源、证据和持久化更新怎样协作。</p>
   <div class="callout"><strong>先记结论：</strong>LangGraph 负责工作流内部编排，但产品对外只暴露 ResearchFlow 自己的领域对象和事件。</div>
 
   <h2>1. 六个节点</h2>
   <div class="flow"><span>规划</span><b>→</b><span>搜索</span><b>→</b><span>阅读</span><b>→</b><span>证据</span><b>→</b><span>写作</span><b>→</b><span>检查</span></div>
-  <p>规划节点生成研究问题和英文检索词；搜索节点创建 ResearchTask；阅读节点保存并分类 Source；证据节点把网页片段关联到问题并形成 Claim；写作节点生成报告与可追溯章节；检查节点做确定性关联检查。</p>
+  <p>规划节点生成研究问题和英文网页检索词；搜索节点创建 ResearchTask；阅读节点联合取得 Exa 网页和用户所选文档片段并转换成 Source；证据节点把原文关联到问题并形成 Claim；写作节点生成报告与可追溯章节；检查节点做确定性关联检查。</p>
 
   <h2>2. 为什么问题和检索词分开</h2>
   <table><thead><tr><th>字段</th><th>服务对象</th><th>示例</th></tr></thead><tbody>
@@ -24,17 +24,18 @@
   </tbody></table>
   <p>研究问题表达“想知道什么”，检索词表达“怎样向特定搜索系统提问”。</p>
 
-  <h2>3. 三个深接口</h2>
+  <h2>3. 四个深接口</h2>
   <pre><code>LangGraphResearchWorkflow
 ├─ LLMClient
 ├─ SearchProvider
-└─ WebPageReader</code></pre>
-  <p>测试注入 Fake，真实运行注入 OpenAI-compatible 和 Exa 实现。节点不需要知道 HTTP 参数、重试或 Exa 响应结构；SearchResult 和 WebDocument 负责隔离供应商。</p>
+├─ WebPageReader
+└─ KnowledgeRetriever</code></pre>
+  <p>测试注入 Fake，真实运行注入 OpenAI-compatible、Exa 和本地检索实现。节点不需要知道 HTTP 参数、上传存储、分块算法或 Exa 响应结构；这些接口和 ResearchFlow DTO 隔离细节。</p>
 
   <h2>4. Source 和 Evidence 的区别</h2>
   <ul>
-    <li><strong>Source</strong> 是实际读过的网页；</li>
-    <li><strong>Evidence</strong> 是网页短原文与解释，并关联 Source 和 Research Question；</li>
+    <li><strong>Source</strong> 是某次运行实际读过的网页或本地片段；</li>
+    <li><strong>Evidence</strong> 是来源短原文与解释，并关联 Source 和 Research Question；</li>
     <li>有 Source 不代表它支持结论，建立 Evidence 关联后材料才进入证据链。</li>
   </ul>
 
@@ -42,10 +43,10 @@
   <p>工作流把节点状态转换成 <code>ResearchWorkflowUpdate</code>，Application 统一保存材料和事件。未来更换编排框架时，API 无需跟着改变。</p>
 
   <h2>6. 当前怎样检查引用</h2>
-  <p>M3 要求每条 Claim 至少关联一条已有 Evidence、每条 Evidence 指向已有 Source，并检查报告的主张小节包含对应来源链接。界面显示主张覆盖率和来源类型计数；DOI、卷期、被引量等专业学术元数据仍不在当前范围。</p>
+  <p>M4 要求每条 Claim 至少关联一条已有 Evidence、每条 Evidence 指向已有 Source，并检查报告的主张小节包含对应来源定位。网页使用可点击 URL，本地资料使用文件名与页码或行号。界面显示主张覆盖率和来源类型计数；DOI、OCR、卷期和被引量等能力仍不在当前范围。</p>
 
   <h2>7. 关联关系总结</h2>
-  <p>六个 StateGraph 节点用固定边按顺序连接；FakeSearchProvider 与真实搜索实现遵守相同接口，因此测试无需访问互联网。数据关系从 Research Question 开始，经 ResearchTask 记录检索，再由 Source 保存实际读取的网页，Evidence 把原文片段关联回问题和来源，Claim 最后把报告中的关键陈述关联到一条或多条 Evidence。</p>
+  <p>六个 StateGraph 节点用固定边按顺序连接；Fake 与真实搜索/本地检索实现遵守相同接口，因此测试无需访问互联网。数据关系从 Research Question 开始，经 ResearchTask 记录检索，再由 Source 保存实际读取的网页或本地片段，Evidence 把原文关联回问题和来源，Claim 最后把报告中的关键陈述关联到一条或多条 Evidence。</p>
   <p><a href="../README.md">返回学习区</a></p>
 </main>
 </body>

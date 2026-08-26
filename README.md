@@ -1,35 +1,37 @@
 # ResearchFlow
 
-ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前版本能把开放式研究目标转成结构化计划，检索和读取开放 Web 中的公开资料，保存分类来源、证据与关键主张，并展示可恢复、可追溯引用的研究过程；下一阶段将加入个人知识库。
+ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前版本能把开放式研究目标转成结构化计划，联合检索开放 Web 和用户选择的本地资料，保存来源、证据与关键主张，并展示可恢复、可追溯引用的研究过程。
 
 项目的首个演示场景是：调研 AI 代码生成工具的现有评测方法，并产出一份可以实际执行的评测方案。
 
 ## 当前进度
 
-仓库目前已完成 M0 至 M3，已经具备可重新打开、可追溯引用的真实网页研究闭环：
+仓库目前已完成 M0 至 M4，已经具备可重新打开、可追溯引用的网页与本地资料联合研究闭环：
 
 - 在 Next.js Dashboard 创建任务，并在 Research Workspace 查看 SSE 实时进度；
-- 使用 SQLite 持久化运行、事件、结构化计划、检索子任务、网页来源、证据和报告；
+- 使用 SQLite 持久化运行、事件、结构化计划、检索子任务、网页/本地来源、证据、知识文档元数据和报告；
 - `simulation` 模式完全离线，`llm` 模式只生成真实计划；
 - `langgraph` 模式执行规划、搜索、阅读、证据提取、写作和检查六个节点；
 - 真实网页来源使用 Exa Search API 检索论文页面、官方文档、企业技术博客和其他公开网页；
 - 中文研究问题与英文检索词分开保存，兼顾界面可读性和通用 Web 检索效果；
 - 保存来源类型与可用元数据，建立 Claim—Evidence 关系并检查引用覆盖率；
 - 前端展示研究计划、分类来源、关键主张、证据与可点击引用，刷新后仍可恢复；
+- Dashboard 可上传、选择、重处理和删除 PDF、Markdown、UTF-8 文本，本地引用保留页码或行号；
+- 默认本地词法检索无需 Embedding API、独立向量数据库或 GPU，并保留可替换的 `KnowledgeRetriever` 边界；
 - 外部能力均有 Fake/Mock，常规测试不联网、不消耗模型额度；
 - 后端、前端、Ruff、ESLint 和生产构建纳入 GitHub Actions。
 
-M3 已建立来源分类与可追溯引用闭环。固定查询验证 Exa 足以覆盖当前黄金场景所需的学术、官方和工业资料，因此暂不额外接入学术 Provider；DOI、期刊、被引量等专业学术元数据仍属于后续按需增强能力。
+M3 固定查询验证 Exa 足以覆盖当前黄金场景所需的学术、官方和工业资料，因此暂不额外接入学术 Provider。M4 固定样例显示词法、字符稀疏向量和混合检索在当前小规模语料上同分，因此默认采用成本最低的词法方案；DOI、OCR 和大型语义索引仍属于按需增强能力。
 
 ## 开发路线图
 
-当前已完成 M3“来源质量、可追溯引用和黄金演示场景”，下一步是 M4“本地知识库与 RAG”。
+当前已完成 M4“本地知识库与 RAG”，下一步是 M5“可靠性、测试与作品集交付”。
 
 - [x] M0：模拟全栈纵向闭环；
 - [x] M1：真实 LLM 接入与工程加固；
 - [x] M2：LangGraph 与真实网页研究闭环；
 - [x] M3：来源质量、可追溯引用和黄金演示场景；
-- [ ] M4：本地知识库与 RAG；
+- [x] M4：本地知识库与 RAG；
 - [ ] M5：可靠性、测试与作品集交付。
 
 每个里程碑的详细任务、实施顺序、完成标准和待确认选择见[项目路线图](docs/product/roadmap.md)。
@@ -42,7 +44,8 @@ M3 已建立来源分类与可追溯引用闭环。固定查询验证 Exa 足以
 - REST API 与 Server-Sent Events（SSE）
 - HTTPX、Exa Search API
 - OpenAI-compatible JSON Schema 结构化输出
-- ResearchFlow 自有 `ResearchWorkflow`、`LLMClient`、`SearchProvider` 与 `WebPageReader` 接口
+- pypdf 文本层解析与轻量本地检索
+- ResearchFlow 自有 `ResearchWorkflow`、`LLMClient`、`SearchProvider`、`WebPageReader` 与 `KnowledgeRetriever` 接口
 
 ## 仓库结构
 
@@ -55,7 +58,7 @@ scripts        可重复运行的质量评测与开发辅助脚本
 var            本地运行数据（不提交到 Git）
 ```
 
-建议先阅读 [MVP 技术规格](docs/product/mvp-spec.md)、[核心数据模型](docs/architecture/domain-model.md)、[LLM 接入架构](docs/architecture/llm-integration.md)、[SSE 事件契约](docs/architecture/sse-events.md)、[M3 阶段复盘](docs/product/retrospectives/m3.md)和[仓库结构设计](docs/architecture/repository-structure.md)。
+建议先阅读 [MVP 技术规格](docs/product/mvp-spec.md)、[核心数据模型](docs/architecture/domain-model.md)、[LLM 接入架构](docs/architecture/llm-integration.md)、[SSE 事件契约](docs/architecture/sse-events.md)、[M4 阶段复盘](docs/product/retrospectives/m4.md)和[仓库结构设计](docs/architecture/repository-structure.md)。
 
 ## 环境要求
 
@@ -129,7 +132,7 @@ npm run build --prefix apps/web
 
 请从 `.env.example` 复制本地配置，不要提交真实 API Key、访问令牌或个人资料。
 
-默认 `simulation` 模式不需要任何外部服务。若要启用 M3 可追溯网页研究，在本地 `.env` 中设置：
+默认 `simulation` 模式不需要任何外部服务。若要启用 M4 网页与本地资料联合研究，在本地 `.env` 中设置：
 
 ```dotenv
 RESEARCHFLOW_WORKFLOW_MODE=langgraph
@@ -142,6 +145,8 @@ RESEARCHFLOW_WEB_SEARCH_API_KEY=你的Exa密钥
 ```
 
 LLM Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completions`。`RESEARCHFLOW_LLM_PROVIDER` 当前是协议/来源标签，使用兼容服务时保持 `openai-compatible`。目标服务需支持 Chat Completions 和 JSON Schema 结构化输出；Exa Key 可从 Exa Dashboard 的免费 Starter 获取。本地兼容模型服务若不要求鉴权，LLM Key 可留空，但 `langgraph` 模式必须配置网页搜索 Key。修改配置后重启后端；真实密钥不得提交到 Git。完整说明见[使用、开发与运维手册](docs/guides/development-and-operations.md)。
+
+知识文档默认保存在 `var/uploads`，支持 PDF、Markdown 和 UTF-8 纯文本。PDF 仅解析已有文本层，不含 OCR；本地资料会交给配置的 LLM 处理，使用私人文件前应确认供应商的数据政策。
 
 ## 项目文档
 
@@ -156,6 +161,7 @@ LLM Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completio
 - [M2 阶段复盘](docs/product/retrospectives/m2.md)
 - [M3 阶段复盘](docs/product/retrospectives/m3.md)
 - [进入 M4 前审查](docs/product/retrospectives/pre-m4-review.md)
+- [M4 阶段复盘](docs/product/retrospectives/m4.md)
 - [MVP 技术规格](docs/product/mvp-spec.md)
 - [领域词汇表](CONTEXT.md)
 - [核心数据模型](docs/architecture/domain-model.md)
@@ -166,6 +172,7 @@ LLM Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completio
 - [Hello-Agents 调研](docs/research/hello-agents-analysis.md)
 - [OpenCode Zen API 配置调研](docs/research/opencode-zen-api.md)
 - [通用网页搜索 Provider 比较](docs/research/general-web-search-provider-comparison.md)
+- [M4 本地检索方案评测](docs/research/m4-local-retrieval-evaluation.md)
 
 ## 许可证
 

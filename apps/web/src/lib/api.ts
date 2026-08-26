@@ -74,13 +74,16 @@ export interface ResearchSource {
   run_id: string;
   task_id: string;
   title: string;
-  url: string;
+  url: string | null;
   snippet: string;
   retrieved_at: string;
   source_type: "academic" | "official" | "industry" | "community" | "other";
   author: string | null;
   published_at: string | null;
   publisher: string | null;
+  origin: "web" | "local";
+  knowledge_document_id: string | null;
+  locator: string | null;
 }
 
 export interface ResearchEvidence {
@@ -120,16 +123,30 @@ export interface ResearchMaterials {
   citation_audit: CitationAudit;
 }
 
+export interface KnowledgeDocument {
+  id: string;
+  original_filename: string;
+  media_type: string;
+  size_bytes: number;
+  status: "processing" | "ready" | "failed";
+  chunk_count: number;
+  error_code: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!(init?.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
   const response = await fetch(apiBaseUrl + path, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {
@@ -139,10 +156,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function createResearchRun(goal: string): Promise<ResearchRun> {
+export function createResearchRun(
+  goal: string,
+  documentIds: string[] = [],
+): Promise<ResearchRun> {
   return request<ResearchRun>("/api/research-runs", {
     method: "POST",
-    body: JSON.stringify({ goal }),
+    body: JSON.stringify({ goal, document_ids: documentIds }),
   });
 }
 
@@ -175,4 +195,39 @@ export async function getResearchPlan(
 
 export function getResearchMaterials(runId: string): Promise<ResearchMaterials> {
   return request<ResearchMaterials>("/api/research-runs/" + runId + "/materials");
+}
+
+export async function listKnowledgeDocuments(): Promise<KnowledgeDocument[]> {
+  const response = await request<{ items: KnowledgeDocument[] }>(
+    "/api/knowledge-documents",
+  );
+  return response.items;
+}
+
+export function uploadKnowledgeDocument(file: File): Promise<KnowledgeDocument> {
+  const body = new FormData();
+  body.append("file", file);
+  return request<KnowledgeDocument>("/api/knowledge-documents", {
+    method: "POST",
+    body,
+  });
+}
+
+export async function deleteKnowledgeDocument(documentId: string): Promise<void> {
+  const response = await fetch(
+    apiBaseUrl + "/api/knowledge-documents/" + documentId,
+    { method: "DELETE" },
+  );
+  if (!response.ok) {
+    throw new Error("删除知识文档失败（" + response.status + "）");
+  }
+}
+
+export function reprocessKnowledgeDocument(
+  documentId: string,
+): Promise<KnowledgeDocument> {
+  return request<KnowledgeDocument>(
+    "/api/knowledge-documents/" + documentId + "/reprocess",
+    { method: "POST" },
+  );
 }

@@ -15,7 +15,13 @@ class SimulatedResearchWorkflow:
     def __init__(self, step_delay: float) -> None:
         self._step_delay = step_delay
 
-    async def execute(self, run_id: UUID, goal: str) -> AsyncIterator[ResearchWorkflowUpdate]:
+    async def execute(
+        self,
+        run_id: UUID,
+        goal: str,
+        document_ids: tuple[UUID, ...] = (),
+    ) -> AsyncIterator[ResearchWorkflowUpdate]:
+        del document_ids
         yield workflow_started_update("研究工作流开始执行")
 
         stages = [

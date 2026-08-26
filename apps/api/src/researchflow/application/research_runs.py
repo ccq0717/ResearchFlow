@@ -3,6 +3,7 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from researchflow.application.knowledge_library import KnowledgeLibrary
 from researchflow.domain.research import (
     ResearchEvent,
     ResearchEventDraft,
@@ -23,12 +24,19 @@ class ResearchRunApplication:
         self,
         repository: SqliteResearchRepository,
         workflow: ResearchWorkflow,
+        knowledge_library: KnowledgeLibrary,
     ) -> None:
         self._repository = repository
         self._workflow = workflow
+        self._knowledge_library = knowledge_library
         self._tasks: dict[asyncio.Task[None], UUID] = {}
 
-    async def create_run(self, goal: str) -> ResearchRun:
+    async def create_run(
+        self,
+        goal: str,
+        document_ids: tuple[UUID, ...] = (),
+    ) -> ResearchRun:
+        selected_document_ids = await self._knowledge_library.validate_selection(document_ids)
         now = datetime.now(UTC)
         run = ResearchRun(
             id=uuid4(),
@@ -46,6 +54,7 @@ class ResearchRunApplication:
             completed_at=None,
         )
         await self._repository.create(run)
+        await self._knowledge_library.link_run(run.id, selected_document_ids)
         await self._repository.append_event(
             run.id,
             event_type="run.queued",
@@ -53,16 +62,21 @@ class ResearchRunApplication:
             progress=0,
         )
         task = asyncio.create_task(
-            self._execute_workflow(run.id, run.goal),
+            self._execute_workflow(run.id, run.goal, selected_document_ids),
             name=f"research-run-{run.id}",
         )
         self._tasks[task] = run.id
         task.add_done_callback(self._on_task_done)
         return run
 
-    async def _execute_workflow(self, run_id: UUID, goal: str) -> None:
+    async def _execute_workflow(
+        self,
+        run_id: UUID,
+        goal: str,
+        document_ids: tuple[UUID, ...],
+    ) -> None:
         try:
-            async for update in self._workflow.execute(run_id, goal):
+            async for update in self._workflow.execute(run_id, goal, document_ids):
                 await self._apply_workflow_update(run_id, update)
         except Exception:
             logger.exception("研究工作流执行失败，run_id=%s", run_id)

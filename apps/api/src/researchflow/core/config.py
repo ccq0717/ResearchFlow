@@ -39,6 +39,26 @@ class Settings(BaseSettings):
         min_length=10,
         max_length=200,
     )
+    knowledge_upload_directory: Path = Path("./var/uploads")
+    knowledge_max_document_bytes: int = Field(
+        default=10 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024
+    )
+    knowledge_max_document_count: int = Field(default=50, ge=1, le=500)
+    knowledge_max_selection_count: int = Field(default=10, ge=1, le=50)
+    knowledge_chunk_size: int = Field(default=1200, ge=300, le=4000)
+    knowledge_max_extracted_characters: int = Field(
+        default=2_000_000,
+        ge=10_000,
+        le=10_000_000,
+    )
+    knowledge_max_pdf_pages: int = Field(default=200, ge=1, le=1000)
+    knowledge_max_pdf_page_stream_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        ge=64 * 1024,
+        le=50 * 1024 * 1024,
+    )
+    knowledge_retrieval_mode: Literal["lexical", "vector", "hybrid"] = "lexical"
+    knowledge_results_per_question: int = Field(default=2, ge=1, le=10)
 
     @model_validator(mode="after")
     def validate_llm_configuration(self) -> "Settings":
@@ -51,6 +71,7 @@ class Settings(BaseSettings):
             database_path = self.database_url.split("///", maxsplit=1)[1]
             if database_path != ":memory:":
                 Path(database_path).parent.mkdir(parents=True, exist_ok=True)
+        self.knowledge_upload_directory.mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache

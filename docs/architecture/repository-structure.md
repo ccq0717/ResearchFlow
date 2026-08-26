@@ -1,6 +1,6 @@
 # ResearchFlow 仓库结构设计
 
-> 状态：M3 实现基线
+> 状态：M4 实现基线
 > 更新日期：2026-08-26
 
 ## 1. 设计目标
@@ -42,7 +42,7 @@ ResearchFlow/
 │       │       ├── application/   # 用例编排，不依赖 Web 框架
 │       │       ├── workflows/     # ResearchWorkflow 与 LangGraph 实现
 │       │       ├── integrations/  # LLM 与 Web 外部适配器
-│       │       ├── ingestion/     # 后续文件解析、切分与索引
+│       │       ├── ingestion/     # 文件解析、切分与本地检索
 │       │       ├── persistence/   # SQLAlchemy 仓储和数据库模型
 │       │       └── core/          # 配置、日志和通用错误
 │       ├── tests/
@@ -93,7 +93,8 @@ ResearchWorkflow interface
 LangGraphResearchWorkflow implementation
     ├─ LLMClient
     ├─ SearchProvider
-    └─ WebPageReader
+    ├─ WebPageReader
+    └─ KnowledgeRetriever
 ```
 
 `ResearchWorkflow` 是框架隔离的 seam。它对调用方暴露少量 ResearchFlow 自己的输入、事件和结果类型，并在内部处理：
@@ -113,8 +114,9 @@ LangGraphResearchWorkflow implementation
 - `SearchProvider`：Exa 通用 Web 适配器 / Fake；
 - `WebPageReader`：Provider 内容读取 / Fake，未来可替换为独立网页读取器；
 - 额外学术检索或元数据服务不是预设接口；只有固定查询证明现有能力不足且出现真实实现差异时，才新增对应 seam；
-- `KnowledgeRetriever`：本地向量检索 / 内存测试实现；
-- `SqliteResearchRepository` 当前只有一个真实 adapter，因此暂不提取假想的 Repository Protocol；测试使用临时 SQLite。出现第二种存储后再建立 seam。
+- `KnowledgeRetriever`：词法、字符 n-gram 稀疏向量和混合检索共用的本地检索边界；
+- `KnowledgeLibrary`：对调用方隐藏上传校验、安全落盘、解析、处理状态、重处理和删除；
+- `SqliteResearchRepository` 与 `SqliteKnowledgeRepository` 按运行材料和可复用知识文档拆分职责；它们当前都只有 SQLite 真实实现，不提取假想的持久化 Protocol。
 
 这些接口由工作流和应用用例接收，而不是在模块内部临时创建真实客户端。测试通过相同 seam 运行完整流程。
 

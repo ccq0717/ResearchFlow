@@ -1,6 +1,6 @@
 # ResearchFlow SSE 事件契约
 
-> 状态：M3 实现基线
+> 状态：M4 实现基线
 > 更新日期：2026-08-26
 
 ## 1. 传输原则
@@ -33,7 +33,7 @@ SSE 从后端向 Research Workspace 单向推送运行进度。持久化事件�
   "type": "research.sources.completed",
   "run_id": "uuid",
   "stage": "retrieving",
-  "message": "已读取并保存 6 个网页来源",
+  "message": "已读取并保存 6 个网页与本地来源",
   "progress": 56,
   "created_at": "2026-08-25T08:00:00Z",
   "payload": {"source_count": 6, "warning_count": 0}

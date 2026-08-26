@@ -1,6 +1,6 @@
 # ResearchFlow 核心数据模型
 
-> 状态：M3 实现基线
+> 状态：M4 实现基线
 > 更新日期：2026-08-26
 
 ## 1. 建模原则
@@ -25,19 +25,21 @@
 
 问题不是证据；检索词也不是新的研究问题。旧数据库中没有 `search_query` 的 M1 计划会回退使用原问题文本。
 
-## 3. M2/M3 研究材料与可追溯引用
+## 3. M2～M4 研究材料与可追溯引用
 
 | 模型 | 关键字段 | 语义 |
 | --- | --- | --- |
 | `ResearchTask` | `question_id`、`query`、`status` | 为某个问题执行的一次检索活动 |
-| `Source` | `task_id`、`title`、`url`、`snippet`、`source_type`、作者/日期/机构 | 实际读取并归一化元数据的外部材料 |
+| `Source` | `task_id`、`title`、`origin`、可选 `url`、可选 `knowledge_document_id`、`locator` | 某次运行实际读取的网页或本地材料 |
 | `Evidence` | `task_id`、`question_id`、`source_id`、`excerpt`、`summary` | 来源原文片段及其对问题的解释 |
 | `Claim` | `question_id`、`text`、`evidence_ids` | 报告中需要证据支持、可以独立检查的关键主张 |
 | `CitationAudit` | 主张数、已支持主张数、覆盖率、来源类型计数 | 从当前材料确定性计算的引用完整性摘要 |
 
-Evidence 必须同时关联已有 Source 和 Research Question，且原文片段必须能在对应来源正文中找到；Claim 通过显式关系关联一条或多条 Evidence。M3 检查保证每条结构化 Claim 都有完整的 Claim—Evidence—Source 链路，并且报告的可追溯章节包含相邻的来源链接。
+Evidence 必须同时关联已有 Source 和 Research Question，且原文片段必须能在对应来源正文中找到；Claim 通过显式关系关联一条或多条 Evidence。M4 检查保证每条结构化 Claim 都有完整的 Claim—Evidence—Source 链路，并且报告的可追溯章节包含相邻的网页链接或本地文件定位。
 
 来源类型是 `academic`、`official`、`industry`、`community` 或保守回退的 `other`。分类使用可解释的 URL 规则，作者和发布时间来自 Provider 可用元数据，发布机构从来源域名归一化；缺失值不会由模型猜测补齐。
+
+M4 增加 `KnowledgeDocument` 与 `DocumentChunk`。文档保存原始文件名、系统生成的存储名、内容哈希、大小和 `processing` / `ready` / `failed` 状态；片段保存正文、顺序以及 PDF 页码或文本行号。用户为一次运行选择文档后，`research_run_documents` 固定该范围。本地检索命中会先转换成 `origin=local` 的运行内 Source，再进入原有 Evidence 与 Claim 链路，因此引用检查不需要维护两套模型。删除知识文档会清理片段和运行选择关系；已完成运行中的 Source、Evidence 与报告快照仍保留，但原文件不再可打开。
 
 ## 4. 阶段与事件
 
@@ -63,20 +65,26 @@ planning → retrieving → analyzing → writing → finalizing
 - `research_tasks`
 - `research_sources`
 - `research_source_metadata`
+- `research_source_origins`
 - `research_evidence`
 - `research_claims`
 - `research_claim_evidence`
+- `knowledge_documents`
+- `document_chunks`
+- `research_run_documents`
 
 后端启动时使用 SQLAlchemy `create_all` 补齐新表。当前没有正式迁移工具，因此公开部署前仍需加入迁移和回滚方案。
 
 ## 7. 已验证的替换 seam
 
-- `ResearchWorkflow`：模拟、仅 LLM 规划、LangGraph 网页研究；
+- `ResearchWorkflow`：模拟、仅 LLM 规划、LangGraph 网页与本地联合研究；
 - `LLMClient`：Fake 与 OpenAI-compatible；
 - `SearchProvider`：Fake 与 Exa；
 - `WebPageReader`：Fake 与供应商无关的搜索结果正文读取器；
-- Repository 暂时只有 SQLite 真实实现，测试使用临时数据库，不提前抽象第二种存储。
+- `KnowledgeRetriever`：本地词法、字符 n-gram 稀疏向量与混合检索；
+- `KnowledgeLibrary`：封装上传校验、安全存储、解析、状态、重处理和删除生命周期；
+- SQLite 研究仓储与知识库仓储按职责拆分，测试使用临时数据库，不提前抽象不存在的第二种持久化实现。
 
 ## 8. 后续模型
 
-M4 引入 `KnowledgeDocument` 和 `DocumentChunk`：前者表示可跨研究运行复用的用户资料，后者表示保留文件名、页码或段落定位的可检索片段。检索命中必须先转换成某次 Research Run 使用的 Source，再生成现有 Evidence，避免让 Evidence 同时维护网页和文件两套关联规则。`WorkflowAttempt` 继续留到 M5 承载重试恢复信息。
+`WorkflowAttempt` 继续留到 M5，只有任务重试和失败恢复真正实现时才引入。

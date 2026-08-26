@@ -1,6 +1,6 @@
 # ResearchFlow 使用、开发与运维手册
 
-> 适用阶段：M3 来源质量与可追溯引用闭环
+> 适用阶段：M4 本地知识库与联合检索闭环
 > 主要平台：Windows 10 / 11 + PowerShell
 > 最后更新：2026-08-26
 
@@ -11,10 +11,10 @@
 - 日常开发时如何启动、检查、停止和重启服务；
 - 数据放在哪里，如何备份与重置；
 - 常见故障如何定位；
-- 如何在模拟、仅 LLM 规划和 LangGraph 网页研究模式之间切换；
-- 后续接入本地 RAG 后，运行方式会如何扩展。
+- 如何在模拟、仅 LLM 规划和 LangGraph 联合研究模式之间切换；
+- 如何管理本地知识文档并备份其数据。
 
-项目已完成 M3：真实链路可以规划、检索和分类开放 Web 资料，保存可用来源元数据，建立 Claim—Evidence 关系，检查引用覆盖并生成报告。当前不包含 DOI、卷期、被引量等专业学术元数据或本地 RAG。
+项目已完成 M4：真实链路可以联合检索开放 Web 与用户选择的本地资料，保存来源定位，建立 Claim—Evidence 关系，检查引用覆盖并生成报告。当前不包含 OCR、DOI/被引量等专业学术元数据或大规模向量数据库。
 
 ## 1. 当前产品由什么组成
 
@@ -23,11 +23,11 @@
 | Web 前端 | Next.js | http://localhost:3000 | 是 |
 | API 后端 | FastAPI | http://127.0.0.1:8000 | 是 |
 | 本地数据库 | SQLite | `var/researchflow.db` | 由后端自动使用 |
-| 研究工作流 | 模拟、LLM 规划或 LangGraph 网页研究 | 后端进程内 | 由后端自动运行 |
+| 研究工作流 | 模拟、LLM 规划或 LangGraph 联合研究 | 后端进程内 | 由后端自动运行 |
 | LLM | OpenAI-compatible HTTP 适配器 | 远程或本地兼容服务 | `llm` / `langgraph` 需要 |
 | 网页搜索与读取 | Exa Search API / Search Result Reader | 公共 HTTPS API | 仅 `langgraph` 需要 |
 | 来源质量与可追溯引用 | 来源分类、Claim—Evidence、引用检查 | 后端与前端 | `langgraph` 使用 |
-| 本地知识库 / 向量数据库 / RAG | 尚未接入 | 无 | 否 |
+| 本地知识库 | PDF / Markdown / UTF-8 文本解析与轻量检索 | `var/uploads` + SQLite | 按需使用 |
 
 前端负责展示页面和接收操作，后端负责保存任务、运行工作流并通过 SSE 推送进度。关闭前端不会删除数据；关闭后端会让页面暂时无法读取或创建任务。
 
@@ -35,8 +35,8 @@
 
 1. 确认前端和后端已经启动。
 2. 打开 http://localhost:3000。
-3. 在“你想研究什么？”文本框输入至少 10 个字符的研究目标。
-4. 点击“开始研究”。
+3. 可选：上传 PDF、Markdown 或纯文本，等待状态变为“可用”并勾选本次要使用的资料。
+4. 在“你想研究什么？”文本框输入至少 10 个字符的研究目标并点击“开始研究”。
 5. 在 Research Workspace 查看阶段、进度、研究事件和最终报告。
 6. 返回 Dashboard，可从“研究记录”查看完成/更新时间并重新打开已保存任务；重新进入后会恢复完整研究事件。
 
@@ -46,7 +46,7 @@
 调研学术界和工业界对 AI 代码生成工具的评测方法，并设计一份覆盖代码质量、安全性和开发效率的评测方案。
 ```
 
-默认 `simulation` 模式输出模拟报告，不访问外部服务。`llm` 模式只真实生成研究计划。`langgraph` 模式会调用配置的 LLM，并通过 Exa Search API 检索论文页面、官方文档、企业技术博客和其他公开网页；工作流会分类来源、保存可用元数据、建立主张与证据关系并执行引用检查。
+默认 `simulation` 模式输出模拟报告，不访问外部服务。`llm` 模式只真实生成研究计划。`langgraph` 模式会调用配置的 LLM，通过 Exa 检索公开网页，并检索本次勾选的本地文档；两类材料会进入统一的来源、证据、主张和引用检查链路。所有模式都可管理知识文档，但只有 `langgraph` 会在研究中使用它们。
 
 ## 3. 第一次初始化开发环境
 
@@ -215,6 +215,16 @@ Get-NetTCPConnection -State Listen |
 | `RESEARCHFLOW_WEB_CONTENT_MAX_CHARACTERS` | 单个来源交给 LLM 的最大字符数 | `16000` |
 | `RESEARCHFLOW_WEB_REQUEST_TIMEOUT_SECONDS` | 搜索/阅读超时秒数 | `20` |
 | `RESEARCHFLOW_WEB_USER_AGENT` | 公共 API 请求标识 | ResearchFlow 默认值 |
+| `RESEARCHFLOW_KNOWLEDGE_UPLOAD_DIRECTORY` | 原始上传文件目录 | `./var/uploads` |
+| `RESEARCHFLOW_KNOWLEDGE_MAX_DOCUMENT_BYTES` | 单个文件最大字节数 | `10485760` |
+| `RESEARCHFLOW_KNOWLEDGE_MAX_DOCUMENT_COUNT` | 文档总数上限 | `50` |
+| `RESEARCHFLOW_KNOWLEDGE_MAX_SELECTION_COUNT` | 单次研究最多选择文档数 | `10` |
+| `RESEARCHFLOW_KNOWLEDGE_CHUNK_SIZE` | 文本片段目标字符数 | `1200` |
+| `RESEARCHFLOW_KNOWLEDGE_MAX_EXTRACTED_CHARACTERS` | 单文档最大解析文本字符数 | `2000000` |
+| `RESEARCHFLOW_KNOWLEDGE_MAX_PDF_PAGES` | PDF 最大页数 | `200` |
+| `RESEARCHFLOW_KNOWLEDGE_MAX_PDF_PAGE_STREAM_BYTES` | 单页 PDF 内容流上限 | `5242880` |
+| `RESEARCHFLOW_KNOWLEDGE_RETRIEVAL_MODE` | `lexical`、`vector` 或 `hybrid` | `lexical` |
+| `RESEARCHFLOW_KNOWLEDGE_RESULTS_PER_QUESTION` | 每个问题最多本地命中数 | `2` |
 
 修改 `.env` 后应重启后端。`llm` 与 `langgraph` 模式都必须配置非空模型名。Base URL 填 API 根地址，不要包含末尾的 `/chat/completions`。
 
@@ -236,7 +246,7 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 修改后应重启前端。`.env.local` 已被仓库的忽略规则覆盖，不应提交。
 
-### 6.3 启用真实 LLM 或 M3 可追溯网页研究
+### 6.3 启用真实 LLM 或 M4 联合研究
 
 目标 LLM 服务需支持 Chat Completions 和 `response_format.type=json_schema`。只验证真实规划时使用：
 
@@ -247,7 +257,7 @@ RESEARCHFLOW_LLM_API_KEY=本机真实密钥
 RESEARCHFLOW_LLM_BASE_URL=https://供应商地址/v1
 ```
 
-要运行 M3 完整链路，把模式改为：
+要运行 M4 完整链路，把模式改为：
 
 ```dotenv
 RESEARCHFLOW_WORKFLOW_MODE=langgraph
@@ -264,6 +274,8 @@ RESEARCHFLOW_WEB_SEARCH_RESULT_LIMIT=3
 Exa Key 只写入仓库根目录被 Git 忽略的 `.env`，不要发送到前端，也不要复制到 `.env.example`、文档、截图或 Commit。运行设备必须能够访问 `api.exa.ai` 和模型服务。重启后端并检查 `/health` 的 `workflow_mode`。成功运行时，工作区会依次出现计划、检索任务、分类来源、证据、关键主张、引用覆盖率和报告；网页或模型失败会进入 `failed` 并显示安全错误。
 
 OpenCode Zen 的 MiMo 示例和数据使用注意事项见 [OpenCode Zen API 配置调研](../research/opencode-zen-api.md)。直接 API 不使用 `opencode/` 模型前缀。
+
+本地资料不需要额外 API Key、向量数据库或 GPU。PDF 必须已有可提取文本层；扫描 PDF 会显示 `DOCUMENT_NO_TEXT`，当前版本不会自动 OCR。上传内容会发送给所配置的 LLM 参与证据提取和写作，因此不要上传不允许交给该模型供应商处理的私人或受限资料。
 
 要回到完全离线、无费用模式：
 
@@ -284,10 +296,16 @@ LangGraph 只依赖 `SearchProvider` 和 `WebPageReader`，不认识 Exa 请求�
 
 ### 7.1 数据位置
 
-当前研究任务、结构化计划、检索子任务、来源、证据、事件和报告保存在：
+当前研究任务、结构化计划、检索子任务、来源、证据、事件、报告和文档元数据保存在：
 
 ```text
 var/researchflow.db
+```
+
+原始知识文档默认保存在：
+
+```text
+var/uploads/
 ```
 
 `var/` 被 Git 忽略，不会上传到 GitHub。
@@ -318,7 +336,7 @@ var/researchflow.db
 .\.venv\Scripts\python.exe -c 'import sqlite3; db=sqlite3.connect("file:var/researchflow.db?mode=ro", uri=True); print(db.execute("SELECT COUNT(*) FROM research_runs").fetchone()[0]); db.close()'
 ```
 
-两个命令都使用 Python 自带的 `sqlite3` 接口和只读模式，不会修改数据库。当前业务表包括 `research_runs`、`research_plans`、`research_events`、`research_tasks`、`research_sources` 和 `research_evidence`。概念解释见 [SQLite 与数据持久化课程](../learning/lessons/0003-understand-sqlite-persistence.html)。
+两个命令都使用 Python 自带的 `sqlite3` 接口和只读模式，不会修改数据库。当前共有十三张业务表，包含研究运行、来源扩展、Claim—Evidence、知识文档、片段和运行选择关系。完整列表见[核心数据模型](../architecture/domain-model.md)，概念解释见 [SQLite 与数据持久化课程](../learning/lessons/0003-understand-sqlite-persistence.html)。
 
 ### 7.3 备份
 
@@ -327,6 +345,7 @@ var/researchflow.db
 ```powershell
 New-Item -ItemType Directory -Force backups | Out-Null
 Copy-Item .\var\researchflow.db .\backups\researchflow.db
+Copy-Item .\var\uploads .\backups\uploads -Recurse
 ```
 
 如需保留多份备份，可以在文件名中加入日期。`backups/` 当前没有被默认忽略；若实际使用该目录，应先将它加入 `.gitignore`，避免提交包含个人研究内容的数据库。
@@ -337,9 +356,10 @@ Copy-Item .\var\researchflow.db .\backups\researchflow.db
 
 ```powershell
 Move-Item .\var\researchflow.db .\var\researchflow.db.bak
+Move-Item .\var\uploads .\var\uploads.bak
 ```
 
-下次启动后端时会自动创建新的空数据库。确认旧数据不再需要后，再手动处理 `.bak` 文件。
+数据库和上传目录必须在后端停止后作为一组备份或重置，否则元数据与原文件会不一致。下次启动后端时会自动创建新的空数据库和上传目录。确认旧数据不再需要后，再手动处理 `.bak` 文件。
 
 ## 8. 代码检查与测试
 
@@ -363,6 +383,14 @@ M3 Exa 来源覆盖度评测会执行 3 次真实搜索，只在需要重新验�
 ```
 
 验收查询、阈值和最近结果见 [M3 Exa 来源覆盖度评测](../research/exa-m3-source-coverage.md)。该命令会读取本地 `.env` 并消耗少量 Exa 额度，不属于 CI。
+
+M4 本地检索固定评测完全离线，不读取 `.env`，也不消耗外部额度：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_local_retrieval.py
+```
+
+样例、指标和选型结论见 [M4 本地检索方案评测](../research/m4-local-retrieval-evaluation.md)。
 
 前端基础测试：
 
@@ -506,7 +534,7 @@ npm run start --prefix apps/web -- --hostname 127.0.0.1
 
 项目计划在本地核心研究闭环稳定后部署一个供面试官和少量受邀访问者使用的作品集在线 Demo。它不以开放注册、多租户或高并发生产系统为目标；部署边界、阻塞项、平台选择标准和上线验收清单见[作品集在线 Demo 部署指南](online-demo-deployment.md)。具体平台命令只有在实际验证后才会写入该指南。
 
-## 12. 当前外部服务与未来 RAG
+## 12. 当前外部服务与本地检索
 
 ### 12.1 两种已支持的 LLM 连接方式
 
@@ -516,9 +544,9 @@ npm run start --prefix apps/web -- --hostname 127.0.0.1
 
 两种方式都经过 `OpenAICompatibleLLMClient`，工作流不直接依赖某一家 SDK。当前要求服务支持 Chat Completions 和 JSON Schema 结构化输出。
 
-### 12.2 后续扩展后的推荐启动顺序
+### 12.2 推荐启动顺序
 
-当相关组件真正实现后，推荐顺序为：
+当前本地知识库由 API 进程和 SQLite 直接提供，不需要单独启动。未来若按实际需求增加基础设施，推荐顺序为：
 
 1. PostgreSQL / 向量数据库（如果启用）；
 2. Redis / 后台任务执行器（如果启用）；
@@ -536,7 +564,7 @@ npm run start --prefix apps/web -- --hostname 127.0.0.1
 - 数据库是否可读写；
 - LLM Provider 是否可连接、模型是否存在；
 - 搜索 Provider 是否可用；
-- 向量库是否可查询；
+- 本地上传目录是否可写、知识文档是否可查询；
 - 后台任务执行器是否在线。
 
 当前 `/health` 表示 FastAPI 进程能够响应，并返回所选工作流模式；它不会主动请求 LLM，也不代表外部依赖健康。

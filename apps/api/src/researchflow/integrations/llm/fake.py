@@ -72,11 +72,18 @@ class FakeLLMClient:
         evidence: tuple[EvidenceDraft, ...],
         documents: tuple[ResearchDocumentInput, ...],
     ) -> LLMReportResult:
-        sources = "\n".join(f"- [{document.title}]({document.url})" for document in documents)
+        sources = "\n".join(
+            (
+                f"- [{document.title}]({document.url})"
+                if document.url
+                else f"- {document.title}（{document.locator or '本地文档'}）"
+            )
+            for document in documents
+        )
         findings = "\n".join(
             f"- {item.summary}（证据 {index}）" for index, item in enumerate(evidence, start=1)
         )
-        report = f"""# AI 研究报告（M3 可追溯引用）
+        report = f"""# AI 研究报告（M4 联合研究）
 
 ## 研究目标
 

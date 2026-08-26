@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_core import PydanticCustomError
 
+from researchflow.domain.knowledge import DocumentChunk, KnowledgeDocument, KnowledgeDocumentStatus
 from researchflow.domain.research import (
     CitationAudit,
     Claim,
@@ -18,12 +19,14 @@ from researchflow.domain.research import (
     ResearchTask,
     ResearchTaskStatus,
     Source,
+    SourceOrigin,
     SourceType,
 )
 
 
 class CreateResearchRunRequest(BaseModel):
     goal: str = Field(max_length=4000)
+    document_ids: tuple[UUID, ...] = Field(default=(), max_length=50)
 
     @field_validator("goal", mode="before")
     @classmethod
@@ -161,13 +164,16 @@ class SourceResponse(BaseModel):
     run_id: UUID
     task_id: str
     title: str
-    url: str
+    url: str | None
     snippet: str
     retrieved_at: datetime
     source_type: SourceType
     author: str | None
     published_at: datetime | None
     publisher: str | None
+    origin: SourceOrigin
+    knowledge_document_id: UUID | None
+    locator: str | None
 
     @classmethod
     def from_domain(cls, source: Source) -> "SourceResponse":
@@ -249,3 +255,63 @@ class ResearchMaterialsResponse(BaseModel):
             claims=[ClaimResponse.from_domain(claim) for claim in materials.claims],
             citation_audit=CitationAuditResponse.from_domain(materials.citation_audit),
         )
+
+
+class KnowledgeDocumentResponse(BaseModel):
+    id: UUID
+    original_filename: str
+    media_type: str
+    size_bytes: int
+    status: KnowledgeDocumentStatus
+    chunk_count: int
+    error_code: str | None
+    error_message: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_domain(cls, document: KnowledgeDocument) -> "KnowledgeDocumentResponse":
+        return cls(
+            id=document.id,
+            original_filename=document.original_filename,
+            media_type=document.media_type,
+            size_bytes=document.size_bytes,
+            status=document.status,
+            chunk_count=document.chunk_count,
+            error_code=document.error_code,
+            error_message=document.error_message,
+            created_at=document.created_at,
+            updated_at=document.updated_at,
+        )
+
+
+class KnowledgeDocumentListResponse(BaseModel):
+    items: list[KnowledgeDocumentResponse]
+
+
+class DocumentChunkResponse(BaseModel):
+    id: str
+    document_id: UUID
+    ordinal: int
+    content: str
+    locator: str
+    page_number: int | None
+    start_line: int | None
+    end_line: int | None
+
+    @classmethod
+    def from_domain(cls, chunk: DocumentChunk) -> "DocumentChunkResponse":
+        return cls(
+            id=chunk.id,
+            document_id=chunk.document_id,
+            ordinal=chunk.ordinal,
+            content=chunk.content,
+            locator=chunk.locator,
+            page_number=chunk.page_number,
+            start_line=chunk.start_line,
+            end_line=chunk.end_line,
+        )
+
+
+class DocumentChunkListResponse(BaseModel):
+    items: list[DocumentChunkResponse]
