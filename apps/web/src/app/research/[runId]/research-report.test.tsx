@@ -35,4 +35,23 @@ describe("ResearchReport", () => {
     expect(html).not.toContain("<script>");
     expect(html).not.toContain("javascript:");
   });
+
+  it("renders bold text inside quotes and LaTeX formulas", () => {
+    const html = renderToStaticMarkup(
+      <ResearchReport
+        markdown={`> **证据边界：**仅说明已验证的范围。
+
+\\[
+S_{overall}=w_cS_c+w_sS_s
+\\]
+
+权重满足 \\(\\sum w=1\\)。`}
+      />,
+    );
+
+    expect(html).toContain("<strong");
+    expect(html).not.toContain("**证据边界：**");
+    expect(html).toContain('class="katex-display"');
+    expect(html).toContain('class="katex"');
+  });
 });

@@ -11,11 +11,14 @@
     "test:e2e": "powershell -ExecutionPolicy Bypass -File ../../scripts/run_e2e.ps1"
   },
   "dependencies": {
+    "katex": "^0.18.4",
     "next": "16.3.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

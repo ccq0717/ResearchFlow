@@ -1,10 +1,39 @@
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 
 type ResearchReportProps = {
   markdown: string;
 };
+
+function normalizeModelMarkdown(markdown: string) {
+  let fence: "```" | "~~~" | null = null;
+
+  return markdown
+    .split("\n")
+    .map((line) => {
+      const marker = line.match(/^\s*(```|~~~)/)?.[1] as "```" | "~~~" | undefined;
+      if (marker) {
+        fence = fence === marker ? null : fence ?? marker;
+        return line;
+      }
+      if (fence) return line;
+
+      if (/^\s*\\[\[\]]\s*$/.test(line)) {
+        return line.replace(/\\[\[\]]/, () => "$$");
+      }
+
+      return line
+        .replace(/\\\((.+?)\\\)/g, (_, expression: string) => `$${expression}$`)
+        .replace(
+          /(\*\*[^*\r\n]*?[：:；;，,。.！？!?])\*\*(?=[\p{L}\p{N}])/gu,
+          "$1** ",
+        );
+    })
+    .join("\n");
+}
 
 function ExternalLink({
   href,
@@ -25,10 +54,13 @@ function ExternalLink({
 }
 
 export function ResearchReport({ markdown }: ResearchReportProps) {
+  const normalizedMarkdown = normalizeModelMarkdown(markdown);
+
   return (
     <article className="mt-6 text-[15px] leading-7 text-[#354039]">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
         components={{
           h1: ({ children }) => (
             <h1 className="mb-5 mt-1 text-3xl font-semibold leading-tight text-[#17231d]">
@@ -103,7 +135,7 @@ export function ResearchReport({ markdown }: ResearchReportProps) {
           ),
         }}
       >
-        {markdown}
+        {normalizedMarkdown}
       </ReactMarkdown>
     </article>
   );

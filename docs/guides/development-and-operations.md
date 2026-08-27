@@ -131,7 +131,7 @@ Gemini 原生适配器默认使用 `https://generativelanguage.googleapis.com/v1
 | `RESEARCHFLOW_EMBEDDING_TIMEOUT_SECONDS` | `60` | Embedding 服务经常超时 |
 | `RESEARCHFLOW_EMBEDDING_BATCH_SIZE` | `32` | 供应商限制批大小 |
 
-如需在运行页估算模型费用，可配置输入、输出每百万 Token 的美元单价：`RESEARCHFLOW_LLM_INPUT_COST_PER_MILLION_TOKENS` 和 `RESEARCHFLOW_LLM_OUTPUT_COST_PER_MILLION_TOKENS`。未配置时显示“未配置单价”，不会错误显示零费用。
+如需在运行页估算模型费用，可配置输入、输出每百万 Token 的美元单价：`RESEARCHFLOW_LLM_INPUT_COST_PER_MILLION_TOKENS` 和 `RESEARCHFLOW_LLM_OUTPUT_COST_PER_MILLION_TOKENS`。估算值为 `输入 Token × 输入单价 / 1,000,000 + 输出 Token × 输出单价 / 1,000,000`；未配置时显示“未配置单价”。
 
 完整默认值以 [`core/config.py`](../../apps/api/src/researchflow/core/config.py) 为准。
 
