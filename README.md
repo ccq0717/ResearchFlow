@@ -28,7 +28,7 @@ ResearchFlow 是一个面向科研与技术预研的 AI 深度研究工作台。
 
 ## 开发路线图
 
-核心研究闭环、可靠性、自动化测试和作品集交付已经完成。项目默认在本地运行并通过共享屏幕演示；Docker 与在线部署都是可选增强。详细状态见[项目路线图](docs/product/roadmap.md)。
+核心研究闭环、可靠性、自动化测试和作品集交付已经完成。项目默认在本地运行并通过共享屏幕演示；Docker 与在线部署都是可选增强。当前产品和技术文档见[文档索引](docs/README.md)。
 
 ## 技术栈
 
@@ -108,7 +108,7 @@ npm --prefix apps/web run dev -- --hostname 127.0.0.1
 
 ## 项目文档
 
-按“使用与部署、产品、架构、调研、学习、实施历史”分类的入口见[文档索引](docs/README.md)。日常启动和排错直接阅读[使用、开发与运维手册](docs/guides/development-and-operations.md)，演示与简历表达见[作品集展示材料](docs/product/portfolio-presentation.md)；仓库还提供[黄金演示输入](examples/ai-code-generation-evaluation.md)和[示例报告](examples/ai-code-generation-evaluation-result.md)。
+按“使用与部署、产品、架构、评测、学习”分类的入口见[文档索引](docs/README.md)。日常启动和排错直接阅读[使用、开发与运维手册](docs/guides/development-and-operations.md)，演示与简历表达见[作品集展示材料](docs/product/portfolio-presentation.md)；仓库还提供[黄金演示输入](examples/ai-code-generation-evaluation.md)和[示例报告](examples/ai-code-generation-evaluation-result.md)。
 
 ## 许可证
 

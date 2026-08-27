@@ -26,8 +26,12 @@
   RAG 原始论文。用于区分参数化记忆、外部非参数记忆、检索器和生成器。
 - [Gemini Embeddings — Google AI for Developers](https://ai.google.dev/gemini-api/docs/embeddings)
   Gemini Embedding 的当前官方指南。用于确认模型版本、检索任务指令和输出维度。
+- [Gemini EmbedContent API — Google AI for Developers](https://ai.google.dev/api/embeddings)
+  Gemini Embedding 的请求、批处理与响应字段参考。
 - [Introduction to Information Retrieval — Stanford](https://nlp.stanford.edu/IR-book/)
   信息检索教材。用于理解余弦相似度、相关性判断和常见检索指标。
+- [Evaluation in information retrieval — Stanford](https://nlp.stanford.edu/IR-book/html/htmledition/evaluation-in-information-retrieval-1.html)
+  用于理解查询集、相关性标注和 MRR 等检索评测边界。
 - [Text REtrieval Conference — NIST](https://trec.nist.gov/)
   TREC 官方入口。用于理解查询集、语料、qrels 和可复现检索评测。
 
@@ -38,7 +42,4 @@
 - [Next.js Discussions](https://github.com/vercel/next.js/discussions)
   遇到版本相关问题时，查看使用者和维护者对 Next.js 行为的讨论。
 
-## Gaps
-
-- 后台任务可靠性与部署课程以当前代码、运行手册和已验证测试为准；平台套餐依据单独保存在部署调研文档中。
-- 学习者暂未选择是否参与开发者社区，当前以阅读高质量讨论为主。
+后台任务可靠性和部署课程以当前代码、运行手册与自动化测试为准；平台价格和限制可能变化，实际部署前应重新核对官方信息。

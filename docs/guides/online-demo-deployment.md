@@ -4,7 +4,7 @@
 >
 > 可选在线方案：Railway Hobby，Singapore，Next.js 与 FastAPI 各一个服务
 
-本地安装与排错见[使用、开发与运维手册](development-and-operations.md)，平台选型依据见[部署平台比较](../research/deployment-platform-comparison.md)。项目无需 Docker 或在线服务即可完成作品集演示；只有确实需要长期公开链接时才执行本文。
+本地安装与排错见[使用、开发与运维手册](development-and-operations.md)。项目无需 Docker 或在线服务即可完成作品集演示；只有确实需要长期公开链接时才执行本文，平台价格和限制应在部署前重新核对。
 
 ## 是否需要部署
 

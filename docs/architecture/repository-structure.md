@@ -2,70 +2,146 @@
 
 > 状态：当前实现
 >
-> 更新日期：2026-08-26
+> 更新日期：2026-08-27
+
+本文说明每个目录的职责和主要依赖方向。使用与配置见[运行手册](../guides/development-and-operations.md)，业务实体见[核心数据模型](domain-model.md)。
 
 ## 1. 顶层目录
 
 ```text
 ResearchFlow/
-├── .github/workflows/       CI
-├── apps/web/                Next.js 前端
-├── apps/api/                FastAPI 后端
-├── docs/                    产品、架构、决策、调研与学习资料
-├── examples/                可公开演示输入
-├── scripts/                 评测与辅助脚本
+├── .github/workflows/       GitHub Actions 自动化检查
+├── apps/
+│   ├── api/                 FastAPI 后端
+│   └── web/                 Next.js 前端
+├── docs/                    当前产品、架构、指南、课程和评测
+├── examples/                可公开使用的演示输入、结果和知识资料
+├── scripts/                 备份、E2E 与真实服务评测脚本
 ├── var/                     本地数据库和上传文件，不提交
-├── .env.example             无密钥配置示例
-├── pyproject.toml           Python workspace
-├── uv.lock                  Python 锁文件
-└── README.md
+├── .env.example             无密钥的核心配置示例
+├── compose.yaml             可选容器拓扑
+├── CONTEXT.md               前后端共享的领域词汇
+├── pyproject.toml           Python workspace 与版本范围
+├── uv.lock                  Python 依赖锁文件
+└── README.md                产品介绍和最短启动路径
 ```
 
-前后端使用各自的 `src`，避免 TypeScript 和 Python 构建边界混在根目录。空目录和假想基础设施不提前创建。
+前后端保留独立构建边界；根目录只放整个 workspace 共用的配置和入口。
 
-## 2. 后端模块
+## 2. 前端 `apps/web`
 
 ```text
-apps/api/src/researchflow/
-├── api/             HTTP、SSE 路由和请求响应模型
-├── application/     研究任务与知识库用例
-├── core/            配置
-├── domain/          领域对象和不变量
-├── ingestion/       文件解析、分块与本地检索
-├── integrations/    LLM、搜索、网页读取和 Embedding 适配器
-├── persistence/     SQLAlchemy 表和仓储
-└── workflows/       模拟、规划与 LangGraph 工作流
+apps/web/
+├── e2e/
+│   └── research-flow.spec.ts       浏览器黄金流程
+├── public/                         静态资源
+├── src/
+│   ├── app/
+│   │   ├── page.tsx                Dashboard 与知识文档管理
+│   │   ├── demo-access-gate.tsx    可选访问码入口
+│   │   ├── research/[runId]/
+│   │   │   ├── page.tsx            Research Workspace 与 SSE
+│   │   │   └── research-*.tsx      计划、材料、报告、度量和错误组件
+│   │   ├── globals.css             全局样式
+│   │   └── layout.tsx              页面根布局
+│   └── lib/
+│       ├── api.ts                  REST 类型与统一客户端
+│       ├── event-stream.ts         SSE 事件合并和终态判断
+│       └── format.ts               时间与数字格式化
+├── Dockerfile                      可选生产镜像
+├── package.json                    前端依赖与命令
+└── playwright.config.ts            E2E 配置
 ```
 
-FastAPI 路由只负责协议转换。Application 编排用例，领域模块保存业务语义，外部协议和数据库细节分别留在 integrations 与 persistence。
+页面组件不直接接触 SQLite、供应商密钥或 LangGraph State。所有后端访问集中在 `lib/api.ts`，研究页只消费 ResearchFlow 的 API 与领域事件。
 
-## 3. 工作流 seam
+## 3. 后端 `apps/api`
+
+```text
+apps/api/
+├── src/researchflow/
+│   ├── api/             HTTP/SSE 路由、请求响应模型和错误契约
+│   ├── application/     研究运行与知识库用例编排
+│   ├── core/            配置、访问保护和结构化日志
+│   ├── domain/          领域对象、来源分类和引用不变量
+│   ├── ingestion/       PDF/文本解析、分块和本地向量检索
+│   ├── integrations/
+│   │   ├── embedding/   Gemini、OpenAI-compatible 与 Fake
+│   │   ├── llm/         OpenAI-compatible LLM 与 Fake
+│   │   └── web/         Exa、结果读取与 Fake
+│   ├── persistence/     SQLAlchemy 表、schema 版本和两个仓储
+│   ├── workflows/       模拟、仅规划和 LangGraph 联合研究
+│   ├── app_factory.py   依赖装配和 FastAPI 生命周期
+│   └── main.py          服务器入口
+├── tests/               后端单元与集成测试
+├── Dockerfile           可选生产镜像
+└── pyproject.toml       后端依赖与工具配置
+```
+
+依赖方向是 `api → application → domain`。外部 HTTP 与数据库细节分别留在 `integrations` 和 `persistence`；`app_factory.py` 负责选择真实或 Fake 实现并注入应用层。
+
+### 研究工作流边界
 
 ```text
 FastAPI Route
   → ResearchRunApplication
     → ResearchWorkflow
-      → LangGraphResearchWorkflow
-        ├─ LLMClient
-        ├─ SearchProvider
-        ├─ WebPageReader
-        └─ KnowledgeRetriever
-             └─ EmbeddingClient
+      ├─ SimulatedResearchWorkflow
+      ├─ LLMResearchWorkflow
+      └─ LangGraphResearchWorkflow
+           ├─ LLMClient
+           ├─ SearchProvider
+           ├─ WebPageReader
+           └─ KnowledgeRetriever
+                └─ EmbeddingClient
 ```
 
-LangGraph 的 Graph、Node 和 State 不进入 FastAPI、领域模型或前端事件。`ResearchWorkflow` 对调用方只暴露 ResearchFlow 自己的输入和更新类型。
+LangGraph 只存在于 `workflows/langgraph_research.py`。它的 Graph、Node 和 State 不进入 FastAPI、领域模型、数据库接口或前端契约；SQLite 中的 Research Run 才是产品状态的权威来源。这样可以保留图编排能力，同时让模拟模式、测试替身和未来替换框架不影响其余模块。
 
-真实外部能力都有测试替身：
+## 4. 文档 `docs`
 
-- `LLMClient`：OpenAI-compatible / Fake；
-- `SearchProvider`：Exa / Fake；
-- `WebPageReader`：搜索结果正文读取器 / Fake；
-- `EmbeddingClient`：Gemini、OpenAI-compatible / Fake；
-- `KnowledgeRetriever`：封装查询向量、模型匹配和余弦排序。
+```text
+docs/
+├── architecture/        当前实现的结构、数据模型、工作流和 SSE 契约
+├── evaluation/          可由仓库脚本复现的搜索与检索结果
+├── guides/              安装、使用、测试、运维和可选在线部署
+├── learning/
+│   ├── assets/          课程共享样式
+│   ├── lessons/         按顺序阅读的项目课程网页
+│   ├── reference/       全栈地图与通信速查页
+│   ├── README.md        课程入口和覆盖范围
+│   └── RESOURCES.md     课程使用的规范、官方文档和论文
+├── product/             当前产品定位与作品集展示材料
+└── README.md            文档总索引
+```
 
-额外学术搜索、OCR、独立向量数据库或新仓储只在出现实际需求和第二种实现时增加，不预设空接口。
+- `architecture/` 回答“代码现在怎样组织、契约是什么”；
+- `guides/` 回答“用户或开发者怎样运行和维护”；
+- `learning/` 回答“这些技术为什么这样工作”；
+- `evaluation/` 保存仍可重复执行的质量证据，不保存一次性选型过程；
+- `product/` 只保留当前定位、范围和展示方式。
 
-## 4. 运行数据
+阶段路线图、ADR、开发复盘和一次性 Provider 比较已经在项目完成后移除；仍有效的结论直接写入对应的当前文档。
+
+## 5. 示例与脚本
+
+```text
+examples/
+├── ai-code-generation-evaluation.md          黄金研究输入
+├── ai-code-generation-evaluation-result.md   可公开示例报告
+└── knowledge-base/                            本地检索评测资料
+
+scripts/
+├── backup_data.ps1              备份 SQLite 与 uploads
+├── restore_data.ps1             恢复到空数据目录
+├── run_e2e.ps1                  启动隔离服务并运行浏览器测试
+├── evaluate_exa_coverage.py     真实网页搜索覆盖度评测
+└── evaluate_local_retrieval.py  真实 Embedding 检索评测
+```
+
+评测脚本会读取本地 `.env` 并调用真实服务；常规自动化测试只使用 Fake 或 HTTP Mock。
+
+## 6. 运行数据与提交边界
 
 ```text
 var/
@@ -73,13 +149,6 @@ var/
 └── uploads/
 ```
 
-数据库与上传目录必须一起备份。`.env`、`var/`、虚拟环境、前端依赖和构建产物不提交；锁文件、`.env.example`、公开样例和 CI 配置应提交。
+数据库与上传目录是同一个数据集，备份和恢复时必须一起处理。`.env`、`var/`、备份、虚拟环境、`node_modules` 和构建产物不提交；锁文件、`.env.example`、公开样例、测试和 CI 配置应提交。
 
-## 5. 暂不引入
-
-- Nx、Turborepo 等额外 monorepo 编排；
-- 微服务、Redis、消息队列和 Kubernetes；
-- 按 LangGraph 节点机械拆分文件；
-- 为只有一个实现的简单类建立形式化接口。
-
-这些选择让仓库保持适合个人作品集的规模，同时保留更换真实 Provider 和工作流实现所需的 seam。
+项目暂不引入额外 monorepo 工具、微服务、Redis、消息队列、Kubernetes、独立向量数据库，也不按 LangGraph 节点或数据库表机械拆分文件。这些边界让个人作品集保持可读，同时保留更换外部 Provider 和工作流实现的接口。
