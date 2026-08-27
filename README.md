@@ -1,6 +1,6 @@
 # ResearchFlow
 
-ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前版本能把开放式研究目标转成结构化计划，联合检索开放 Web 和用户选择的本地资料，保存来源、证据与关键主张，并展示可恢复、可追溯引用的研究过程。
+ResearchFlow 是一个面向科研与技术预研的 AI 深度研究工作台。它能把开放式研究目标转成结构化计划，联合检索开放 Web 和用户选择的本地资料，保存来源、证据与关键主张，并展示可恢复、可追溯引用的研究过程。
 
 项目的首个演示场景是：调研 AI 代码生成工具的现有评测方法，并产出一份可以实际执行的评测方案。
 
@@ -70,9 +70,9 @@ var            本地运行数据（不提交到 Git）
 
 ## 本地启动
 
-需要 Windows 10/11、Git、Node.js 20.9+、npm、uv 和 Python 3.12；不需要 Docker、Redis、GPU 或本地大模型。
+需要 Git、Node.js 20.9+、npm、uv 和 Python 3.12；支持 Windows、Linux 和 macOS，不需要 Docker、Redis、GPU 或本地大模型。
 
-在仓库根目录打开 PowerShell：
+在仓库根目录打开终端（下面以 PowerShell 为例）：
 
 ```powershell
 uv sync --package researchflow-api
@@ -80,16 +80,14 @@ Copy-Item .env.example .env
 npm install --prefix apps/web
 ```
 
+Linux 或 macOS 将第二行改为 `cp .env.example .env`。
+
 然后分别启动后端和前端：
 
 后端终端：
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn researchflow.main:app `
-  --app-dir apps/api/src `
-  --host 127.0.0.1 `
-  --port 8000 `
-  --reload
+uv run --package researchflow-api python -m uvicorn researchflow.main:app --app-dir apps/api/src --host 127.0.0.1 --port 8000 --reload
 ```
 
 前端终端：
@@ -110,7 +108,7 @@ npm --prefix apps/web run dev -- --hostname 127.0.0.1
 
 ## 项目文档
 
-按“使用与部署、产品、架构、调研、学习、实施历史”分类的入口见[文档索引](docs/README.md)。日常启动和排错直接阅读[使用、开发与运维手册](docs/guides/development-and-operations.md)，演示与简历表达见[作品集展示材料](docs/product/portfolio-presentation.md)。
+按“使用与部署、产品、架构、调研、学习、实施历史”分类的入口见[文档索引](docs/README.md)。日常启动和排错直接阅读[使用、开发与运维手册](docs/guides/development-and-operations.md)，演示与简历表达见[作品集展示材料](docs/product/portfolio-presentation.md)；仓库还提供[黄金演示输入](examples/ai-code-generation-evaluation.md)和[示例报告](examples/ai-code-generation-evaluation-result.md)。
 
 ## 许可证
 

@@ -40,7 +40,7 @@ try {
 } finally {
     foreach ($process in $web, $api) {
         if ($null -ne $process -and -not $process.HasExited) {
-            & taskkill.exe /PID $process.Id /T /F | Out-Null
+            & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null
         }
     }
 }

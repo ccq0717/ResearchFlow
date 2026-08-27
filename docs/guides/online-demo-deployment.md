@@ -73,7 +73,7 @@ NEXT_PUBLIC_API_BASE_URL=https://<api-domain>
 
 ## 安全、预算与数据
 
-- 生产配置会拒绝模拟工作流、本地域名、通配 CORS 或短访问码；访问成功后后端只写入 8 小时有效的 HttpOnly、Secure Cookie，不把访问码放进前端包。
+- 生产配置会拒绝模拟工作流、本地域名、通配 CORS 或短访问码；访问成功后后端只写入 8 小时有效的 HttpOnly、Secure、SameSite=None Cookie，使分域 Web 与 API 能携带会话，同时不把访问码放进前端包。
 - API 已限制全站并发数和每日创建数；搜索结果数、上传体积与数量也有上限。平台和 Provider 仍需分别设置费用提醒或硬上限。
 - 日志只记录请求 ID、方法、路径、状态和耗时，不记录请求正文、密钥或文档内容。
 - 演示只上传公开资料。文档片段会发送给 Embedding Provider，检索命中还会发送给 LLM。

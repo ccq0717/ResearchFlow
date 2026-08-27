@@ -11,6 +11,7 @@
 
 ## 当前课程
 
+- [第 0 课：先看懂浏览器、React、FastAPI 和 HTTP](lessons/0000-understand-full-stack-basics.html)
 - [第 1 课：SSE 如何把后端进度实时送到网页](lessons/0001-understand-sse.html)
 - [第 2 课：一次研究任务如何穿过前端、后端和数据库](lessons/0002-follow-a-research-request.html)
 - [第 3 课：SQLite、SQLAlchemy 和 aiosqlite 分别做什么](lessons/0003-understand-sqlite-persistence.html)
@@ -27,21 +28,16 @@
 - [Web 通信方式速查表](reference/web-communication-cheatsheet.html)
 - [当前全栈实现地图](reference/current-full-stack-map.html)
 
-## 后续学习路线
+## 已覆盖的学习路径
 
-课程会跟随 ResearchFlow 的开发进度逐步补充，而不是脱离项目一次性讲完。
+课程已经覆盖理解、运行和讲解当前项目所需的主线知识：
 
-1. 浏览器、前端、后端和数据库分别负责什么（已有入门课）
-2. HTTP 请求与响应、JSON 和 REST API
-3. React 组件、状态与副作用
-4. FastAPI 路由、数据校验与异步函数
-5. SQLite、SQLAlchemy 和数据持久化（已有入门课）
-6. SSE、任务进度和断线重连（已有入门课）
-7. LLM 接口、适配器与结构化输出（已有入门课）
-8. Agent 工作流、LangGraph 与状态管理（已有入门课）
-9. RAG、Embedding 检索、证据和引用（已有专题课）
-10. Fake、Mock、集成测试与真实评测（已有专题课）
-11. 后台任务、失败恢复、日志与可靠性（已有专题课）
-12. Docker、Secret、持久化与在线部署（已有专题课）
+1. 浏览器、HTTP/REST、React、FastAPI 和一次全栈请求；
+2. SQLite、SQLAlchemy、SSE 和异步任务；
+3. LLM 适配器、结构化输出、LangGraph 工作流；
+4. RAG、Embedding、来源、证据、主张与引用；
+5. 测试、评测、可靠性、安全和部署边界。
+
+这些课程以“能读懂和解释 ResearchFlow”为完成边界，不替代系统的 React、FastAPI、数据库或机器学习教材。遇到代码细节时，先看对应课程给出的真实文件路径，再查 [RESOURCES.md](RESOURCES.md) 中的官方资料。
 
 学习方向由 [MISSION.md](MISSION.md) 约束，资料来源记录在 [RESOURCES.md](RESOURCES.md)。

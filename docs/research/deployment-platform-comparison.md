@@ -5,7 +5,7 @@
 
 ## 结论
 
-首次部署选择 **Railway Hobby**：保持现有 Next.js 与 FastAPI 两个服务，只给单实例 API 挂载 1 GB Volume。建议区域为 **Singapore**，平台最低消费 5 美元/月，按实际 RAM、CPU、流量和磁盘计费；项目预算先设为 **5–15 美元/月**，另计 LLM、Exa 与 Embedding 费用。
+项目默认本地演示。若未来需要长期在线链接，首选 **Railway Hobby**：保持现有 Next.js 与 FastAPI 两个服务，只给单实例 API 挂载 1 GB Volume。建议区域为 **Singapore**，平台最低消费 5 美元/月，按实际 RAM、CPU、流量和磁盘计费；项目预算先设为 **5–15 美元/月**，另计 LLM、Exa 与 Embedding 费用。
 
 原因是它不要求把当前动态研究路由改成静态导出。Render 固定费用更容易预测，但当前结构需要两个 Starter Web Service 和磁盘，基线约 14.25 美元/月；若未来前端成功静态化，Render 的约 7.25 美元方案可重新成为首选。
 

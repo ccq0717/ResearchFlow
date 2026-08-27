@@ -5,6 +5,8 @@ from httpx import ASGITransport, AsyncClient
 
 from researchflow.app_factory import create_app
 from researchflow.core.config import Settings
+from researchflow.integrations.llm.fake import FakeLLMClient
+from researchflow.integrations.web.fake import FakeSearchProvider, FakeWebPageReader
 
 
 async def test_default_cors_accepts_both_local_frontend_hosts(tmp_path: Path) -> None:
@@ -51,9 +53,37 @@ async def test_optional_demo_access_code_protects_api_with_http_only_cookie(
     assert blocked.json()["code"] == "DEMO_ACCESS_REQUIRED"
     assert invalid.status_code == 401
     assert unlocked.status_code == 204
-    assert "httponly" in unlocked.headers["set-cookie"].lower()
+    cookie = unlocked.headers["set-cookie"].lower()
+    assert "httponly" in cookie
+    assert "samesite=lax" in cookie
     assert "portfolio-secret" not in unlocked.headers["set-cookie"]
     assert allowed.status_code == 200
+
+
+async def test_production_demo_cookie_supports_separate_web_and_api_origins(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        Settings(
+            _env_file=None,
+            environment="production",
+            workflow_mode="langgraph",
+            llm_model="model",
+            cors_origins=("https://web.example.com",),
+            demo_access_code="long-demo-secret",
+            database_url=f"sqlite+aiosqlite:///{(tmp_path / 'production.db').as_posix()}",
+        ),
+        llm_client=FakeLLMClient(),
+        search_provider=FakeSearchProvider(),
+        page_reader=FakeWebPageReader(),
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="https://api.example.com") as client:
+        response = await client.post("/api/demo-session", json={"access_code": "long-demo-secret"})
+
+    cookie = response.headers["set-cookie"].lower()
+    assert "secure" in cookie
+    assert "samesite=none" in cookie
 
 
 async def test_research_run_completes_and_persists(tmp_path: Path) -> None:

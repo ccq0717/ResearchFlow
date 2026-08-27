@@ -1,10 +1,10 @@
 # ResearchFlow 使用、开发与运维手册
 
-> 适用范围：Windows 本地使用、开发、测试与排错
+> 适用范围：Windows、Linux 和 macOS 本地使用、开发、测试与排错
 >
 > 最后更新：2026-08-27
 
-ResearchFlow 由 Next.js 前端、FastAPI 后端、SQLite、本地上传目录以及远程 LLM、网页搜索和 Embedding 服务组成。在线部署另见[作品集 Demo 部署指南](online-demo-deployment.md)。
+ResearchFlow 由 Next.js 前端、FastAPI 后端、SQLite、本地上传目录以及远程 LLM、网页搜索和 Embedding 服务组成。在线部署另见[可选在线 Demo 部署指南](online-demo-deployment.md)。
 
 ## 1. 使用产品
 
@@ -30,7 +30,7 @@ PDF 只读取已有文本层，不执行 OCR。扫描件会进入 `DOCUMENT_NO_T
 
 ### 环境要求
 
-- Windows 10/11；
+- Windows、Linux 或 macOS；
 - Git；
 - Node.js 20.9 或更高版本；
 - npm；
@@ -49,6 +49,8 @@ Copy-Item .env.example .env
 npm install --prefix apps/web
 ```
 
+Linux 或 macOS 将 `Copy-Item` 改为 `cp`。核心应用没有 Windows 专属依赖；仓库中的 `.ps1` 备份与 E2E 辅助脚本需要 PowerShell。
+
 `.env` 保存本机配置且已被 Git 忽略。不要把真实密钥写入 `.env.example`、文档、截图或前端变量。
 
 ### 日常启动
@@ -56,11 +58,7 @@ npm install --prefix apps/web
 后端：
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn researchflow.main:app `
-  --app-dir apps/api/src `
-  --host 127.0.0.1 `
-  --port 8000 `
-  --reload
+uv run --package researchflow-api python -m uvicorn researchflow.main:app --app-dir apps/api/src --host 127.0.0.1 --port 8000 --reload
 ```
 
 前端：
@@ -180,9 +178,9 @@ var/
 后端：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest apps/api/tests
-.\.venv\Scripts\ruff.exe check apps/api scripts
-.\.venv\Scripts\ruff.exe format --check apps/api scripts
+uv run --package researchflow-api pytest apps/api/tests
+uv run --package researchflow-api ruff check apps/api scripts
+uv run --package researchflow-api ruff format --check apps/api scripts
 ```
 
 前端：
@@ -197,8 +195,8 @@ npm run test:e2e --prefix apps/web
 真实服务评测不会进入常规测试，需手动执行并消耗少量额度：
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\evaluate_exa_coverage.py
-.\.venv\Scripts\python.exe scripts\evaluate_local_retrieval.py
+uv run --package researchflow-api python scripts/evaluate_exa_coverage.py
+uv run --package researchflow-api python scripts/evaluate_local_retrieval.py
 ```
 
 自动化测试显式禁用仓库 `.env`，并使用 Fake 或 HTTP Mock，不会读取真实密钥或访问外部服务。

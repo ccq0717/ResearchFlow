@@ -52,7 +52,7 @@
   <pre><code>await connection.run_sync(Base.metadata.create_all)</code></pre>
   <p>如果数据库文件或表不存在，SQLAlchemy 会根据模型创建它们；已经存在时则保留原数据。因此首次启动会自动生成文件，重启后历史记录仍然存在。</p>
 
-  <h2>5. 当前十四张表怎样分工</h2>
+  <h2>5. 十四张内容表怎样分工</h2>
   <table>
     <thead><tr><th>表</th><th>保存什么</th><th>关系</th></tr></thead>
     <tbody>
@@ -72,6 +72,7 @@
       <tr><td><code>research_run_documents</code></td><td>一次研究选择的知识文档范围</td><td>连接研究运行和知识文档</td></tr>
     </tbody>
   </table>
+  <p>此外，<code>research_run_controls</code> 保存归档与重试谱系，<code>schema_migrations</code> 保存数据库结构版本；完整清单以<a href="../../architecture/domain-model.md">核心数据模型</a>为准。</p>
   <p><code>research_plans.run_id</code> 和 <code>research_events.run_id</code> 都指向所属任务。计划以任务 ID 为主键；事件序号和任务 ID 共同构成主键，使每个任务的事件能按顺序补发。检索任务、来源、证据和主张也用 run_id 归属到同一次运行。来源元数据和网页/本地来源属性放在独立扩展表中，因此旧数据库无需给原来源表破坏性加列。知识文档可跨运行复用，片段向量记录生成它的模型与维度；本地命中进入某次运行后仍转换成普通 Source，继续使用同一 Evidence 链路。</p>
 
   <h2>6. SQLAlchemy 帮了什么忙</h2>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 0 课：前后端基础地图 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0000 · 约 15 分钟</p>
+  <h1>先看懂浏览器、React、FastAPI 和 HTTP</h1>
+  <p class="lead">这一课只补齐阅读 ResearchFlow 所需的前后端基础：各层负责什么、数据怎样跨过网络，以及代码应该从哪里开始看。</p>
+
+  <div class="callout"><strong>先记结论：</strong>浏览器不能直接调用 Python 或读 SQLite。React 负责页面，FastAPI 负责业务入口，两者通过 HTTP 交换 JSON。</div>
+
+  <h2>1. 四层各做一件事</h2>
+  <table>
+    <thead><tr><th>层</th><th>当前技术</th><th>职责</th></tr></thead>
+    <tbody>
+      <tr><td>浏览器</td><td>Chrome / Edge</td><td>运行前端代码、显示界面、发起网络请求</td></tr>
+      <tr><td>前端</td><td>Next.js + React</td><td>收集输入、维护页面状态、调用 API、渲染结果</td></tr>
+      <tr><td>后端</td><td>FastAPI + Python</td><td>校验请求、组织研究流程、保护密钥与数据</td></tr>
+      <tr><td>持久化</td><td>SQLAlchemy + SQLite</td><td>让任务、来源和报告在重启后仍然存在</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. HTTP 请求和响应是什么</h2>
+  <p>一次 HTTP 请求至少包含方法、地址、Header 和可选正文。后端返回状态码、Header 和正文。ResearchFlow 的创建请求可以简化成：</p>
+  <pre><code>POST /api/research-runs
+Content-Type: application/json
+
+{"goal": "调研 AI 代码生成评测方法", "document_ids": []}</code></pre>
+  <p><code>POST</code> 表示创建，路径表示资源入口，JSON 是跨语言的数据格式。成功时后端返回 <code>201 Created</code> 和任务对象；输入无效、未授权或服务繁忙时返回对应的 4xx 状态。</p>
+
+  <h2>3. REST 在项目里意味着什么</h2>
+  <p>REST 不是某个库，而是一种围绕资源设计 HTTP 接口的方式。ResearchFlow 用 <code>/api/research-runs</code> 表示研究运行集合，用 <code>/api/research-runs/{run_id}</code> 表示其中一项，再用 HTTP 方法表达创建、读取、修改和删除。耗时进度不是一次响应，因此另用 SSE 持续推送。</p>
+
+  <h2>4. React 组件、状态与副作用</h2>
+  <p>React 组件是返回界面的函数。<code>props</code> 是父组件传入的数据，<code>state</code> 是组件需要记住并触发重新渲染的数据，<code>useEffect</code> 用于连接 API、SSE 等页面外部系统。</p>
+  <pre><code>const [runs, setRuns] = useState&lt;ResearchRun[]&gt;([]);
+
+useEffect(() =&gt; {
+  void listResearchRuns().then(setRuns);
+}, []);</code></pre>
+  <p>这段代码表示：页面先以空列表渲染，组件挂载后读取历史任务，响应回来后更新状态并重新渲染。当前 Dashboard 位于 <a href="../../../apps/web/src/app/page.tsx"><code>apps/web/src/app/page.tsx</code></a>，所有后端调用集中在 <a href="../../../apps/web/src/lib/api.ts"><code>src/lib/api.ts</code></a>，避免组件重复拼接 URL 和请求选项。</p>
+
+  <h2>5. Next.js 在这里做什么</h2>
+  <p>Next.js 提供项目结构、开发服务器、构建和按文件生成路由。<code>app/page.tsx</code> 对应首页，<code>app/research/[runId]/page.tsx</code> 中的方括号表示动态任务 ID。当前交互页面使用 Client Component，因此可以响应点击、保存 state 和建立 SSE 连接。</p>
+
+  <h2>6. FastAPI、Pydantic 与异步函数</h2>
+  <p>FastAPI 把 Python 函数暴露为 HTTP 路由；Pydantic 根据类型检查 JSON，并把合法输入转换成 Python 对象。<code>async def</code> 允许服务器在等待数据库或外部 API 时处理其他工作，而不是占住线程空等。</p>
+  <pre><code>@router.post("/research-runs", status_code=201)
+async def create_research_run(body: CreateResearchRunRequest, request: Request):
+    run = await _application(request).create_run(body.goal, body.document_ids)
+    return ResearchRunResponse.from_domain(run)</code></pre>
+  <p>实际路由位于 <a href="../../../apps/api/src/researchflow/api/routes.py"><code>api/routes.py</code></a>，请求与响应模型位于 <a href="../../../apps/api/src/researchflow/api/schemas.py"><code>api/schemas.py</code></a>。路由只处理 HTTP 转换，业务编排交给 Application，数据库操作交给 Repository。</p>
+
+  <h2>7. 一次操作的完整方向</h2>
+  <div class="card">
+    <p><strong>用户点击 → React 事件处理 → API 客户端发送 JSON → FastAPI 校验 → Application 执行业务 → Repository 写入 SQLite → JSON 响应 → React 更新 state</strong></p>
+    <p>先记住这条主线，再学习 SSE、LangGraph 或 RAG，就不会把“页面状态”“运行状态”和“数据库记录”混成一件事。</p>
+  </div>
+
+  <p class="footer">下一课：<a href="0001-understand-sse.html">SSE 如何推送研究进度</a> · 速查：<a href="../reference/current-full-stack-map.html">当前全栈实现地图</a></p>
+</main>
+</body>
+</html>

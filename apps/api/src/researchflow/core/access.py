@@ -17,6 +17,7 @@ class DemoAccessGuard:
     ) -> None:
         self._access_code = access_code
         self.secure_cookie = secure_cookie
+        self.cookie_same_site = "none" if secure_cookie else "lax"
         self.session_ttl_seconds = session_ttl_seconds
         self._now = now
 

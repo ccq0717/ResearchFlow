@@ -278,4 +278,4 @@ M4 的实现、检索评测、验证和阶段门禁结论见 [M4 阶段复盘](r
 - 实现、测试、文档、复盘和路线状态尽量放在同一个完整改动中提交；
 - 项目进入多人协作前，不额外维护 GitHub Issues。
 
-相关文档：[项目讨论记录](project-discussion.md)、[MVP 技术规格](mvp-spec.md)、[LangGraph 架构决策](../decisions/0001-use-langgraph-behind-workflow-interface.md)、[作品集在线 Demo 部署指南](../guides/online-demo-deployment.md)。
+相关文档：[项目讨论记录](project-discussion.md)、[MVP 技术规格](mvp-spec.md)、[LangGraph 架构决策](../decisions/0001-use-langgraph-behind-workflow-interface.md)、[可选在线 Demo 部署指南](../guides/online-demo-deployment.md)。

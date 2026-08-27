@@ -50,7 +50,7 @@ async def create_demo_session(body: DemoSessionRequest, request: Request) -> Res
         guard.issue_session(),
         httponly=True,
         secure=guard.secure_cookie,
-        samesite="lax",
+        samesite=guard.cookie_same_site,
         max_age=guard.session_ttl_seconds,
     )
     return response
