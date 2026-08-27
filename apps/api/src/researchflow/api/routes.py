@@ -9,11 +9,13 @@ from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile,
 from fastapi.responses import Response, StreamingResponse
 
 from researchflow.api.schemas import (
+    ArchiveResearchRunRequest,
     CreateResearchRunRequest,
     DocumentChunkListResponse,
     DocumentChunkResponse,
     KnowledgeDocumentListResponse,
     KnowledgeDocumentResponse,
+    RenameResearchRunRequest,
     ResearchEventListResponse,
     ResearchEventResponse,
     ResearchMaterialsResponse,
@@ -180,8 +182,10 @@ async def create_research_run(
 
 
 @router.get("/research-runs", response_model=ResearchRunListResponse)
-async def list_research_runs(request: Request) -> ResearchRunListResponse:
-    runs = await _application(request).list_runs()
+async def list_research_runs(
+    request: Request, include_archived: bool = False
+) -> ResearchRunListResponse:
+    runs = await _application(request).list_runs(include_archived=include_archived)
     return ResearchRunListResponse(items=[ResearchRunResponse.from_domain(run) for run in runs])
 
 
@@ -203,6 +207,48 @@ async def cancel_research_run(run_id: UUID, request: Request) -> ResearchRunResp
     except ResearchRunApplicationError as error:
         raise _run_error(error) from error
     return ResearchRunResponse.from_domain(run)
+
+
+@router.post("/research-runs/{run_id}/retry", response_model=ResearchRunResponse)
+async def retry_research_run(run_id: UUID, request: Request) -> ResearchRunResponse:
+    try:
+        run = await _application(request).retry_run(run_id)
+    except (ResearchRunApplicationError, KnowledgeLibraryError) as error:
+        if isinstance(error, KnowledgeLibraryError):
+            raise _knowledge_error(error) from error
+        raise _run_error(error) from error
+    return ResearchRunResponse.from_domain(run)
+
+
+@router.patch("/research-runs/{run_id}", response_model=ResearchRunResponse)
+async def rename_research_run(
+    run_id: UUID, body: RenameResearchRunRequest, request: Request
+) -> ResearchRunResponse:
+    try:
+        run = await _application(request).rename_run(run_id, body.title)
+    except ResearchRunApplicationError as error:
+        raise _run_error(error) from error
+    return ResearchRunResponse.from_domain(run)
+
+
+@router.patch("/research-runs/{run_id}/archive", response_model=ResearchRunResponse)
+async def archive_research_run(
+    run_id: UUID, body: ArchiveResearchRunRequest, request: Request
+) -> ResearchRunResponse:
+    try:
+        run = await _application(request).archive_run(run_id, body.archived)
+    except ResearchRunApplicationError as error:
+        raise _run_error(error) from error
+    return ResearchRunResponse.from_domain(run)
+
+
+@router.delete("/research-runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_research_run(run_id: UUID, request: Request) -> Response:
+    try:
+        await _application(request).delete_run(run_id)
+    except ResearchRunApplicationError as error:
+        raise _run_error(error) from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/research-runs/{run_id}/plan", response_model=ResearchPlanEnvelope)

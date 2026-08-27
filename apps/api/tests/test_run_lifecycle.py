@@ -176,3 +176,87 @@ async def test_startup_recovers_orphaned_run(tmp_path: Path) -> None:
     assert recovered.status == ResearchRunStatus.FAILED
     assert recovered.error_code == "RUN_INTERRUPTED"
     assert events[-1].type == "run.failed"
+
+
+async def test_failed_run_can_be_retried_once_as_a_new_run(tmp_path: Path) -> None:
+    database_path = tmp_path / "retry.db"
+    settings = _settings(database_path)
+    engine = create_engine(settings.database_url)
+    await create_schema(engine)
+    repository = SqliteResearchRepository(create_session_factory(engine))
+    now = datetime.now(UTC)
+    failed = ResearchRun(
+        id=uuid4(),
+        goal="验证失败任务可以保留原记录并创建一次新的研究运行",
+        title="验证失败任务重试",
+        status=ResearchRunStatus.FAILED,
+        current_stage=None,
+        progress=30,
+        report_markdown=None,
+        error_code="RUN_INTERRUPTED",
+        error_message="服务曾意外退出",
+        created_at=now,
+        updated_at=now,
+        started_at=now,
+        completed_at=now,
+    )
+    await repository.create(failed)
+    await engine.dispose()
+
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(f"/api/research-runs/{failed.id}/retry")
+            assert response.status_code == 200
+            retried = response.json()
+            assert retried["id"] != str(failed.id)
+            assert retried["retry_of"] == str(failed.id)
+            assert retried["attempt"] == 2
+
+            for _ in range(100):
+                detail = await client.get(f"/api/research-runs/{retried['id']}")
+                if detail.json()["status"] == "completed":
+                    break
+                await asyncio.sleep(0.01)
+            assert detail.json()["status"] == "completed"
+
+            invalid = await client.post(f"/api/research-runs/{retried['id']}/retry")
+            assert invalid.status_code == 409
+            assert invalid.json()["code"] == "RUN_NOT_RETRYABLE"
+
+
+async def test_terminal_run_can_be_renamed_archived_and_deleted(tmp_path: Path) -> None:
+    app = create_app(_settings(tmp_path / "management.db"))
+
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            created = await client.post(
+                "/api/research-runs",
+                json={"goal": "验证研究记录可以重命名归档取消归档并永久删除"},
+            )
+            run_id = created.json()["id"]
+            for _ in range(100):
+                detail = await client.get(f"/api/research-runs/{run_id}")
+                if detail.json()["status"] == "completed":
+                    break
+                await asyncio.sleep(0.01)
+
+            renamed = await client.patch(
+                f"/api/research-runs/{run_id}", json={"title": "  新的研究标题  "}
+            )
+            assert renamed.json()["title"] == "新的研究标题"
+
+            archived = await client.patch(
+                f"/api/research-runs/{run_id}/archive", json={"archived": True}
+            )
+            assert archived.json()["archived"] is True
+            assert (await client.get("/api/research-runs")).json()["items"] == []
+            assert (
+                len((await client.get("/api/research-runs?include_archived=true")).json()["items"])
+                == 1
+            )
+
+            await client.patch(f"/api/research-runs/{run_id}/archive", json={"archived": False})
+            deleted = await client.delete(f"/api/research-runs/{run_id}")
+            assert deleted.status_code == 204
+            assert (await client.get(f"/api/research-runs/{run_id}")).status_code == 404

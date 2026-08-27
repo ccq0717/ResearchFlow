@@ -26,6 +26,9 @@ export interface ResearchRun {
   updated_at: string;
   started_at: string | null;
   completed_at: string | null;
+  archived: boolean;
+  retry_of: string | null;
+  attempt: number;
 }
 
 export interface ResearchQuestion {
@@ -166,8 +169,10 @@ export function createResearchRun(
   });
 }
 
-export async function listResearchRuns(): Promise<ResearchRun[]> {
-  const response = await request<{ items: ResearchRun[] }>("/api/research-runs");
+export async function listResearchRuns(includeArchived = false): Promise<ResearchRun[]> {
+  const response = await request<{ items: ResearchRun[] }>(
+    "/api/research-runs" + (includeArchived ? "?include_archived=true" : ""),
+  );
   return response.items;
 }
 
@@ -179,6 +184,36 @@ export function cancelResearchRun(runId: string): Promise<ResearchRun> {
   return request<ResearchRun>("/api/research-runs/" + runId + "/cancel", {
     method: "POST",
   });
+}
+
+export function retryResearchRun(runId: string): Promise<ResearchRun> {
+  return request<ResearchRun>("/api/research-runs/" + runId + "/retry", {
+    method: "POST",
+  });
+}
+
+export function renameResearchRun(runId: string, title: string): Promise<ResearchRun> {
+  return request<ResearchRun>("/api/research-runs/" + runId, {
+    method: "PATCH",
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function archiveResearchRun(
+  runId: string,
+  archived: boolean,
+): Promise<ResearchRun> {
+  return request<ResearchRun>("/api/research-runs/" + runId + "/archive", {
+    method: "PATCH",
+    body: JSON.stringify({ archived }),
+  });
+}
+
+export async function deleteResearchRun(runId: string): Promise<void> {
+  const response = await fetch(apiBaseUrl + "/api/research-runs/" + runId, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("删除研究任务失败（" + response.status + "）");
 }
 
 export async function listResearchEvents(

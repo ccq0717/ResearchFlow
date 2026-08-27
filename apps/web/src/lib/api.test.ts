@@ -1,8 +1,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cancelResearchRun } from "./api";
+import { cancelResearchRun, retryResearchRun } from "./api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("retryResearchRun", () => {
+  it("通过公开重试端点创建新的运行", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "run-2", retry_of: "run-1", attempt: 2 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(retryResearchRun("run-1")).resolves.toMatchObject({
+      id: "run-2",
+      retry_of: "run-1",
+      attempt: 2,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/research-runs/run-1/retry",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
 });
 
 describe("cancelResearchRun", () => {

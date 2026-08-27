@@ -12,7 +12,7 @@
 
 ## 2. 运行、计划与问题
 
-`ResearchRun` 表示从目标到报告的一次完整运行，状态为 `queued`、`running`、`completed`、`failed` 或 `cancelled`。`ResearchRunOutcome` 把终态和终结事件放在同一事务中，避免 SSE 竞态。
+`ResearchRun` 表示从目标到报告的一次完整运行，状态为 `queued`、`running`、`completed`、`failed` 或 `cancelled`。失败运行最多创建一个新的第二次运行；`retry_of` 和 `attempt` 保存谱系，原失败记录不被覆盖。这是任务级恢复，不声称从 LangGraph 节点断点续跑。`ResearchRunOutcome` 把终态和终结事件放在同一事务中，避免 SSE 竞态。
 
 `ResearchPlan` 是检索前的结构化中间产物，包含摘要、交付物、模型元数据和有序 `ResearchQuestion`。每个问题包含：
 
@@ -60,6 +60,7 @@ planning → retrieving → analyzing → writing → finalizing
 ## 6. 当前 SQLite 表
 
 - `research_runs`
+- `research_run_controls`
 - `research_plans`
 - `research_events`
 - `research_tasks`
@@ -74,7 +75,7 @@ planning → retrieving → analyzing → writing → finalizing
 - `document_chunk_embeddings`
 - `research_run_documents`
 
-后端启动时使用 SQLAlchemy `create_all` 补齐新表。当前没有正式迁移工具，因此公开部署前仍需加入迁移和回滚方案。
+`research_run_controls` 以附属表保存归档和重试谱系，使已有数据库可由 `create_all` 无损补表。正式迁移和回滚方案仍需在公开部署前加入。
 
 ## 7. 已验证的替换 seam
 
@@ -86,7 +87,3 @@ planning → retrieving → analyzing → writing → finalizing
 - `KnowledgeRetriever`：基于持久化 Embedding 的余弦相似度检索；
 - `KnowledgeLibrary`：封装上传校验、安全存储、解析、状态、重处理和删除生命周期；
 - SQLite 研究仓储与知识库仓储按职责拆分，测试使用临时数据库，不提前抽象不存在的第二种持久化实现。
-
-## 8. 后续模型
-
-`WorkflowAttempt` 只有在任务重试和失败恢复真正实现时才引入。

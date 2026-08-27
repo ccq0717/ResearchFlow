@@ -43,6 +43,9 @@ class ResearchRunApplication:
         self,
         goal: str,
         document_ids: tuple[UUID, ...] = (),
+        *,
+        retry_of: UUID | None = None,
+        attempt: int = 1,
     ) -> ResearchRun:
         selected_document_ids = await self._knowledge_library.validate_selection(document_ids)
         now = datetime.now(UTC)
@@ -60,14 +63,23 @@ class ResearchRunApplication:
             updated_at=now,
             started_at=None,
             completed_at=None,
+            retry_of=retry_of,
+            attempt=attempt,
         )
         await self._repository.create(run)
         await self._knowledge_library.link_run(run.id, selected_document_ids)
         await self._repository.append_event(
             run.id,
             event_type="run.queued",
-            message="研究任务已创建，等待执行",
+            message=(
+                f"研究任务第 {attempt} 次运行已创建，等待执行"
+                if retry_of is not None
+                else "研究任务已创建，等待执行"
+            ),
             progress=0,
+            payload={"retry_of": str(retry_of), "attempt": attempt}
+            if retry_of is not None
+            else None,
         )
         task = asyncio.create_task(
             self._execute_workflow(run.id, run.goal, selected_document_ids),
@@ -212,6 +224,51 @@ class ResearchRunApplication:
                 ),
             )
 
+    async def retry_run(self, run_id: UUID) -> ResearchRun:
+        source = await self._require_run(run_id)
+        if source.status is not ResearchRunStatus.FAILED:
+            raise ResearchRunApplicationError("RUN_NOT_RETRYABLE", "只有失败的研究任务可以重试")
+        if source.attempt >= 2:
+            raise ResearchRunApplicationError(
+                "RUN_RETRY_LIMIT_REACHED", "该研究任务已经达到一次重试上限"
+            )
+        document_ids = await self._knowledge_library.list_run_document_ids(run_id)
+        retried = await self.create_run(
+            source.goal,
+            document_ids,
+            retry_of=source.id,
+            attempt=source.attempt + 1,
+        )
+        await self._repository.append_event(
+            source.id,
+            event_type="run.retry.created",
+            message="已创建一次新的研究运行",
+            payload={"run_id": str(retried.id), "attempt": retried.attempt},
+        )
+        return retried
+
+    async def rename_run(self, run_id: UUID, title: str) -> ResearchRun:
+        await self._require_run(run_id)
+        return await self._repository.rename(run_id, title)
+
+    async def archive_run(self, run_id: UUID, archived: bool) -> ResearchRun:
+        run = await self._require_run(run_id)
+        if not run.status.is_terminal:
+            raise ResearchRunApplicationError("RUN_NOT_ARCHIVABLE", "只有已结束的研究任务可以归档")
+        return await self._repository.set_archived(run_id, archived)
+
+    async def delete_run(self, run_id: UUID) -> None:
+        run = await self._require_run(run_id)
+        if not run.status.is_terminal:
+            raise ResearchRunApplicationError("RUN_NOT_DELETABLE", "只有已结束的研究任务可以删除")
+        await self._repository.delete(run_id)
+
+    async def _require_run(self, run_id: UUID) -> ResearchRun:
+        run = await self._repository.get(run_id)
+        if run is None:
+            raise ResearchRunApplicationError("RUN_NOT_FOUND", "研究任务不存在")
+        return run
+
     def _on_task_done(self, task: asyncio.Task[None]) -> None:
         run_id = self._tasks.pop(task, None)
         if task.cancelled():
@@ -266,5 +323,5 @@ class ResearchRunApplication:
     async def events_after(self, run_id: UUID, sequence: int) -> list[ResearchEvent]:
         return await self._repository.events_after(run_id, sequence)
 
-    async def list_runs(self) -> list[ResearchRun]:
-        return await self._repository.list_runs()
+    async def list_runs(self, *, include_archived: bool = False) -> list[ResearchRun]:
+        return await self._repository.list_runs(include_archived=include_archived)

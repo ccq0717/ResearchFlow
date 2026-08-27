@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import {
+  archiveResearchRun,
   createResearchRun,
   deleteKnowledgeDocument,
+  deleteResearchRun,
   listKnowledgeDocuments,
   listResearchRuns,
   reprocessKnowledgeDocument,
+  renameResearchRun,
   uploadKnowledgeDocument,
   type KnowledgeDocument,
   type ResearchRun,
@@ -41,17 +44,18 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listResearchRuns(), listKnowledgeDocuments()])
+    Promise.all([listResearchRuns(showArchived), listKnowledgeDocuments()])
       .then(([nextRuns, nextDocuments]) => {
         setRuns(nextRuns);
         setDocuments(nextDocuments);
       })
       .catch(() => setError("无法读取研究历史，请确认后端已经启动。"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [showArchived]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -118,6 +122,40 @@ export default function Dashboard() {
     );
   }
 
+  async function renameRun(run: ResearchRun) {
+    const title = window.prompt("输入新的研究记录标题", run.title)?.trim();
+    if (!title || title === run.title) return;
+    try {
+      const updated = await renameResearchRun(run.id, title);
+      setRuns((current) => current.map((item) => (item.id === run.id ? updated : item)));
+    } catch {
+      setError("重命名研究记录失败。");
+    }
+  }
+
+  async function toggleArchive(run: ResearchRun) {
+    try {
+      const updated = await archiveResearchRun(run.id, !run.archived);
+      setRuns((current) =>
+        showArchived
+          ? current.map((item) => (item.id === run.id ? updated : item))
+          : current.filter((item) => item.id !== run.id),
+      );
+    } catch {
+      setError("归档研究记录失败；运行中的任务不能归档。");
+    }
+  }
+
+  async function removeRun(run: ResearchRun) {
+    if (!window.confirm("永久删除该研究记录及其中间材料？此操作无法撤销。")) return;
+    try {
+      await deleteResearchRun(run.id);
+      setRuns((current) => current.filter((item) => item.id !== run.id));
+    } catch {
+      setError("删除研究记录失败；请先等待任务结束或取消任务。");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f4f1e9] text-[#17231d]">
       <section className="border-b border-[#d8d3c7] bg-[#173f35] text-white">
@@ -182,7 +220,15 @@ export default function Dashboard() {
               <p className="text-sm font-semibold text-[#7b4f2f]">HISTORY</p>
               <h2 className="mt-2 text-2xl font-semibold">研究记录</h2>
             </div>
-            <span className="text-sm text-[#6d746f]">{runs.length} 项</span>
+            <label className="flex items-center gap-2 text-sm text-[#6d746f]">
+              <input
+                checked={showArchived}
+                className="accent-[#2f6f5e]"
+                onChange={(event) => setShowArchived(event.target.checked)}
+                type="checkbox"
+              />
+              显示归档
+            </label>
           </div>
 
           <div className="mt-6 space-y-3">
@@ -193,15 +239,19 @@ export default function Dashboard() {
               </div>
             )}
             {runs.map((run) => (
-              <Link
-                className="block rounded-2xl border border-[#d5cec0] bg-white p-4 transition hover:-translate-y-0.5 hover:border-[#8ea99d]"
-                href={"/research/" + run.id}
+              <article
+                className="rounded-2xl border border-[#d5cec0] bg-white p-4"
                 key={run.id}
               >
                 <div className="flex items-start justify-between gap-4">
-                  <h3 className="line-clamp-2 font-medium leading-6">{run.title}</h3>
+                  <Link
+                    className="line-clamp-2 font-medium leading-6 hover:text-[#2f6f5e] hover:underline"
+                    href={"/research/" + run.id}
+                  >
+                    {run.title}
+                  </Link>
                   <span className="shrink-0 rounded-full bg-[#edf3ef] px-2.5 py-1 text-xs font-medium text-[#2f6f5e]">
-                    {statusLabel[run.status]}
+                    {run.archived ? "已归档" : statusLabel[run.status]}
                   </span>
                 </div>
                 <p className="mt-3 text-xs text-[#777c78]">
@@ -214,7 +264,22 @@ export default function Dashboard() {
                     style={{ width: run.progress + "%" }}
                   />
                 </div>
-              </Link>
+                <div className="mt-3 flex gap-3 text-xs">
+                  <button className="underline" onClick={() => renameRun(run)} type="button">
+                    重命名
+                  </button>
+                  <button className="underline" onClick={() => toggleArchive(run)} type="button">
+                    {run.archived ? "取消归档" : "归档"}
+                  </button>
+                  <button
+                    className="text-[#9a5540] underline"
+                    onClick={() => removeRun(run)}
+                    type="button"
+                  >
+                    删除
+                  </button>
+                </div>
+              </article>
             ))}
           </div>
         </section>

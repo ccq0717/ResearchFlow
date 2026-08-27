@@ -5,7 +5,18 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text, func, select
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+    select,
+)
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -47,6 +58,19 @@ class ResearchRunRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ResearchRunControlRow(Base):
+    __tablename__ = "research_run_controls"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("research_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    retry_of: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("research_runs.id", ondelete="SET NULL")
+    )
+    attempt: Mapped[int] = mapped_column(Integer, default=1)
 
 
 class ResearchPlanRow(Base):
@@ -190,20 +214,77 @@ class SqliteResearchRepository:
     async def create(self, run: ResearchRun) -> ResearchRun:
         async with self._session() as session:
             session.add(self._run_to_row(run))
+            await session.flush()
+            session.add(
+                ResearchRunControlRow(
+                    run_id=str(run.id),
+                    archived=run.archived,
+                    retry_of=str(run.retry_of) if run.retry_of else None,
+                    attempt=run.attempt,
+                )
+            )
             await session.commit()
         return run
 
     async def get(self, run_id: UUID) -> ResearchRun | None:
         async with self._session() as session:
             row = await session.get(ResearchRunRow, str(run_id))
-            return self._row_to_run(row) if row else None
+            if row is None:
+                return None
+            control = await session.get(ResearchRunControlRow, str(run_id))
+            return self._row_to_run(row, control)
 
-    async def list_runs(self) -> list[ResearchRun]:
+    async def list_runs(self, *, include_archived: bool = False) -> list[ResearchRun]:
         async with self._session() as session:
-            result = await session.scalars(
-                select(ResearchRunRow).order_by(ResearchRunRow.created_at.desc())
+            statement = (
+                select(ResearchRunRow, ResearchRunControlRow)
+                .outerjoin(ResearchRunControlRow, ResearchRunControlRow.run_id == ResearchRunRow.id)
+                .order_by(ResearchRunRow.created_at.desc())
             )
-            return [self._row_to_run(row) for row in result]
+            if not include_archived:
+                statement = statement.where(
+                    ResearchRunControlRow.archived.is_(False)
+                    | ResearchRunControlRow.run_id.is_(None)
+                )
+            result = await session.execute(statement)
+            return [self._row_to_run(row, control) for row, control in result]
+
+    async def rename(self, run_id: UUID, title: str) -> ResearchRun:
+        async with self._session() as session:
+            row = await session.get(ResearchRunRow, str(run_id))
+            if row is None:
+                raise KeyError(str(run_id))
+            row.title = title
+            row.updated_at = datetime.now(UTC)
+            await session.commit()
+            await session.refresh(row)
+            control = await session.get(ResearchRunControlRow, str(run_id))
+            return self._row_to_run(row, control)
+
+    async def set_archived(self, run_id: UUID, archived: bool) -> ResearchRun:
+        async with self._session() as session:
+            row = await session.get(ResearchRunRow, str(run_id))
+            if row is None:
+                raise KeyError(str(run_id))
+            control = await session.get(ResearchRunControlRow, str(run_id))
+            if control is None:
+                control = ResearchRunControlRow(run_id=str(run_id), archived=archived, attempt=1)
+                session.add(control)
+            else:
+                control.archived = archived
+            row.updated_at = datetime.now(UTC)
+            await session.commit()
+            await session.refresh(row)
+            return self._row_to_run(row, control)
+
+    async def delete(self, run_id: UUID) -> bool:
+        async with self._session() as session:
+            row = await session.get(ResearchRunRow, str(run_id))
+            if row is None:
+                return False
+            await session.delete(row)
+            await session.commit()
+            return True
 
     async def update(
         self,
@@ -241,7 +322,8 @@ class SqliteResearchRepository:
             row.updated_at = datetime.now(UTC)
             await session.commit()
             await session.refresh(row)
-            return self._row_to_run(row)
+            control = await session.get(ResearchRunControlRow, str(run_id))
+            return self._row_to_run(row, control)
 
     async def finalize(self, run_id: UUID, outcome: ResearchRunOutcome) -> ResearchRun:
         """在一个事务中保存终态和全部终态事件。"""
@@ -282,7 +364,8 @@ class SqliteResearchRepository:
             session.add_all(event_rows)
             await session.commit()
             await session.refresh(row)
-            return self._row_to_run(row)
+            control = await session.get(ResearchRunControlRow, str(run_id))
+            return self._row_to_run(row, control)
 
     async def save_plan(self, plan: ResearchPlan) -> ResearchPlan:
         row = ResearchPlanRow(
@@ -549,7 +632,9 @@ class SqliteResearchRepository:
         )
 
     @staticmethod
-    def _row_to_run(row: ResearchRunRow) -> ResearchRun:
+    def _row_to_run(
+        row: ResearchRunRow, control: ResearchRunControlRow | None = None
+    ) -> ResearchRun:
         return ResearchRun(
             id=UUID(row.id),
             goal=row.goal,
@@ -564,6 +649,9 @@ class SqliteResearchRepository:
             updated_at=SqliteResearchRepository._as_utc(row.updated_at),
             started_at=SqliteResearchRepository._as_utc(row.started_at),
             completed_at=SqliteResearchRepository._as_utc(row.completed_at),
+            archived=control.archived if control else False,
+            retry_of=UUID(control.retry_of) if control and control.retry_of else None,
+            attempt=control.attempt if control else 1,
         )
 
     @staticmethod

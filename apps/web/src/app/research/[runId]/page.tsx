@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ResearchErrorPanel } from "./research-error-panel";
 import { ResearchMaterialsPanel } from "./research-materials-panel";
@@ -14,6 +14,7 @@ import {
   getResearchPlan,
   getResearchRun,
   listResearchEvents,
+  retryResearchRun,
   type ResearchEventData,
   type ResearchMaterials,
   type ResearchPlan,
@@ -37,6 +38,7 @@ const stages: Array<{ id: ResearchStage; label: string }> = [
 
 export default function ResearchWorkspace() {
   const params = useParams<{ runId: string }>();
+  const router = useRouter();
   const runId = params.runId;
   const [run, setRun] = useState<ResearchRun | null>(null);
   const [plan, setPlan] = useState<ResearchPlan | null>(null);
@@ -45,6 +47,7 @@ export default function ResearchWorkspace() {
   const [connection, setConnection] = useState("正在连接");
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const terminal = useMemo(
@@ -188,6 +191,18 @@ export default function ResearchWorkspace() {
     }
   }
 
+  async function handleRetry() {
+    setRetrying(true);
+    setActionError(null);
+    try {
+      const nextRun = await retryResearchRun(runId);
+      router.push("/research/" + nextRun.id);
+    } catch {
+      setActionError("无法重试研究任务；每个失败任务最多重试一次。");
+      setRetrying(false);
+    }
+  }
+
   if (error) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#f4f1e9] p-6">
@@ -248,16 +263,28 @@ export default function ResearchWorkspace() {
               {run.progress}%
             </span>
           </div>
-          {!terminal && (
+          {(!terminal || (run.status === "failed" && run.attempt < 2)) && (
             <div className="mt-5 flex items-center gap-4">
-              <button
-                className="rounded-full border border-white/40 px-4 py-2 text-sm font-semibold transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={cancelling}
-                onClick={handleCancel}
-                type="button"
-              >
-                {cancelling ? "正在取消…" : "取消研究"}
-              </button>
+              {!terminal && (
+                <button
+                  className="rounded-full border border-white/40 px-4 py-2 text-sm font-semibold transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={cancelling}
+                  onClick={handleCancel}
+                  type="button"
+                >
+                  {cancelling ? "正在取消…" : "取消研究"}
+                </button>
+              )}
+              {run.status === "failed" && run.attempt < 2 && (
+                <button
+                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#173f35] disabled:opacity-60"
+                  disabled={retrying}
+                  onClick={handleRetry}
+                  type="button"
+                >
+                  {retrying ? "正在重试…" : "重新运行一次"}
+                </button>
+              )}
               {actionError && (
                 <p className="text-sm text-[#ffd4bd]">{actionError}</p>
               )}
@@ -336,7 +363,7 @@ export default function ResearchWorkspace() {
                 <h2 className="mt-1 text-2xl font-semibold">研究结果</h2>
               </div>
               <span className="rounded-full bg-[#edf3ef] px-3 py-1 text-sm text-[#2f6f5e]">
-                {run.status}
+                {run.status} · 第 {run.attempt} 次运行
               </span>
             </div>
             {run.status === "failed" ? (

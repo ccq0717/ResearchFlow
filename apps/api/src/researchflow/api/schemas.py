@@ -39,6 +39,19 @@ class CreateResearchRunRequest(BaseModel):
         return normalized
 
 
+class RenameResearchRunRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def normalize_title(cls, value: object) -> object:
+        return " ".join(value.split()) if isinstance(value, str) else value
+
+
+class ArchiveResearchRunRequest(BaseModel):
+    archived: bool = True
+
+
 class ResearchRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -55,6 +68,9 @@ class ResearchRunResponse(BaseModel):
     updated_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+    archived: bool
+    retry_of: UUID | None
+    attempt: int
 
     @classmethod
     def from_domain(cls, run: ResearchRun) -> "ResearchRunResponse":

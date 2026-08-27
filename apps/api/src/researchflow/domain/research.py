@@ -59,6 +59,9 @@ class ResearchRun:
     updated_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+    archived: bool = False
+    retry_of: UUID | None = None
+    attempt: int = 1
 
 
 @dataclass(frozen=True, slots=True)

@@ -61,6 +61,6 @@ LLM 保持 `LLM_TIMEOUT`、`LLM_CONNECTION_ERROR`、`LLM_HTTP_ERROR`、`LLM_INVA
 - 更换 Embedding 模型、维度或检索指令策略后必须重新处理已有文档，系统不会混算不兼容的向量；
 - PDF 只提取已有文本层，不执行 OCR；扫描件会进入明确的失败状态；
 - 已保存 Exa 可用的作者与发布时间并分类来源，但没有 DOI、卷期、被引量等专业学术元数据；
-- LangGraph 尚未配置持久 checkpoint；进程中断遗留的运行会在下次启动时被标记为 `RUN_INTERRUPTED`；
+- LangGraph 尚未配置持久 checkpoint；进程中断遗留的运行会标记为 `RUN_INTERRUPTED`，用户可在界面创建一次保留原记录的新运行；
 - Citation Coverage 只衡量结构化 Claim，不自动证明报告正文的每句话都获得语义充分的支持；
 - 自动化测试使用 Fake/Mock，真实网络兼容性由单独冒烟测试验证。

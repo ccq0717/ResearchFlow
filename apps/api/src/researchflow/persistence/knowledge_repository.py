@@ -288,6 +288,7 @@ class SqliteKnowledgeRepository:
                 )
                 for chunk in chunks
             )
+            await session.flush()
             session.add_all(
                 DocumentChunkEmbeddingRow(
                     chunk_id=embedding.chunk_id,
