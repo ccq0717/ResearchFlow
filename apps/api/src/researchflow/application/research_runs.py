@@ -65,12 +65,12 @@ class ResearchRunApplication:
             now = datetime.now(UTC)
             if sum(not task.done() for task in self._tasks) >= self._max_concurrent_runs:
                 raise ResearchRunApplicationError(
-                    "RUN_CAPACITY_REACHED", "当前研究任务已达并发上限，请稍后再试"
+                    "RUN_CAPACITY_REACHED", "当前研究运行已达并发上限，请稍后再试"
                 )
             runs = await self._repository.list_runs(include_archived=True)
             if sum(run.created_at.date() == now.date() for run in runs) >= self._max_runs_per_day:
                 raise ResearchRunApplicationError(
-                    "DAILY_RUN_LIMIT_REACHED", "今日研究任务额度已用完，请明天再试"
+                    "DAILY_RUN_LIMIT_REACHED", "今日研究运行额度已用完，请明天再试"
                 )
             return await self._create_run(
                 goal,
@@ -112,9 +112,9 @@ class ResearchRunApplication:
             run.id,
             event_type="run.queued",
             message=(
-                f"研究任务第 {attempt} 次运行已创建，等待执行"
+                f"第 {attempt} 次研究运行已创建，等待执行"
                 if retry_of is not None
-                else "研究任务已创建，等待执行"
+                else "研究运行已创建，等待执行"
             ),
             progress=0,
             payload={"retry_of": str(retry_of), "attempt": attempt}
@@ -205,7 +205,7 @@ class ResearchRunApplication:
             if not run.status.is_terminal:
                 await self._mark_interrupted(
                     run.id,
-                    "检测到上次服务退出时未完成的研究任务，已将其标记为失败",
+                    "检测到上次服务退出时未完成的研究运行，已将其标记为失败",
                 )
 
     async def shutdown(self) -> None:
@@ -223,11 +223,11 @@ class ResearchRunApplication:
         async with self._lifecycle_lock:
             run = await self._repository.get(run_id)
             if run is None:
-                raise ResearchRunApplicationError("RUN_NOT_FOUND", "研究任务不存在")
+                raise ResearchRunApplicationError("RUN_NOT_FOUND", "研究运行不存在")
             if run.status.is_terminal:
                 raise ResearchRunApplicationError(
                     "RUN_NOT_CANCELLABLE",
-                    "只有排队中或运行中的研究任务可以取消",
+                    "只有排队中或运行中的研究运行可以取消",
                 )
 
             active_task = next(
@@ -240,11 +240,11 @@ class ResearchRunApplication:
 
             current = await self._repository.get(run_id)
             if current is None:
-                raise ResearchRunApplicationError("RUN_NOT_FOUND", "研究任务不存在")
+                raise ResearchRunApplicationError("RUN_NOT_FOUND", "研究运行不存在")
             if current.status.is_terminal:
                 raise ResearchRunApplicationError(
                     "RUN_NOT_CANCELLABLE",
-                    "研究任务已在取消前结束",
+                    "研究运行已在取消前结束",
                 )
             return await self._repository.finalize(
                 run_id,
@@ -258,34 +258,36 @@ class ResearchRunApplication:
                     events=(
                         ResearchEventDraft(
                             type="run.cancelled",
-                            message="研究任务已由用户取消",
+                            message="研究运行已由用户取消",
                         ),
                     ),
                 ),
             )
 
     async def retry_run(self, run_id: UUID) -> ResearchRun:
-        source = await self._require_run(run_id)
-        if source.status is not ResearchRunStatus.FAILED:
-            raise ResearchRunApplicationError("RUN_NOT_RETRYABLE", "只有失败的研究任务可以重试")
-        if source.attempt >= 2:
-            raise ResearchRunApplicationError(
-                "RUN_RETRY_LIMIT_REACHED", "该研究任务已经达到一次重试上限"
+        async with self._lifecycle_lock:
+            source = await self._require_run(run_id)
+            if source.status is not ResearchRunStatus.FAILED:
+                raise ResearchRunApplicationError("RUN_NOT_RETRYABLE", "只有失败的研究运行可以重试")
+            runs = await self._repository.list_runs(include_archived=True)
+            if source.attempt >= 2 or any(run.retry_of == source.id for run in runs):
+                raise ResearchRunApplicationError(
+                    "RUN_RETRY_LIMIT_REACHED", "该研究运行已经达到一次重试上限"
+                )
+            document_ids = await self._knowledge_library.list_run_document_ids(run_id)
+            retried = await self.create_run(
+                source.goal,
+                document_ids,
+                retry_of=source.id,
+                attempt=source.attempt + 1,
             )
-        document_ids = await self._knowledge_library.list_run_document_ids(run_id)
-        retried = await self.create_run(
-            source.goal,
-            document_ids,
-            retry_of=source.id,
-            attempt=source.attempt + 1,
-        )
-        await self._repository.append_event(
-            source.id,
-            event_type="run.retry.created",
-            message="已创建一次新的研究运行",
-            payload={"run_id": str(retried.id), "attempt": retried.attempt},
-        )
-        return retried
+            await self._repository.append_event(
+                source.id,
+                event_type="run.retry.created",
+                message="已创建一次新的研究运行",
+                payload={"run_id": str(retried.id), "attempt": retried.attempt},
+            )
+            return retried
 
     async def rename_run(self, run_id: UUID, title: str) -> ResearchRun:
         await self._require_run(run_id)
@@ -294,19 +296,19 @@ class ResearchRunApplication:
     async def archive_run(self, run_id: UUID, archived: bool) -> ResearchRun:
         run = await self._require_run(run_id)
         if not run.status.is_terminal:
-            raise ResearchRunApplicationError("RUN_NOT_ARCHIVABLE", "只有已结束的研究任务可以归档")
+            raise ResearchRunApplicationError("RUN_NOT_ARCHIVABLE", "只有已结束的研究运行可以归档")
         return await self._repository.set_archived(run_id, archived)
 
     async def delete_run(self, run_id: UUID) -> None:
         run = await self._require_run(run_id)
         if not run.status.is_terminal:
-            raise ResearchRunApplicationError("RUN_NOT_DELETABLE", "只有已结束的研究任务可以删除")
+            raise ResearchRunApplicationError("RUN_NOT_DELETABLE", "只有已结束的研究运行可以删除")
         await self._repository.delete(run_id)
 
     async def _require_run(self, run_id: UUID) -> ResearchRun:
         run = await self._repository.get(run_id)
         if run is None:
-            raise ResearchRunApplicationError("RUN_NOT_FOUND", "研究任务不存在")
+            raise ResearchRunApplicationError("RUN_NOT_FOUND", "研究运行不存在")
         return run
 
     def _on_task_done(self, task: asyncio.Task[None]) -> None:
@@ -368,10 +370,10 @@ class ResearchRunApplication:
         ]
 
         def total(field: str) -> int | None:
-            values = [
-                value for payload in llm_payloads if isinstance((value := payload.get(field)), int)
-            ]
-            return sum(values) if values else None
+            if not llm_payloads:
+                return None
+            values = [payload.get(field) for payload in llm_payloads]
+            return sum(values) if all(isinstance(value, int) for value in values) else None
 
         input_tokens = total("input_tokens")
         output_tokens = total("output_tokens")

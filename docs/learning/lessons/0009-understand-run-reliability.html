@@ -26,7 +26,7 @@
   <p>后台 Task 存在于内存，进程退出后无法继续。下次启动扫描仍为 <code>queued</code> 或 <code>running</code> 的记录，将其标记为 <code>RUN_INTERRUPTED</code>。系统没有把失败误报为继续运行。</p>
 
   <h2>5. “恢复”为什么是新运行</h2>
-  <p>当前 LangGraph 没有持久 checkpoint，所以失败任务会创建一个新的第二次运行，并保存 <code>retry_of</code> 与 <code>attempt</code>；原失败记录和中间材料保留。一次上限防止错误配置持续消耗额度。</p>
+  <p>当前 LangGraph 没有持久 checkpoint，所以失败运行会创建一个新的第二次运行，并保存 <code>retry_of</code> 与 <code>attempt</code>；原失败记录和中间材料保留。一次上限防止错误配置持续消耗额度。</p>
   <table><thead><tr><th>行为</th><th>当前语义</th></tr></thead><tbody>
     <tr><td>刷新页面</td><td>恢复已持久化的同一运行</td></tr>
     <tr><td>服务重启</td><td>遗留运行明确失败</td></tr>
@@ -35,7 +35,7 @@
   </tbody></table>
 
   <h2>6. 限额和日志解决什么</h2>
-  <p>并发上限保护单实例 SQLite 和外部服务；每日任务上限限制公开 Demo 的费用。JSON 日志只记录请求 ID、路径、状态和耗时，不记录目标正文、文档、密钥或供应商原始响应。</p>
+  <p>并发上限保护单实例 SQLite 和外部服务；每日运行上限限制公开 Demo 的费用。JSON 日志只记录请求 ID、路径、状态和耗时，不记录目标正文、文档、密钥或供应商原始响应。</p>
 
   <h2>7. 怎样证明可靠性</h2>
   <p>生命周期测试覆盖完成、取消、重启中断、一次重试和配额；浏览器 E2E 覆盖创建、报告、度量和刷新恢复。备份恢复演练还会运行 SQLite 完整性检查。不同测试分别证明状态机、用户路径和数据可恢复性。</p>

@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 _ERROR_MESSAGES = {
-    "RUN_NOT_FOUND": "研究任务不存在",
+    "RUN_NOT_FOUND": "研究运行不存在",
 }
 
 _VALIDATION_MESSAGES = {

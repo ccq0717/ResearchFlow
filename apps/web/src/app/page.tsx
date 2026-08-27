@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { DemoAccessGate } from "./demo-access-gate";
 import {
   ApiError,
   archiveResearchRun,
-  createDemoSession,
   createResearchRun,
   deleteKnowledgeDocument,
   deleteResearchRun,
@@ -49,8 +49,6 @@ export default function Dashboard() {
   const [showArchived, setShowArchived] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accessRequired, setAccessRequired] = useState(false);
-  const [accessCode, setAccessCode] = useState("");
-  const [unlocking, setUnlocking] = useState(false);
 
   useEffect(() => {
     Promise.all([listResearchRuns(showArchived), listKnowledgeDocuments()])
@@ -76,7 +74,7 @@ export default function Dashboard() {
       const run = await createResearchRun(goal, selectedDocumentIds);
       router.push("/research/" + run.id);
     } catch {
-      setError("创建研究任务失败，请检查后端连接。");
+      setError("创建研究运行失败，请检查后端连接。");
     } finally {
       setSubmitting(false);
     }
@@ -153,7 +151,7 @@ export default function Dashboard() {
           : current.filter((item) => item.id !== run.id),
       );
     } catch {
-      setError("归档研究记录失败；运行中的任务不能归档。");
+      setError("归档研究记录失败；运行中的记录不能归档。");
     }
   }
 
@@ -163,55 +161,12 @@ export default function Dashboard() {
       await deleteResearchRun(run.id);
       setRuns((current) => current.filter((item) => item.id !== run.id));
     } catch {
-      setError("删除研究记录失败；请先等待任务结束或取消任务。");
-    }
-  }
-
-  async function unlockDemo(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setUnlocking(true);
-    setError(null);
-    try {
-      await createDemoSession(accessCode);
-      window.location.reload();
-    } catch {
-      setError("访问码无效，请重新输入。");
-      setUnlocking(false);
+      setError("删除研究记录失败；请先等待运行结束或取消运行。");
     }
   }
 
   if (accessRequired) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-[#f4f1e9] p-6 text-[#17231d]">
-        <form
-          className="w-full max-w-md rounded-3xl border border-[#d8d3c7] bg-white p-8 shadow-sm"
-          onSubmit={unlockDemo}
-        >
-          <p className="text-sm font-semibold text-[#7b4f2f]">PROTECTED DEMO</p>
-          <h1 className="mt-2 text-3xl font-semibold">访问 ResearchFlow</h1>
-          <p className="mt-3 text-sm leading-6 text-[#6d746f]">
-            请输入作品集演示访问码。访问码只发送给后端，不会写入浏览器包。
-          </p>
-          <input
-            aria-label="演示访问码"
-            autoComplete="current-password"
-            className="mt-6 w-full rounded-2xl border border-[#cfc9bd] px-4 py-3 outline-none focus:border-[#2f6f5e]"
-            onChange={(event) => setAccessCode(event.target.value)}
-            required
-            type="password"
-            value={accessCode}
-          />
-          <button
-            className="mt-4 w-full rounded-full bg-[#2f6f5e] px-5 py-3 font-semibold text-white disabled:opacity-50"
-            disabled={unlocking}
-            type="submit"
-          >
-            {unlocking ? "正在验证…" : "进入演示"}
-          </button>
-          {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
-        </form>
-      </main>
-    );
+    return <DemoAccessGate />;
   }
 
   return (
@@ -293,7 +248,7 @@ export default function Dashboard() {
             {loading && <p className="text-sm text-[#6d746f]">正在加载…</p>}
             {!loading && runs.length === 0 && (
               <div className="rounded-2xl border border-dashed border-[#bbb3a4] p-6 text-sm leading-6 text-[#6d746f]">
-                还没有研究记录。创建第一个任务后，它会保存在本地 SQLite 数据库中。
+                还没有研究记录。创建第一次研究运行后，它会保存在本地 SQLite 数据库中。
               </div>
             )}
             {runs.map((run) => (

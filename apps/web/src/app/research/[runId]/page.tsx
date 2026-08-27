@@ -177,7 +177,7 @@ export default function ResearchWorkspace() {
         setError(
           cause instanceof ApiError && cause.status === 401
             ? "演示访问尚未解锁，请返回 Dashboard 输入访问码。"
-            : "无法读取研究任务，请确认后端已经启动。",
+            : "无法读取研究运行，请确认后端已经启动。",
         );
         setConnection("连接失败");
       }
@@ -198,7 +198,7 @@ export default function ResearchWorkspace() {
       setMetrics(await getResearchRunMetrics(runId));
       setConnection("已结束");
     } catch {
-      setActionError("无法取消研究任务，请刷新后确认任务状态。");
+      setActionError("无法取消研究运行，请刷新后确认运行状态。");
     } finally {
       setCancelling(false);
     }
@@ -211,7 +211,7 @@ export default function ResearchWorkspace() {
       const nextRun = await retryResearchRun(runId);
       router.push("/research/" + nextRun.id);
     } catch {
-      setActionError("无法重试研究任务；每个失败任务最多重试一次。");
+      setActionError("无法重试研究运行；每个失败运行最多重试一次。");
       setRetrying(false);
     }
   }
@@ -220,7 +220,7 @@ export default function ResearchWorkspace() {
     return (
       <main className="grid min-h-screen place-items-center bg-[#f4f1e9] p-6">
         <div className="max-w-lg rounded-3xl bg-white p-8 text-center shadow-sm">
-          <h1 className="text-2xl font-semibold">无法打开研究任务</h1>
+          <h1 className="text-2xl font-semibold">无法打开研究运行</h1>
           <p className="mt-3 text-[#6d746f]">{error}</p>
           <Link className="mt-6 inline-block text-[#2f6f5e] underline" href="/">
             返回 Dashboard
@@ -233,7 +233,7 @@ export default function ResearchWorkspace() {
   if (!run) {
     return (
       <main className="min-h-screen bg-[#f4f1e9] p-8">
-        正在加载研究任务…
+        正在加载研究运行…
       </main>
     );
   }
@@ -388,7 +388,7 @@ export default function ResearchWorkspace() {
               />
             ) : run.status === "cancelled" ? (
               <div className="grid min-h-96 place-items-center text-center text-[#737a75]">
-                <p>研究任务已取消，已保存的计划、来源和证据仍可查看。</p>
+                <p>研究运行已取消，已保存的计划、来源和证据仍可查看。</p>
               </div>
             ) : run.report_markdown ? (
               <ResearchReport markdown={run.report_markdown} />

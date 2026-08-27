@@ -33,6 +33,7 @@
 
 - [学习课程入口](learning/README.md)：面向从零理解前后端与 AI 工程的读者；
 - [进入 M5 前审查](product/retrospectives/pre-m5-review.md)：当前实现、文档、设计与简洁性门禁；
+- [M5 部署就绪审查](product/retrospectives/m5-deployment-readiness.md)：本地交付结论与真实上线剩余项；
 - `product/retrospectives/`：阶段复盘与历史问题；
 - [早期 MVP 技术规格](product/mvp-spec.md)：最初纵向闭环的验收基线。
 

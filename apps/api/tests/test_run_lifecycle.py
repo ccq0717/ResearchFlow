@@ -206,9 +206,16 @@ async def test_failed_run_can_be_retried_once_as_a_new_run(tmp_path: Path) -> No
     app = create_app(settings)
     async with app.router.lifespan_context(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.post(f"/api/research-runs/{failed.id}/retry")
-            assert response.status_code == 200
-            retried = response.json()
+            responses = await asyncio.gather(
+                client.post(f"/api/research-runs/{failed.id}/retry"),
+                client.post(f"/api/research-runs/{failed.id}/retry"),
+            )
+            assert sorted(response.status_code for response in responses) == [200, 409]
+            retried = next(response.json() for response in responses if response.status_code == 200)
+            rejected = next(
+                response.json() for response in responses if response.status_code == 409
+            )
+            assert rejected["code"] == "RUN_RETRY_LIMIT_REACHED"
             assert retried["id"] != str(failed.id)
             assert retried["retry_of"] == str(failed.id)
             assert retried["attempt"] == 2
@@ -219,6 +226,10 @@ async def test_failed_run_can_be_retried_once_as_a_new_run(tmp_path: Path) -> No
                     break
                 await asyncio.sleep(0.01)
             assert detail.json()["status"] == "completed"
+
+            duplicate = await client.post(f"/api/research-runs/{failed.id}/retry")
+            assert duplicate.status_code == 409
+            assert duplicate.json()["code"] == "RUN_RETRY_LIMIT_REACHED"
 
             invalid = await client.post(f"/api/research-runs/{retried['id']}/retry")
             assert invalid.status_code == 409

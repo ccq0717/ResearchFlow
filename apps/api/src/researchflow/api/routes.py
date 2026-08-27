@@ -47,11 +47,11 @@ async def create_demo_session(body: DemoSessionRequest, request: Request) -> Res
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     response.set_cookie(
         guard.cookie_name,
-        guard.session_token,
+        guard.issue_session(),
         httponly=True,
         secure=guard.secure_cookie,
         samesite="lax",
-        max_age=8 * 60 * 60,
+        max_age=guard.session_ttl_seconds,
     )
     return response
 

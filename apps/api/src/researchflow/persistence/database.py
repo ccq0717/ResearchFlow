@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Integer, event, select
+from sqlalchemy import DateTime, Integer, event, inspect, select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -35,18 +35,23 @@ def create_session_factory(engine: AsyncEngine) -> async_sessionmaker:
 
 async def create_schema(engine: AsyncEngine) -> None:
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-        current = await connection.scalar(
-            select(SchemaMigrationRow.version).order_by(SchemaMigrationRow.version.desc())
+        has_version_table = await connection.run_sync(
+            lambda sync_connection: inspect(sync_connection).has_table("schema_migrations")
         )
-        if current is None:
+        if has_version_table:
+            current = await connection.scalar(
+                select(SchemaMigrationRow.version).order_by(SchemaMigrationRow.version.desc())
+            )
+            if current != CURRENT_SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"数据库结构版本 {current} 与应用版本 {CURRENT_SCHEMA_VERSION} 不兼容"
+                )
+
+        await connection.run_sync(Base.metadata.create_all)
+        if not has_version_table:
             await connection.execute(
                 SchemaMigrationRow.__table__.insert().values(
                     version=CURRENT_SCHEMA_VERSION,
                     applied_at=datetime.now(UTC),
                 )
-            )
-        elif current != CURRENT_SCHEMA_VERSION:
-            raise RuntimeError(
-                f"数据库结构版本 {current} 与应用版本 {CURRENT_SCHEMA_VERSION} 不兼容"
             )

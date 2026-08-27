@@ -243,11 +243,9 @@ export function archiveResearchRun(
 }
 
 export async function deleteResearchRun(runId: string): Promise<void> {
-  const response = await fetch(apiBaseUrl + "/api/research-runs/" + runId, {
+  return request<void>("/api/research-runs/" + runId, {
     method: "DELETE",
-    credentials: "include",
   });
-  if (!response.ok) throw new Error("删除研究任务失败（" + response.status + "）");
 }
 
 export async function listResearchEvents(
@@ -293,13 +291,9 @@ export function uploadKnowledgeDocument(file: File): Promise<KnowledgeDocument> 
 }
 
 export async function deleteKnowledgeDocument(documentId: string): Promise<void> {
-  const response = await fetch(
-    apiBaseUrl + "/api/knowledge-documents/" + documentId,
-    { method: "DELETE", credentials: "include" },
-  );
-  if (!response.ok) {
-    throw new Error("删除知识文档失败（" + response.status + "）");
-  }
+  return request<void>("/api/knowledge-documents/" + documentId, {
+    method: "DELETE",
+  });
 }
 
 export function reprocessKnowledgeDocument(

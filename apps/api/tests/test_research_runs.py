@@ -145,6 +145,6 @@ async def test_missing_run_uses_stable_not_found_error(tmp_path: Path) -> None:
     assert response.status_code == 404
     assert response.json() == {
         "code": "RUN_NOT_FOUND",
-        "message": "研究任务不存在",
+        "message": "研究运行不存在",
         "details": None,
     }
