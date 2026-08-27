@@ -16,6 +16,7 @@ $env:RESEARCHFLOW_WORKFLOW_MODE = "simulation"
 $env:RESEARCHFLOW_CORS_ORIGINS = '["http://127.0.0.1:3100"]'
 $env:RESEARCHFLOW_DEMO_ACCESS_CODE = "e2e-portfolio-access"
 $env:NEXT_PUBLIC_API_BASE_URL = "http://127.0.0.1:8100"
+$env:NEXT_DIST_DIR = ".next-e2e"
 
 $api = $null
 $web = $null

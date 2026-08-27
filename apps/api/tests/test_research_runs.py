@@ -28,6 +28,7 @@ async def test_default_cors_accepts_both_local_frontend_hosts(tmp_path: Path) ->
             )
             assert response.status_code == 200
             assert response.headers["access-control-allow-origin"] == origin
+            assert response.headers["access-control-allow-credentials"] == "true"
 
 
 async def test_optional_demo_access_code_protects_api_with_http_only_cookie(
