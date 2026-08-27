@@ -20,6 +20,7 @@ SSE 从后端向 Research Workspace 单向推送运行进度。持久化事件�
 | `report.draft.completed` | 草稿已生成 |
 | `report.completed` / `run.completed` | 检查通过并结束 |
 | `run.failed` | 运行失败，payload 含稳定错误代码 |
+| `run.cancelled` | 用户主动取消运行 |
 
 任务、来源或证据事件到达时，前端重新读取 `/api/research-runs/{id}/materials`。事件只传计数、引用覆盖率和来源类型计数等摘要，不重复传输正文。
 

@@ -23,7 +23,10 @@ from researchflow.api.schemas import (
     ResearchRunResponse,
 )
 from researchflow.application.knowledge_library import KnowledgeLibrary, KnowledgeLibraryError
-from researchflow.application.research_runs import ResearchRunApplication
+from researchflow.application.research_runs import (
+    ResearchRunApplication,
+    ResearchRunApplicationError,
+)
 from researchflow.domain.research import ResearchEvent
 
 router = APIRouter(prefix="/api")
@@ -44,6 +47,16 @@ def _knowledge_error(error: KnowledgeLibraryError) -> HTTPException:
         "KNOWLEDGE_DOCUMENT_LIMIT_REACHED": status.HTTP_409_CONFLICT,
         "DOCUMENT_TOO_LARGE": status.HTTP_413_CONTENT_TOO_LARGE,
     }.get(error.code, status.HTTP_400_BAD_REQUEST)
+    return HTTPException(
+        status_code=status_code,
+        detail={"code": error.code, "message": error.public_message},
+    )
+
+
+def _run_error(error: ResearchRunApplicationError) -> HTTPException:
+    status_code = (
+        status.HTTP_404_NOT_FOUND if error.code == "RUN_NOT_FOUND" else status.HTTP_409_CONFLICT
+    )
     return HTTPException(
         status_code=status_code,
         detail={"code": error.code, "message": error.public_message},
@@ -177,6 +190,18 @@ async def get_research_run(run_id: UUID, request: Request) -> ResearchRunRespons
     run = await _application(request).get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail={"code": "RUN_NOT_FOUND"})
+    return ResearchRunResponse.from_domain(run)
+
+
+@router.post(
+    "/research-runs/{run_id}/cancel",
+    response_model=ResearchRunResponse,
+)
+async def cancel_research_run(run_id: UUID, request: Request) -> ResearchRunResponse:
+    try:
+        run = await _application(request).cancel_run(run_id)
+    except ResearchRunApplicationError as error:
+        raise _run_error(error) from error
     return ResearchRunResponse.from_domain(run)
 
 

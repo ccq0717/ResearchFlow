@@ -12,7 +12,7 @@
 
 ## 2. 运行、计划与问题
 
-`ResearchRun` 表示从目标到报告的一次完整运行，状态为 `queued`、`running`、`completed`、`failed` 或预留的 `cancelled`。`ResearchRunOutcome` 把终态和终结事件放在同一事务中，避免 SSE 竞态。
+`ResearchRun` 表示从目标到报告的一次完整运行，状态为 `queued`、`running`、`completed`、`failed` 或 `cancelled`。`ResearchRunOutcome` 把终态和终结事件放在同一事务中，避免 SSE 竞态。
 
 `ResearchPlan` 是检索前的结构化中间产物，包含摘要、交付物、模型元数据和有序 `ResearchQuestion`。每个问题包含：
 

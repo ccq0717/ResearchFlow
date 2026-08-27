@@ -175,6 +175,12 @@ export function getResearchRun(runId: string): Promise<ResearchRun> {
   return request<ResearchRun>("/api/research-runs/" + runId);
 }
 
+export function cancelResearchRun(runId: string): Promise<ResearchRun> {
+  return request<ResearchRun>("/api/research-runs/" + runId + "/cancel", {
+    method: "POST",
+  });
+}
+
 export async function listResearchEvents(
   runId: string,
 ): Promise<ResearchEventData[]> {

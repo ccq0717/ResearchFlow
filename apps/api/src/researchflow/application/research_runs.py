@@ -19,6 +19,13 @@ from researchflow.workflows.base import ResearchWorkflow, ResearchWorkflowUpdate
 logger = logging.getLogger(__name__)
 
 
+class ResearchRunApplicationError(Exception):
+    def __init__(self, code: str, public_message: str) -> None:
+        super().__init__(public_message)
+        self.code = code
+        self.public_message = public_message
+
+
 class ResearchRunApplication:
     def __init__(
         self,
@@ -30,6 +37,7 @@ class ResearchRunApplication:
         self._workflow = workflow
         self._knowledge_library = knowledge_library
         self._tasks: dict[asyncio.Task[None], UUID] = {}
+        self._lifecycle_lock = asyncio.Lock()
 
     async def create_run(
         self,
@@ -77,7 +85,7 @@ class ResearchRunApplication:
     ) -> None:
         try:
             async for update in self._workflow.execute(run_id, goal, document_ids):
-                await self._apply_workflow_update(run_id, update)
+                await self._apply_workflow_update_safely(run_id, update)
         except Exception:
             logger.exception("研究工作流执行失败，run_id=%s", run_id)
             current = await self._repository.get(run_id)
@@ -87,6 +95,18 @@ class ResearchRunApplication:
                     code="WORKFLOW_FAILED",
                     message="研究工作流执行失败，请稍后重试",
                 )
+
+    async def _apply_workflow_update_safely(
+        self,
+        run_id: UUID,
+        update: ResearchWorkflowUpdate,
+    ) -> None:
+        persistence = asyncio.create_task(self._apply_workflow_update(run_id, update))
+        try:
+            await asyncio.shield(persistence)
+        except asyncio.CancelledError:
+            await persistence
+            raise
 
     async def _apply_workflow_update(self, run_id: UUID, update: ResearchWorkflowUpdate) -> None:
         if update.outcome is not None:
@@ -137,13 +157,59 @@ class ResearchRunApplication:
                 )
 
     async def shutdown(self) -> None:
-        active = tuple(self._tasks.items())
-        for task, _ in active:
-            task.cancel()
-        if active:
-            await asyncio.gather(
-                *(task for task, _ in active),
-                return_exceptions=True,
+        async with self._lifecycle_lock:
+            active = tuple(self._tasks.items())
+            for task, _ in active:
+                task.cancel()
+            if active:
+                await asyncio.gather(
+                    *(task for task, _ in active),
+                    return_exceptions=True,
+                )
+
+    async def cancel_run(self, run_id: UUID) -> ResearchRun:
+        async with self._lifecycle_lock:
+            run = await self._repository.get(run_id)
+            if run is None:
+                raise ResearchRunApplicationError("RUN_NOT_FOUND", "研究任务不存在")
+            if run.status.is_terminal:
+                raise ResearchRunApplicationError(
+                    "RUN_NOT_CANCELLABLE",
+                    "只有排队中或运行中的研究任务可以取消",
+                )
+
+            active_task = next(
+                (task for task, active_run_id in self._tasks.items() if active_run_id == run_id),
+                None,
+            )
+            if active_task is not None:
+                active_task.cancel()
+                await asyncio.gather(active_task, return_exceptions=True)
+
+            current = await self._repository.get(run_id)
+            if current is None:
+                raise ResearchRunApplicationError("RUN_NOT_FOUND", "研究任务不存在")
+            if current.status.is_terminal:
+                raise ResearchRunApplicationError(
+                    "RUN_NOT_CANCELLABLE",
+                    "研究任务已在取消前结束",
+                )
+            return await self._repository.finalize(
+                run_id,
+                ResearchRunOutcome(
+                    status=ResearchRunStatus.CANCELLED,
+                    progress=None,
+                    stage=None,
+                    report_markdown=None,
+                    error_code=None,
+                    error_message=None,
+                    events=(
+                        ResearchEventDraft(
+                            type="run.cancelled",
+                            message="研究任务已由用户取消",
+                        ),
+                    ),
+                ),
             )
 
     def _on_task_done(self, task: asyncio.Task[None]) -> None:

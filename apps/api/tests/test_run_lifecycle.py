@@ -106,6 +106,36 @@ async def test_restart_marks_active_run_as_interrupted(tmp_path: Path) -> None:
             assert payload["error_code"] == "RUN_INTERRUPTED"
 
 
+async def test_user_can_cancel_an_active_run(tmp_path: Path) -> None:
+    app = create_app(_settings(tmp_path / "cancel.db", step_delay=10))
+
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            created = await client.post(
+                "/api/research-runs",
+                json={"goal": "验证用户可以主动取消仍在运行的研究任务"},
+            )
+            run_id = created.json()["id"]
+            for _ in range(50):
+                detail = await client.get(f"/api/research-runs/{run_id}")
+                if detail.json()["status"] == "running":
+                    break
+                await asyncio.sleep(0.01)
+
+            cancelled = await client.post(f"/api/research-runs/{run_id}/cancel")
+            payload = cancelled.json()
+            history = await client.get(f"/api/research-runs/{run_id}/events/history")
+
+            assert cancelled.status_code == 200
+            assert payload["status"] == "cancelled"
+            assert payload["completed_at"] is not None
+            assert history.json()["items"][-1]["type"] == "run.cancelled"
+
+            repeated = await client.post(f"/api/research-runs/{run_id}/cancel")
+            assert repeated.status_code == 409
+            assert repeated.json()["code"] == "RUN_NOT_CANCELLABLE"
+
+
 async def test_startup_recovers_orphaned_run(tmp_path: Path) -> None:
     database_path = tmp_path / "recovery.db"
     settings = _settings(database_path)

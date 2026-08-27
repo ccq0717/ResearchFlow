@@ -9,6 +9,7 @@ import { ResearchPlanPanel } from "./research-plan-panel";
 import { ResearchReport } from "./research-report";
 import {
   apiBaseUrl,
+  cancelResearchRun,
   getResearchMaterials,
   getResearchPlan,
   getResearchRun,
@@ -43,6 +44,8 @@ export default function ResearchWorkspace() {
   const [events, setEvents] = useState<ResearchEventData[]>([]);
   const [connection, setConnection] = useState("正在连接");
   const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const terminal = useMemo(
     () =>
@@ -172,6 +175,19 @@ export default function ResearchWorkspace() {
     };
   }, [runId]);
 
+  async function handleCancel() {
+    setCancelling(true);
+    setActionError(null);
+    try {
+      setRun(await cancelResearchRun(runId));
+      setConnection("已结束");
+    } catch {
+      setActionError("无法取消研究任务，请刷新后确认任务状态。");
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   if (error) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#f4f1e9] p-6">
@@ -232,6 +248,21 @@ export default function ResearchWorkspace() {
               {run.progress}%
             </span>
           </div>
+          {!terminal && (
+            <div className="mt-5 flex items-center gap-4">
+              <button
+                className="rounded-full border border-white/40 px-4 py-2 text-sm font-semibold transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={cancelling}
+                onClick={handleCancel}
+                type="button"
+              >
+                {cancelling ? "正在取消…" : "取消研究"}
+              </button>
+              {actionError && (
+                <p className="text-sm text-[#ffd4bd]">{actionError}</p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[0.72fr_1.28fr]">
@@ -313,6 +344,10 @@ export default function ResearchWorkspace() {
                 code={run.error_code}
                 message={run.error_message}
               />
+            ) : run.status === "cancelled" ? (
+              <div className="grid min-h-96 place-items-center text-center text-[#737a75]">
+                <p>研究任务已取消，已保存的计划、来源和证据仍可查看。</p>
+              </div>
             ) : run.report_markdown ? (
               <ResearchReport markdown={run.report_markdown} />
             ) : (
