@@ -61,6 +61,7 @@ planning → retrieving → analyzing → writing → finalizing
 
 - `research_runs`
 - `research_run_controls`
+- `schema_migrations`
 - `research_plans`
 - `research_events`
 - `research_tasks`
@@ -75,7 +76,7 @@ planning → retrieving → analyzing → writing → finalizing
 - `document_chunk_embeddings`
 - `research_run_documents`
 
-`research_run_controls` 以附属表保存归档和重试谱系，使已有数据库可由 `create_all` 无损补表。正式迁移和回滚方案仍需在公开部署前加入。
+`research_run_controls` 以附属表保存归档和重试谱系，使已有数据库可无损补表。`schema_migrations` 记录兼容版本；SQLite 的回滚策略是恢复更新前备份，而不是原地降级。
 
 ## 7. 已验证的替换 seam
 

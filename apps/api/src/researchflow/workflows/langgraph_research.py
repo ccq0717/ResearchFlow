@@ -65,6 +65,8 @@ class _ResearchState(TypedDict, total=False):
     document_ids: tuple[UUID, ...]
     local_hits: tuple[tuple[str, KnowledgeSearchHit], ...]
     check_passed: bool
+    evidence_metrics: dict[str, int | None]
+    report_metrics: dict[str, int | None]
 
 
 class LangGraphResearchWorkflow:
@@ -360,6 +362,12 @@ class LangGraphResearchWorkflow:
             "evidence": evidence,
             "claims": claims,
             "evidence_drafts": valid_drafts,
+            "evidence_metrics": {
+                "input_tokens": result.usage.input_tokens,
+                "output_tokens": result.usage.output_tokens,
+                "total_tokens": result.usage.total_tokens,
+                "duration_ms": result.duration_ms,
+            },
         }
 
     @staticmethod
@@ -393,7 +401,13 @@ class LangGraphResearchWorkflow:
                 state["claims"],
                 state["evidence"],
                 state["sources"],
-            )
+            ),
+            "report_metrics": {
+                "input_tokens": result.usage.input_tokens,
+                "output_tokens": result.usage.output_tokens,
+                "total_tokens": result.usage.total_tokens,
+                "duration_ms": result.duration_ms,
+            },
         }
 
     async def _checking(self, state: _ResearchState) -> dict[str, Any]:
@@ -503,7 +517,15 @@ class LangGraphResearchWorkflow:
                         stage=ResearchStage.PLANNING,
                         message="结构化研究计划已经生成",
                         progress=20,
-                        payload={"provider": plan.provider, "model": plan.model},
+                        payload={
+                            "provider": plan.provider,
+                            "model": plan.model,
+                            "input_tokens": plan.input_tokens,
+                            "output_tokens": plan.output_tokens,
+                            "total_tokens": plan.total_tokens,
+                            "duration_ms": plan.duration_ms,
+                            "llm_call": True,
+                        },
                     ),
                 ),
             )
@@ -560,6 +582,8 @@ class LangGraphResearchWorkflow:
                         payload={
                             "evidence_count": len(state_update["evidence"]),
                             "claim_count": len(state_update["claims"]),
+                            **state_update["evidence_metrics"],
+                            "llm_call": True,
                         },
                     ),
                 ),
@@ -574,6 +598,7 @@ class LangGraphResearchWorkflow:
                         stage=ResearchStage.WRITING,
                         message="基于网页与本地证据的报告草稿已经生成",
                         progress=90,
+                        payload={**state_update["report_metrics"], "llm_call": True},
                     ),
                 ),
             )

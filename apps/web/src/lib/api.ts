@@ -126,6 +126,23 @@ export interface ResearchMaterials {
   citation_audit: CitationAudit;
 }
 
+export interface ResearchRunMetrics {
+  duration_ms: number | null;
+  llm_duration_ms: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  total_tokens: number | null;
+  estimated_llm_cost_usd: number | null;
+  task_count: number;
+  failed_task_count: number;
+  source_count: number;
+  web_source_count: number;
+  local_source_count: number;
+  evidence_count: number;
+  claim_count: number;
+  citation_coverage_percent: number;
+}
+
 export interface KnowledgeDocument {
   id: string;
   original_filename: string;
@@ -236,6 +253,10 @@ export async function getResearchPlan(
 
 export function getResearchMaterials(runId: string): Promise<ResearchMaterials> {
   return request<ResearchMaterials>("/api/research-runs/" + runId + "/materials");
+}
+
+export function getResearchRunMetrics(runId: string): Promise<ResearchRunMetrics> {
+  return request<ResearchRunMetrics>("/api/research-runs/" + runId + "/metrics");
 }
 
 export async function listKnowledgeDocuments(): Promise<KnowledgeDocument[]> {

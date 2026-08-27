@@ -260,3 +260,38 @@ async def test_terminal_run_can_be_renamed_archived_and_deleted(tmp_path: Path) 
             deleted = await client.delete(f"/api/research-runs/{run_id}")
             assert deleted.status_code == 204
             assert (await client.get(f"/api/research-runs/{run_id}")).status_code == 404
+
+
+async def test_run_creation_enforces_concurrency_and_daily_limits(tmp_path: Path) -> None:
+    concurrent_app = create_app(
+        _settings(tmp_path / "concurrent.db", step_delay=10).model_copy(
+            update={"max_concurrent_runs": 1}
+        )
+    )
+    async with concurrent_app.router.lifespan_context(concurrent_app):
+        async with AsyncClient(
+            transport=ASGITransport(app=concurrent_app), base_url="http://test"
+        ) as client:
+            first = await client.post(
+                "/api/research-runs", json={"goal": "第一个任务会占用唯一的并发研究名额"}
+            )
+            second = await client.post(
+                "/api/research-runs", json={"goal": "第二个任务应收到明确的容量限制错误"}
+            )
+            assert first.status_code == 201
+            assert second.status_code == 429
+            assert second.json()["code"] == "RUN_CAPACITY_REACHED"
+
+    daily_app = create_app(
+        _settings(tmp_path / "daily.db").model_copy(update={"max_runs_per_day": 1})
+    )
+    async with daily_app.router.lifespan_context(daily_app):
+        async with AsyncClient(
+            transport=ASGITransport(app=daily_app), base_url="http://test"
+        ) as client:
+            await client.post("/api/research-runs", json={"goal": "今天允许创建的第一项研究任务"})
+            limited = await client.post(
+                "/api/research-runs", json={"goal": "今天超过持久化配额的第二项研究任务"}
+            )
+            assert limited.status_code == 429
+            assert limited.json()["code"] == "DAILY_RUN_LIMIT_REACHED"

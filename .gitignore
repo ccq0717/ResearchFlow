@@ -6,6 +6,8 @@
 # Python
 .venv/
 .uv-cache/
+.npm-cache/
+.playwright-browsers/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -22,6 +24,8 @@ node_modules/
 .next/
 out/
 coverage/
+playwright-report/
+test-results/
 *.tsbuildinfo
 npm-debug.log*
 pnpm-debug.log*
@@ -30,6 +34,7 @@ yarn-error.log*
 
 # Runtime data
 var/
+backups/
 *.db
 *.db-shm
 *.db-wal

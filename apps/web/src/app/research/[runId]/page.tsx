@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ResearchErrorPanel } from "./research-error-panel";
 import { ResearchMaterialsPanel } from "./research-materials-panel";
+import { ResearchMetricsPanel } from "./research-metrics-panel";
 import { ResearchPlanPanel } from "./research-plan-panel";
 import { ResearchReport } from "./research-report";
 import {
@@ -13,12 +14,14 @@ import {
   getResearchMaterials,
   getResearchPlan,
   getResearchRun,
+  getResearchRunMetrics,
   listResearchEvents,
   retryResearchRun,
   type ResearchEventData,
   type ResearchMaterials,
   type ResearchPlan,
   type ResearchRun,
+  type ResearchRunMetrics,
   type ResearchStage,
 } from "@/lib/api";
 import {
@@ -43,6 +46,7 @@ export default function ResearchWorkspace() {
   const [run, setRun] = useState<ResearchRun | null>(null);
   const [plan, setPlan] = useState<ResearchPlan | null>(null);
   const [materials, setMaterials] = useState<ResearchMaterials | null>(null);
+  const [metrics, setMetrics] = useState<ResearchRunMetrics | null>(null);
   const [events, setEvents] = useState<ResearchEventData[]>([]);
   const [connection, setConnection] = useState("正在连接");
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +107,7 @@ export default function ResearchWorkspace() {
           historyIsTerminal ||
           ["completed", "failed", "cancelled"].includes(latestRun.status)
         ) {
+          void getResearchRunMetrics(runId).then(setMetrics);
           setConnection("已结束");
           return;
         }
@@ -152,10 +157,12 @@ export default function ResearchWorkspace() {
               getResearchRun(runId),
               getResearchPlan(runId),
               getResearchMaterials(runId),
-            ]).then(([latestRun, latestPlan, latestMaterials]) => {
+              getResearchRunMetrics(runId),
+            ]).then(([latestRun, latestPlan, latestMaterials, latestMetrics]) => {
               setRun(latestRun);
               setPlan(latestPlan);
               setMaterials(latestMaterials);
+              setMetrics(latestMetrics);
             });
             source?.close();
             setConnection("已结束");
@@ -183,6 +190,7 @@ export default function ResearchWorkspace() {
     setActionError(null);
     try {
       setRun(await cancelResearchRun(runId));
+      setMetrics(await getResearchRunMetrics(runId));
       setConnection("已结束");
     } catch {
       setActionError("无法取消研究任务，请刷新后确认任务状态。");
@@ -334,6 +342,8 @@ export default function ResearchWorkspace() {
             <ResearchPlanPanel plan={plan} />
 
             <ResearchMaterialsPanel materials={materials} />
+
+            <ResearchMetricsPanel metrics={metrics} />
 
             <section className="rounded-3xl border border-[#d8d3c7] bg-[#ebe5d9] p-6">
               <h2 className="font-semibold">研究事件</h2>

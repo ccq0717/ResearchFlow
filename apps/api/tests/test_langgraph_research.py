@@ -34,7 +34,12 @@ def _settings(database_path: Path) -> Settings:
 async def test_langgraph_web_research_persists_materials_and_report(tmp_path: Path) -> None:
     database_path = tmp_path / "langgraph.db"
     app = create_app(
-        _settings(database_path),
+        _settings(database_path).model_copy(
+            update={
+                "llm_input_cost_per_million_tokens": 1.0,
+                "llm_output_cost_per_million_tokens": 2.0,
+            }
+        ),
         llm_client=FakeLLMClient(),
         search_provider=FakeSearchProvider(),
         page_reader=FakeWebPageReader(),
@@ -88,6 +93,13 @@ async def test_langgraph_web_research_persists_materials_and_report(tmp_path: Pa
 
             plan = (await client.get(f"/api/research-runs/{run_id}/plan")).json()["plan"]
             assert all(question["search_query"] for question in plan["questions"])
+
+            metrics = (await client.get(f"/api/research-runs/{run_id}/metrics")).json()
+            assert metrics["duration_ms"] >= 0
+            assert metrics["total_tokens"] == 988
+            assert metrics["estimated_llm_cost_usd"] == 0.001584
+            assert metrics["source_count"] == 6
+            assert metrics["citation_coverage_percent"] == 100
 
             events = (await client.get(f"/api/research-runs/{run_id}/events/history")).json()[
                 "items"

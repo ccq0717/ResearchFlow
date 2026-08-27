@@ -14,13 +14,15 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "ResearchFlow API"
-    environment: str = "development"
+    environment: Literal["development", "test", "production"] = "development"
     database_url: str = "sqlite+aiosqlite:///./var/researchflow.db"
     cors_origins: tuple[str, ...] = (
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     )
     simulation_step_delay: float = Field(default=0.7, ge=0, le=10)
+    max_concurrent_runs: int = Field(default=2, ge=1, le=20)
+    max_runs_per_day: int = Field(default=20, ge=1, le=1000)
 
     workflow_mode: Literal["simulation", "llm", "langgraph"] = "simulation"
     llm_provider: str = Field(default="openai-compatible", min_length=1)
@@ -28,6 +30,8 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr | None = None
     llm_base_url: AnyHttpUrl = AnyHttpUrl("https://api.openai.com/v1")
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    llm_input_cost_per_million_tokens: float | None = Field(default=None, ge=0)
+    llm_output_cost_per_million_tokens: float | None = Field(default=None, ge=0)
     web_search_provider: str = Field(default="exa", min_length=1, max_length=80)
     web_search_base_url: AnyHttpUrl = AnyHttpUrl("https://api.exa.ai")
     web_search_api_key: SecretStr | None = None
@@ -70,6 +74,13 @@ class Settings(BaseSettings):
     def validate_llm_configuration(self) -> "Settings":
         if self.workflow_mode in {"llm", "langgraph"} and not self.llm_model.strip():
             raise ValueError("LLM 或 LangGraph 模式必须设置 RESEARCHFLOW_LLM_MODEL")
+        if self.environment == "production":
+            if self.workflow_mode != "langgraph":
+                raise ValueError("生产环境必须使用 langgraph 工作流")
+            if any("localhost" in origin or "127.0.0.1" in origin for origin in self.cors_origins):
+                raise ValueError("生产环境必须显式配置公开前端 CORS Origin")
+            if "*" in self.cors_origins:
+                raise ValueError("生产环境不允许通配 CORS Origin")
         return self
 
     def ensure_runtime_directories(self) -> None:

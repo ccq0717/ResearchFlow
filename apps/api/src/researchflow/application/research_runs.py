@@ -10,8 +10,11 @@ from researchflow.domain.research import (
     ResearchMaterials,
     ResearchPlan,
     ResearchRun,
+    ResearchRunMetrics,
     ResearchRunOutcome,
     ResearchRunStatus,
+    ResearchTaskStatus,
+    SourceOrigin,
 )
 from researchflow.persistence.repository import SqliteResearchRepository
 from researchflow.workflows.base import ResearchWorkflow, ResearchWorkflowUpdate
@@ -32,12 +35,22 @@ class ResearchRunApplication:
         repository: SqliteResearchRepository,
         workflow: ResearchWorkflow,
         knowledge_library: KnowledgeLibrary,
+        *,
+        llm_input_cost_per_million_tokens: float | None = None,
+        llm_output_cost_per_million_tokens: float | None = None,
+        max_concurrent_runs: int = 2,
+        max_runs_per_day: int = 20,
     ) -> None:
         self._repository = repository
         self._workflow = workflow
         self._knowledge_library = knowledge_library
         self._tasks: dict[asyncio.Task[None], UUID] = {}
         self._lifecycle_lock = asyncio.Lock()
+        self._create_lock = asyncio.Lock()
+        self._llm_input_cost = llm_input_cost_per_million_tokens
+        self._llm_output_cost = llm_output_cost_per_million_tokens
+        self._max_concurrent_runs = max_concurrent_runs
+        self._max_runs_per_day = max_runs_per_day
 
     async def create_run(
         self,
@@ -48,7 +61,34 @@ class ResearchRunApplication:
         attempt: int = 1,
     ) -> ResearchRun:
         selected_document_ids = await self._knowledge_library.validate_selection(document_ids)
-        now = datetime.now(UTC)
+        async with self._create_lock:
+            now = datetime.now(UTC)
+            if sum(not task.done() for task in self._tasks) >= self._max_concurrent_runs:
+                raise ResearchRunApplicationError(
+                    "RUN_CAPACITY_REACHED", "当前研究任务已达并发上限，请稍后再试"
+                )
+            runs = await self._repository.list_runs(include_archived=True)
+            if sum(run.created_at.date() == now.date() for run in runs) >= self._max_runs_per_day:
+                raise ResearchRunApplicationError(
+                    "DAILY_RUN_LIMIT_REACHED", "今日研究任务额度已用完，请明天再试"
+                )
+            return await self._create_run(
+                goal,
+                selected_document_ids,
+                retry_of=retry_of,
+                attempt=attempt,
+                now=now,
+            )
+
+    async def _create_run(
+        self,
+        goal: str,
+        selected_document_ids: tuple[UUID, ...],
+        *,
+        retry_of: UUID | None,
+        attempt: int,
+        now: datetime,
+    ) -> ResearchRun:
         run = ResearchRun(
             id=uuid4(),
             goal=goal,
@@ -316,6 +356,61 @@ class ResearchRunApplication:
 
     async def get_materials(self, run_id: UUID) -> ResearchMaterials:
         return await self._repository.get_materials(run_id)
+
+    async def get_metrics(self, run_id: UUID) -> ResearchRunMetrics:
+        run = await self._require_run(run_id)
+        materials = await self._repository.get_materials(run_id)
+        events = await self._repository.events_after(run_id, 0)
+        llm_payloads = [
+            event.payload
+            for event in events
+            if event.payload and event.payload.get("llm_call") is True
+        ]
+
+        def total(field: str) -> int | None:
+            values = [
+                value for payload in llm_payloads if isinstance((value := payload.get(field)), int)
+            ]
+            return sum(values) if values else None
+
+        input_tokens = total("input_tokens")
+        output_tokens = total("output_tokens")
+        estimated_cost = None
+        if (
+            input_tokens is not None
+            and output_tokens is not None
+            and self._llm_input_cost is not None
+            and self._llm_output_cost is not None
+        ):
+            estimated_cost = round(
+                (input_tokens * self._llm_input_cost + output_tokens * self._llm_output_cost)
+                / 1_000_000,
+                6,
+            )
+        duration_ms = None
+        if run.started_at is not None:
+            end = run.completed_at or datetime.now(UTC)
+            duration_ms = max(0, round((end - run.started_at).total_seconds() * 1000))
+        return ResearchRunMetrics(
+            duration_ms=duration_ms,
+            llm_duration_ms=total("duration_ms") or 0,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total("total_tokens"),
+            estimated_llm_cost_usd=estimated_cost,
+            task_count=len(materials.tasks),
+            failed_task_count=sum(
+                task.status is ResearchTaskStatus.FAILED for task in materials.tasks
+            ),
+            source_count=len(materials.sources),
+            web_source_count=sum(source.origin is SourceOrigin.WEB for source in materials.sources),
+            local_source_count=sum(
+                source.origin is SourceOrigin.LOCAL for source in materials.sources
+            ),
+            evidence_count=len(materials.evidence),
+            claim_count=len(materials.claims),
+            citation_coverage_percent=materials.citation_audit.coverage_percent,
+        )
 
     async def list_events(self, run_id: UUID) -> list[ResearchEvent]:
         return await self._repository.events_after(run_id, 0)

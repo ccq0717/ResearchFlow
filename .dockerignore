@@ -1,0 +1,14 @@
+.git
+.env*
+.venv
+.uv-cache
+.npm-cache
+.playwright-browsers
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/node_modules
+**/.next
+**/test-results
+var
+backups

@@ -47,3 +47,22 @@ jobs:
         run: npm run lint --prefix apps/web
       - name: Build production bundle
         run: npm run build --prefix apps/web
+
+  e2e:
+    name: Browser E2E · Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: uv sync --locked --all-packages
+      - run: npm ci --prefix apps/web --ignore-scripts
+      - run: npx --prefix apps/web playwright install chromium
+      - run: npm run test:e2e --prefix apps/web

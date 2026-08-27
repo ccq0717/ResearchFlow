@@ -2,7 +2,7 @@
 
 > 适用范围：Windows 本地使用、开发、测试与排错
 >
-> 最后更新：2026-08-26
+> 最后更新：2026-08-27
 
 ResearchFlow 由 Next.js 前端、FastAPI 后端、SQLite、本地上传目录以及远程 LLM、网页搜索和 Embedding 服务组成。在线部署另见[作品集 Demo 部署指南](online-demo-deployment.md)。
 
@@ -11,8 +11,10 @@ ResearchFlow 由 Next.js 前端、FastAPI 后端、SQLite、本地上传目录�
 1. 打开 `http://localhost:3000`；
 2. 可选：上传 PDF、Markdown 或 UTF-8 文本，等待状态变为 `ready`；
 3. 输入不少于 10 个字符的研究目标，并选择需要使用的本地文档；
-4. 创建任务后，在工作区查看计划、进度、来源、证据、主张和报告；运行期间可主动取消；
+4. 创建任务后查看计划、进度、来源、证据、主张、度量和报告；运行期间可取消；
 5. 刷新或重新打开任务不会丢失已持久化内容。
+
+失败任务可重新运行一次。Dashboard 支持重命名、归档和删除已结束记录。
 
 三种工作流模式：
 
@@ -119,6 +121,8 @@ Gemini 原生适配器默认使用 `https://generativelanguage.googleapis.com/v1
 | `RESEARCHFLOW_CORS_ORIGINS` | 本地 3000 端口 | 前后端分域部署 |
 | `RESEARCHFLOW_WEB_SEARCH_RESULT_LIMIT` | `3` | 调整每个问题的网页数量与费用 |
 | `RESEARCHFLOW_WEB_REQUEST_TIMEOUT_SECONDS` | `20` | 网页服务经常超时 |
+| `RESEARCHFLOW_MAX_CONCURRENT_RUNS` | `2` | 限制同时运行的研究任务 |
+| `RESEARCHFLOW_MAX_RUNS_PER_DAY` | `20` | 限制每日任务及外部服务费用 |
 | `RESEARCHFLOW_KNOWLEDGE_UPLOAD_DIRECTORY` | `./var/uploads` | 使用持久磁盘 |
 | `RESEARCHFLOW_KNOWLEDGE_MAX_DOCUMENT_BYTES` | `10485760` | 调整单文件上限 |
 | `RESEARCHFLOW_KNOWLEDGE_MAX_DOCUMENT_COUNT` | `50` | 调整文档总数上限 |
@@ -127,6 +131,8 @@ Gemini 原生适配器默认使用 `https://generativelanguage.googleapis.com/v1
 | `RESEARCHFLOW_EMBEDDING_BASE_URL` | Gemini `v1beta` | 更换 Embedding 服务 |
 | `RESEARCHFLOW_EMBEDDING_TIMEOUT_SECONDS` | `60` | Embedding 服务经常超时 |
 | `RESEARCHFLOW_EMBEDDING_BATCH_SIZE` | `32` | 供应商限制批大小 |
+
+如需在运行页估算模型费用，可配置输入、输出每百万 Token 的美元单价：`RESEARCHFLOW_LLM_INPUT_COST_PER_MILLION_TOKENS` 和 `RESEARCHFLOW_LLM_OUTPUT_COST_PER_MILLION_TOKENS`。未配置时显示“未配置单价”，不会错误显示零费用。
 
 完整默认值以 [`core/config.py`](../../apps/api/src/researchflow/core/config.py) 为准。
 
@@ -152,17 +158,21 @@ var/
 
 数据库保存任务、事件、计划、来源、证据、主张、文档片段和 Embedding；上传目录保存原始文件。两者必须作为同一个数据集备份。
 
-停止后端后备份：
+停止后端后执行备份，脚本输出带时间戳的目录：
 
 ```powershell
-New-Item -ItemType Directory -Force .\backups
-Copy-Item .\var\researchflow.db .\backups\researchflow.db
-Copy-Item .\var\uploads .\backups\uploads -Recurse
+.\scripts\backup_data.ps1
 ```
 
-`backups/` 可能包含私人资料，不应提交。需要清空数据时，先停止后端并保留备份，再删除明确的 `var/researchflow.db` 和 `var/uploads`；下次启动会自动创建数据库结构。
+恢复到空目录后检查：
 
-当前使用 SQLAlchemy `create_all` 补齐表，没有正式迁移工具。公开部署前需要加入迁移和回滚方案。
+```powershell
+.\scripts\restore_data.ps1 -BackupDirectory .\backups\时间戳 -DataDirectory .\var-restored
+```
+
+`backups/` 可能包含私人资料，不应提交。恢复目标必须是空目录，避免把两套数据混合。需要清空数据时，先停止后端并保留备份，再删除明确的数据库和上传目录。
+
+数据库保存 `schema_migrations` 版本。当前基线可为旧数据库无损补齐附属表；不兼容版本会拒绝启动。SQLite 回滚使用更新前备份恢复，不在原库上执行破坏性降级。
 
 ## 5. 检查与测试
 
@@ -180,6 +190,7 @@ Copy-Item .\var\uploads .\backups\uploads -Recurse
 npm test --prefix apps/web
 npm run lint --prefix apps/web
 npm run build --prefix apps/web
+npm run test:e2e --prefix apps/web
 ```
 
 真实服务评测不会进入常规测试，需手动执行并消耗少量额度：
@@ -190,6 +201,7 @@ npm run build --prefix apps/web
 ```
 
 自动化测试显式禁用仓库 `.env`，并使用 Fake 或 HTTP Mock，不会读取真实密钥或访问外部服务。
+浏览器 E2E 会在专用端口启动模拟工作流，验证创建、完成、报告、度量和刷新恢复，并在结束后关闭测试服务。
 
 ## 6. 常见问题
 
@@ -232,6 +244,7 @@ npm run build --prefix apps/web
 - 不上传不允许交给这些供应商处理的私人或受限资料；
 - 错误响应不会返回密钥、供应商原始正文或堆栈；
 - 当前 SQLite 和进程内任务适合单实例、低流量演示，不适合直接横向扩展；
+- API 日志只记录请求 ID、路径、状态和耗时，不记录请求正文、密钥或文档内容；
 - 线上访问保护、限流、费用上限、持久磁盘和备份要求见[部署指南](online-demo-deployment.md)。
 
 演示前只需确认：前后端健康、真实服务密钥有效、知识文档为 `ready`、任务能够完成、来源链接可打开且页面未暴露敏感信息。

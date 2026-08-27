@@ -186,3 +186,21 @@ class ResearchMaterials:
     evidence: tuple[Evidence, ...]
     claims: tuple[Claim, ...]
     citation_audit: CitationAudit
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchRunMetrics:
+    duration_ms: int | None
+    llm_duration_ms: int
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+    estimated_llm_cost_usd: float | None
+    task_count: int
+    failed_task_count: int
+    source_count: int
+    web_source_count: int
+    local_source_count: int
+    evidence_count: int
+    claim_count: int
+    citation_coverage_percent: int

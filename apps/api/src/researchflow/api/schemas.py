@@ -14,6 +14,7 @@ from researchflow.domain.research import (
     ResearchPlan,
     ResearchQuestion,
     ResearchRun,
+    ResearchRunMetrics,
     ResearchRunStatus,
     ResearchStage,
     ResearchTask,
@@ -79,6 +80,29 @@ class ResearchRunResponse(BaseModel):
 
 class ResearchRunListResponse(BaseModel):
     items: list[ResearchRunResponse]
+
+
+class ResearchRunMetricsResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    duration_ms: int | None
+    llm_duration_ms: int
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+    estimated_llm_cost_usd: float | None
+    task_count: int
+    failed_task_count: int
+    source_count: int
+    web_source_count: int
+    local_source_count: int
+    evidence_count: int
+    claim_count: int
+    citation_coverage_percent: int
+
+    @classmethod
+    def from_domain(cls, metrics: ResearchRunMetrics) -> "ResearchRunMetricsResponse":
+        return cls.model_validate(metrics)
 
 
 class ResearchQuestionResponse(BaseModel):

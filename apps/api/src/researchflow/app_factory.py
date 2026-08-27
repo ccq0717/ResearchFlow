@@ -1,4 +1,7 @@
+import logging
 from contextlib import asynccontextmanager
+from time import perf_counter
+from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +30,8 @@ from researchflow.persistence.repository import SqliteResearchRepository
 from researchflow.workflows.langgraph_research import LangGraphResearchWorkflow
 from researchflow.workflows.llm_research import LLMResearchWorkflow
 from researchflow.workflows.simulated import SimulatedResearchWorkflow
+
+logger = logging.getLogger("researchflow.http")
 
 
 def create_app(
@@ -141,7 +146,15 @@ def create_app(
     else:
         workflow = SimulatedResearchWorkflow(resolved_settings.simulation_step_delay)
 
-    application = ResearchRunApplication(repository, workflow, knowledge_library)
+    application = ResearchRunApplication(
+        repository,
+        workflow,
+        knowledge_library,
+        llm_input_cost_per_million_tokens=(resolved_settings.llm_input_cost_per_million_tokens),
+        llm_output_cost_per_million_tokens=(resolved_settings.llm_output_cost_per_million_tokens),
+        max_concurrent_runs=resolved_settings.max_concurrent_runs,
+        max_runs_per_day=resolved_settings.max_runs_per_day,
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -158,6 +171,29 @@ def create_app(
     app = FastAPI(title=resolved_settings.app_name, lifespan=lifespan)
     app.state.research_runs = application
     app.state.knowledge_library = knowledge_library
+
+    @app.middleware("http")
+    async def log_request(request, call_next):
+        request_id = request.headers.get("X-Request-ID", str(uuid4()))[:100]
+        started = perf_counter()
+        status_code = 500
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            response.headers["X-Request-ID"] = request_id
+            return response
+        finally:
+            logger.info(
+                "request.completed",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": status_code,
+                    "duration_ms": round((perf_counter() - started) * 1000),
+                },
+            )
+
     register_error_handlers(app)
     app.add_middleware(
         CORSMiddleware,
