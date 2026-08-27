@@ -53,6 +53,10 @@ class ArchiveResearchRunRequest(BaseModel):
     archived: bool = True
 
 
+class DemoSessionRequest(BaseModel):
+    access_code: str = Field(min_length=1, max_length=200)
+
+
 class ResearchRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

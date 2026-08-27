@@ -5,11 +5,13 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from researchflow.api.errors import register_error_handlers
 from researchflow.api.routes import router
 from researchflow.application.knowledge_library import KnowledgeLibrary
 from researchflow.application.research_runs import ResearchRunApplication
+from researchflow.core.access import DemoAccessGuard
 from researchflow.core.config import Settings, get_settings
 from researchflow.ingestion.retrieval import EmbeddingKnowledgeRetriever
 from researchflow.integrations.embedding.base import EmbeddingClient, UnconfiguredEmbeddingClient
@@ -171,6 +173,32 @@ def create_app(
     app = FastAPI(title=resolved_settings.app_name, lifespan=lifespan)
     app.state.research_runs = application
     app.state.knowledge_library = knowledge_library
+    access_code = (
+        resolved_settings.demo_access_code.get_secret_value().strip()
+        if resolved_settings.demo_access_code is not None
+        else None
+    ) or None
+    app.state.demo_access_guard = DemoAccessGuard(
+        access_code,
+        secure_cookie=resolved_settings.environment == "production",
+    )
+
+    @app.middleware("http")
+    async def protect_demo(request, call_next):
+        guard = request.app.state.demo_access_guard
+        public_path = request.url.path in {"/health", "/api/demo-session"}
+        if (
+            guard.enabled
+            and request.method != "OPTIONS"
+            and request.url.path.startswith("/api")
+            and not public_path
+            and not guard.allows(request.cookies.get(guard.cookie_name))
+        ):
+            return JSONResponse(
+                status_code=401,
+                content={"code": "DEMO_ACCESS_REQUIRED", "message": "请输入演示访问码"},
+            )
+        return await call_next(request)
 
     @app.middleware("http")
     async def log_request(request, call_next):
@@ -198,7 +226,7 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(resolved_settings.cors_origins),
-        allow_credentials=False,
+        allow_credentials=bool(access_code),
         allow_methods=["*"],
         allow_headers=["*"],
     )

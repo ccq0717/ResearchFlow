@@ -123,6 +123,7 @@ Gemini 原生适配器默认使用 `https://generativelanguage.googleapis.com/v1
 | `RESEARCHFLOW_WEB_REQUEST_TIMEOUT_SECONDS` | `20` | 网页服务经常超时 |
 | `RESEARCHFLOW_MAX_CONCURRENT_RUNS` | `2` | 限制同时运行的研究任务 |
 | `RESEARCHFLOW_MAX_RUNS_PER_DAY` | `20` | 限制每日任务及外部服务费用 |
+| `RESEARCHFLOW_DEMO_ACCESS_CODE` | 未启用 | 为共享在线 Demo 设置访问码 |
 | `RESEARCHFLOW_KNOWLEDGE_UPLOAD_DIRECTORY` | `./var/uploads` | 使用持久磁盘 |
 | `RESEARCHFLOW_KNOWLEDGE_MAX_DOCUMENT_BYTES` | `10485760` | 调整单文件上限 |
 | `RESEARCHFLOW_KNOWLEDGE_MAX_DOCUMENT_COUNT` | `50` | 调整文档总数上限 |
@@ -245,6 +246,8 @@ npm run test:e2e --prefix apps/web
 - 错误响应不会返回密钥、供应商原始正文或堆栈；
 - 当前 SQLite 和进程内任务适合单实例、低流量演示，不适合直接横向扩展；
 - API 日志只记录请求 ID、路径、状态和耗时，不记录请求正文、密钥或文档内容；
-- 线上访问保护、限流、费用上限、持久磁盘和备份要求见[部署指南](online-demo-deployment.md)。
+- 本地可不设置访问码；设置 `RESEARCHFLOW_DEMO_ACCESS_CODE` 后，Dashboard 会先要求解锁，Cookie 只保存后端签发的会话值；
+- `production` 环境强制使用 `langgraph`、公开 CORS Origin 和至少 12 字符的访问码；
+- 线上限流、费用上限、持久磁盘和备份要求见[部署指南](online-demo-deployment.md)。
 
 演示前只需确认：前后端健康、真实服务密钥有效、知识文档为 `ready`、任务能够完成、来源链接可打开且页面未暴露敏感信息。

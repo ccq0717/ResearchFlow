@@ -11,6 +11,7 @@
 
 - [产品定位与设计取舍](product/project-discussion.md)：稳定的产品范围与非目标；
 - [项目路线图](product/roadmap.md)：实施阶段、状态和后续计划；
+- [作品集展示材料](product/portfolio-presentation.md)：演示顺序、简历描述和技术取舍；
 - [领域词汇表](../CONTEXT.md)：核心术语；
 - [核心数据模型](architecture/domain-model.md)：实体、关系和数据库表；
 - [LLM 与联合研究工作流](architecture/llm-integration.md)：工作流、外部接口和数据流；
@@ -23,6 +24,7 @@
 - [通用网页搜索 Provider 比较](research/general-web-search-provider-comparison.md)；
 - [Exa 来源覆盖度评测](research/exa-m3-source-coverage.md)；
 - [本地检索方案评测](research/m4-local-retrieval-evaluation.md)；
+- [在线 Demo 部署平台比较](research/deployment-platform-comparison.md)；
 - [Hello-Agents 参考分析](research/hello-agents-analysis.md)。
 
 这些文件保留选型依据和可复现结果，不是运行产品的必读前置。

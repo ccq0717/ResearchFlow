@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 10 课：容器、Secret 与在线部署 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0010 · 约 20 分钟</p>
+  <h1>本地能运行，为什么还不等于可以上线</h1>
+  <p class="lead">在线 Demo 需要把构建、网络、数据、Secret、费用和恢复方式一起固定下来。Docker 只解决其中的运行环境一致性。</p>
+  <div class="callout"><strong>先记结论：</strong>容器可以替换，数据卷和 Secret 不能写进镜像；当前架构必须保持单个 API 写入实例。</div>
+
+  <h2>1. 两个容器分别负责什么</h2>
+  <p>Web 镜像构建并运行 Next.js，API 镜像用锁文件安装 Python 依赖并运行 FastAPI。Compose 把它们组合起来，浏览器访问 Web 和 API，API 再访问外部 LLM、Exa 与 Embedding 服务。</p>
+
+  <h2>2. 为什么 SQLite 和 uploads 必须放在同一持久卷</h2>
+  <p>数据库保存文档元数据、片段和引用，上传目录保存原文件。只恢复其中一个会产生“记录存在但文件丢失”或“文件存在但数据库不知道”的不一致，因此两者作为一个数据集备份和恢复。</p>
+
+  <h2>3. Secret 与公开前端变量的边界</h2>
+  <p>LLM、Exa 和 Embedding Key 只进入 API 服务的 Secret。<code>NEXT_PUBLIC_*</code> 会被写入浏览器包，只能放公开 API 地址。镜像、Git、日志和截图都不应包含密钥。</p>
+
+  <h2>4. HTTPS 和访问保护在哪里做</h2>
+  <p>首个作品集版本优先使用平台入口或反向代理提供 HTTPS 与访问保护，避免在业务代码中提前建设账号系统。受保护的访客才能读取历史、上传文件或触发付费研究。</p>
+
+  <h2>5. 为什么不能直接增加多个 API 实例</h2>
+  <p>当前后台任务在进程内，SQLite 也只有一个本地文件。多个实例可能看不到彼此的 Task，并对同一数据库产生写入竞争。只有需要正式多用户和横向扩展时，才迁移到 PostgreSQL、独立 Worker 和队列。</p>
+
+  <h2>6. 更新与回滚的最小顺序</h2>
+  <pre><code>健康检查当前版本
+→ 停止写入并备份 SQLite + uploads
+→ 构建和发布新镜像
+→ 检查 schema 版本、健康端点和黄金流程
+→ 失败时恢复旧镜像与对应备份</code></pre>
+  <p>数据库的 <code>schema_migrations</code> 会阻止不兼容应用悄悄读写错误结构。SQLite 回滚使用发布前备份，不执行危险的原地降级。</p>
+
+  <h2>7. 上线验收看什么</h2>
+  <p>验收必须从真实浏览器完成创建、SSE、来源、证据、报告和刷新恢复；同时检查重启后数据、访问保护、Secret、日志、每日限额和备份恢复。只有这些都实际验证后，HTTPS 链接才适合放进作品集。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>项目明确区分镜像、运行配置和持久数据；单实例是基于 SQLite 与进程内任务的主动约束，并通过健康检查、限额、版本门禁和备份恢复控制作品集 Demo 风险。</div>
+  <p class="footer"><a href="0009-understand-run-reliability.html">上一课：后台任务与可靠性</a> · <a href="../README.md">返回学习区</a> · <a href="../../guides/online-demo-deployment.md">部署指南</a></p>
+</main>
+</body>
+</html>

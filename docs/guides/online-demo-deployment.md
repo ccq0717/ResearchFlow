@@ -1,128 +1,97 @@
 # ResearchFlow 作品集在线 Demo 部署指南
 
-> 状态：规划中，步骤需在选定平台后实际验证
+> 当前方案：Railway Hobby，Singapore，Next.js 与 FastAPI 各一个服务
 >
-> 目标：提供面试官可通过 HTTPS 链接访问的低流量 Demo
+> 当前状态：代码与配置已准备；平台部署、容器验证和线上验收尚未执行
 
-本地安装、测试和排错见[使用、开发与运维手册](development-and-operations.md)。本文只记录上线约束与验收标准，不把当前项目描述为多用户生产系统。
+本地安装与排错见[使用、开发与运维手册](development-and-operations.md)，平台选型依据见[部署平台比较](../research/deployment-platform-comparison.md)。本文只保留首次上线所需配置和验收步骤。
 
-## 1. 部署边界
+## 部署边界
 
-目标：
-
-- 受邀访问者可以运行受限任务并查看进度、来源、证据和报告；
-- Secret 不进入浏览器、仓库或日志；
-- 数据在普通重启后仍可恢复；
-- 成本、更新、备份和回滚可控。
-
-非目标：公开注册、多租户、高并发、高可用、零停机升级和复杂云基础设施。
-
-## 2. 上线阻塞项
-
-当前代码可以本地运行，但公开前还需要：
-
-- 访问保护，避免任意访客读取历史或触发付费任务；
-- 频率、并发、单任务和每日费用上限；
-- SQLite 与上传目录所在的持久磁盘；
-- HTTPS、请求体限制和 SSE 可用的入口；
-- 日志、健康检查、自动重启、备份、恢复和回滚；
-- 公开、安全且费用可控的固定演示输入。
-
-任务当前运行在 FastAPI 进程内，重启会把未完成任务标记为中断；SQLite 和进程内状态也要求 API 保持单实例。
-
-## 3. 目标架构
+这是使用共享访问码保护的低流量作品集 Demo，不是多租户 SaaS。FastAPI 在进程内执行任务，SQLite 与上传文件位于单块持久卷，因此 API 必须保持单实例。进程重启时未完成任务会标记为中断，用户可以重新运行，但不会从节点中间续跑。
 
 ```text
-浏览器
-  │ HTTPS
-  ▼
-平台入口或反向代理
-  ├─ /       → Next.js Web
-  └─ /api/*  → FastAPI API（单实例）
-                    ├─ LLM / Exa / Embedding Provider
-                    └─ 持久磁盘：SQLite + uploads
+浏览器 ──HTTPS──> Next.js
+  └──── REST / SSE ────> FastAPI（单实例）
+                            ├─ LLM / Exa / Embedding
+                            └─ /data
+                               ├─ researchflow.db
+                               └─ uploads/
 ```
 
-优先使用同一站点入口，减少 CORS、SSE 和访问控制复杂度。若前后端分域，必须显式配置 API 地址、CORS 和 HTTPS。
+## Railway 配置
 
-出现多实例、并行写入、正式账号数据或任务续跑需求时，再评估 PostgreSQL、迁移工具、独立 Worker 和队列；不能直接横向扩展当前 API。
+在同一个 Railway 项目中从本仓库创建 `web` 和 `api` 两个服务，不设置子目录 Root Directory；两个 Dockerfile 都需要仓库根目录作为构建上下文。
 
-## 4. 平台选择标准
+### API 服务
 
-候选平台必须确认：
+- Dockerfile Path：`/apps/api/Dockerfile`
+- Region：`Singapore`
+- Replicas：`1`
+- Serverless：关闭
+- Public Networking：开启
+- Healthcheck Path：`/health`
+- Volume：1 GB，挂载到 `/data`
 
-- 支持长时间 Web 服务和 SSE，而不是只有短时 Serverless 请求；
-- 提供持久磁盘、Secret、HTTPS、日志、健康检查和回滚；
-- 冷启动、休眠和最长请求时间不会破坏研究任务；
-- 支持单实例或单进程约束；
-- CPU、内存、磁盘、出站流量和外部 Provider 总成本可接受；
-- 可以设置访问保护、限流和费用告警。
+设置以下变量；密钥和访问码使用平台 Secret，不复制仓库 `.env`：
 
-平台确定后，在本文补充实际区域、资源、预算、部署命令和限制。
+```dotenv
+RAILWAY_DOCKERFILE_PATH=/apps/api/Dockerfile
+RESEARCHFLOW_ENVIRONMENT=production
+RESEARCHFLOW_WORKFLOW_MODE=langgraph
+RESEARCHFLOW_DATABASE_URL=sqlite+aiosqlite:////data/researchflow.db
+RESEARCHFLOW_KNOWLEDGE_UPLOAD_DIRECTORY=/data/uploads
+RESEARCHFLOW_CORS_ORIGINS=["https://<web-domain>"]
+RESEARCHFLOW_DEMO_ACCESS_CODE=<至少12字符的随机访问码>
+RESEARCHFLOW_MAX_CONCURRENT_RUNS=1
+RESEARCHFLOW_MAX_RUNS_PER_DAY=10
+```
 
-## 5. 安全与费用
+再按本地已验证配置加入 LLM、Exa 和 Embedding 变量。可选填写两项每百万 Token 单价，让运行页显示模型费用估算；真正的月度硬预算仍应在各 Provider 控制台设置。
 
-### 访问和预算
+### Web 服务
 
-- 采用平台访问策略、反向代理口令或应用内演示访问码；
-- 未授权访问者不能读取历史或创建任务；
-- 限制同一访问者频率、全站并发、搜索次数、来源数、模型 Token 和重试；
-- 设置每日或每月总预算及超限后的安全失败方式；
-- Provider 原始错误、上下文和密钥不得返回前端。
+- Dockerfile Path：`/apps/web/Dockerfile`
+- Region：`Singapore`
+- Public Networking：开启
+- Healthcheck Path：`/`
 
-### Secret 和上传数据
+```dotenv
+RAILWAY_DOCKERFILE_PATH=/apps/web/Dockerfile
+NEXT_PUBLIC_API_BASE_URL=https://<api-domain>
+```
 
-- LLM、搜索和 Embedding 密钥只进入平台 Secret；
-- `NEXT_PUBLIC_*` 变量不能存放密钥；
-- 数据库、上传文件、备份和访问日志不进入 Git；
-- 文档片段会发送给 Embedding Provider，命中片段还会发送给 LLM；
-- 首版更适合预置公开文档，或把上传功能放在访问保护之后；
-- 日志不记录私人资料、受版权保护全文或不必要的模型上下文。
+`NEXT_PUBLIC_API_BASE_URL` 会写入浏览器包，修改后必须重新构建；它只能包含公开 API 地址，不能包含密钥。取得 Web 域名后，再把 API 的 `RESEARCHFLOW_CORS_ORIGINS` 改为该完整 Origin 并重新部署。
 
-## 6. 持久化与备份
+## 安全、预算与数据
 
-- `RESEARCHFLOW_DATABASE_URL` 和 `RESEARCHFLOW_KNOWLEDGE_UPLOAD_DIRECTORY` 指向同一持久磁盘；
-- API 只运行一个写入实例；
-- 部署更新不会覆盖数据；
-- 数据库与上传目录作为一个数据集自动备份，并限制保留数量；
-- 至少完成一次恢复到临时环境的演练；
-- 删除或重置前先核对明确目标并保留可恢复备份。
+- 生产配置会拒绝模拟工作流、本地域名、通配 CORS 或短访问码；访问成功后后端只写入 8 小时有效的 HttpOnly、Secure Cookie，不把访问码放进前端包。
+- API 已限制全站并发数和每日创建数；搜索结果数、上传体积与数量也有上限。平台和 Provider 仍需分别设置费用提醒或硬上限。
+- 日志只记录请求 ID、方法、路径、状态和耗时，不记录请求正文、密钥或文档内容。
+- 演示只上传公开资料。文档片段会发送给 Embedding Provider，检索命中还会发送给 LLM。
+- Railway Volume 启用每日或每周备份。定期把 SQLite 与 uploads 导出到平台外；平台内备份不能作为唯一副本。
 
-## 7. 实施顺序
+## 发布与恢复
 
-1. 确认功能边界、访问方式、平台和月度预算；
-2. 增加可复现的前后端容器构建与本地 Compose 验证；
-3. 实现访问保护、并发限制和研究预算；
-4. 配置域名、Secret、持久磁盘、日志和健康检查；
-5. 在临时环境验证构建、SSE、任务终态和重启持久化；
-6. 演练备份、恢复、更新和回滚；
-7. 使用黄金输入完成线上端到端验收；
-8. 验收通过后再把链接加入 README、简历或作品集。
+首次发布按 `API → Web → API CORS` 的顺序进行。后续更新先备份 `/data`，再部署一个已通过 CI 的提交；不要横向扩展 API。
 
-## 8. 上线验收
+回滚分两类：
 
-### 构建与用户流程
+- 代码问题：在 Railway 回滚到上一成功部署；
+- 数据或 schema 问题：停止 API 写入，恢复同一时间点的 SQLite 与 uploads，再部署与该 schema 兼容的代码。
 
-- [ ] 干净环境可用锁文件完成构建；
-- [ ] 健康检查、HTTPS 和自动重启正常；
-- [ ] 访问保护不破坏 REST 与 SSE；
-- [ ] 可完成创建、进度、来源、证据、报告和刷新恢复；
-- [ ] 本地资料能被检索并显示文件定位；
-- [ ] 外部服务失败、超时和预算耗尽时提示安全明确。
+仓库中的 `scripts/backup_data.ps1` 和 `scripts/restore_data.ps1` 用于本地与导出副本的恢复演练；平台备份和平台外副本都应至少验证一次。
 
-### 数据与安全
+## 上线验收
 
-- [ ] 重启和部署后 SQLite 与上传文件仍一致；
-- [ ] 已完成备份恢复演练；
-- [ ] 浏览器、页面源代码、日志和错误响应中没有密钥；
-- [ ] 未授权访问者不能读取历史或触发付费任务；
-- [ ] 并发、频率、Token、搜索次数和总费用均有上限。
+- [ ] 两个镜像在干净环境构建成功，API 健康检查通过；
+- [ ] HTTPS 页面显示访问码入口，未授权请求不能读取历史或创建任务；
+- [ ] 黄金输入完成规划、网页与本地检索、证据、报告和度量；
+- [ ] SSE 中断或刷新后能恢复已保存进度；取消、失败和一次重试状态明确；
+- [ ] 重启 API 后历史、SQLite 和上传文件仍在；
+- [ ] 外部服务失败或超时时，页面不泄露密钥、原始响应或堆栈；
+- [ ] Railway 与 Provider 的预算提醒已开启；
+- [ ] 备份恢复、代码回滚和数据回滚各验证一次；
+- [ ] README 只在上述检查完成后加入真实在线链接和截图。
 
-### 运维与交付
-
-- [ ] 已记录平台、区域、规格、预算和已知限制；
-- [ ] 已验证更新、回滚、备份、恢复和停机步骤；
-- [ ] README 在线链接、截图和能力说明与实际部署一致；
-- [ ] 演示前有简短的健康、费用和敏感信息检查清单。
-
-首次部署完成后，应把本文件中的计划性描述替换为真实命令和平台操作，而不是另建一份重复手册。
+Docker 当前未安装在本开发设备，因此 Dockerfile 与 Compose 尚未实际构建；线上链接、真实平台规格和恢复步骤也必须在首次部署后回填，不能把“已配置”写成“已验证”。

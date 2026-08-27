@@ -19,6 +19,8 @@
 - [第 6 课：RAG 与 Embedding 在 ResearchFlow 中怎样工作](lessons/0006-understand-rag-embeddings.html)
 - [第 7 课：检索结果怎样变成可追溯结论](lessons/0007-understand-evidence-and-citations.html)
 - [第 8 课：Fake、Mock、集成测试与真实评测](lessons/0008-understand-testing-and-evaluation.html)
+- [第 9 课：后台任务、失败恢复、日志与可靠性](lessons/0009-understand-run-reliability.html)
+- [第 10 课：Docker、Secret、持久化与在线部署](lessons/0010-understand-deployment.html)
 
 ## 速查资料
 
@@ -39,7 +41,7 @@
 8. Agent 工作流、LangGraph 与状态管理（已有入门课）
 9. RAG、Embedding 检索、证据和引用（已有专题课）
 10. Fake、Mock、集成测试与真实评测（已有专题课）
-11. 后台任务、失败恢复、日志与可靠性
-12. Docker、Secret、持久化与在线部署
+11. 后台任务、失败恢复、日志与可靠性（已有专题课）
+12. Docker、Secret、持久化与在线部署（已有专题课）
 
 学习方向由 [MISSION.md](MISSION.md) 约束，资料来源记录在 [RESOURCES.md](RESOURCES.md)。

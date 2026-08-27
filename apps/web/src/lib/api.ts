@@ -159,6 +159,12 @@ export interface KnowledgeDocument {
 export const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
+export class ApiError extends Error {
+  constructor(public readonly status: number) {
+    super("请求失败（" + status + "）");
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!(init?.body instanceof FormData)) {
@@ -167,13 +173,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(apiBaseUrl + path, {
     ...init,
     headers,
+    credentials: "include",
   });
 
   if (!response.ok) {
-    throw new Error("请求失败（" + response.status + "）");
+    throw new ApiError(response.status);
   }
 
+  if (response.status === 204) return undefined as T;
+
   return response.json() as Promise<T>;
+}
+
+export function createDemoSession(accessCode: string): Promise<void> {
+  return request<void>("/api/demo-session", {
+    method: "POST",
+    body: JSON.stringify({ access_code: accessCode }),
+  });
 }
 
 export function createResearchRun(
@@ -229,6 +245,7 @@ export function archiveResearchRun(
 export async function deleteResearchRun(runId: string): Promise<void> {
   const response = await fetch(apiBaseUrl + "/api/research-runs/" + runId, {
     method: "DELETE",
+    credentials: "include",
   });
   if (!response.ok) throw new Error("删除研究任务失败（" + response.status + "）");
 }
@@ -278,7 +295,7 @@ export function uploadKnowledgeDocument(file: File): Promise<KnowledgeDocument> 
 export async function deleteKnowledgeDocument(documentId: string): Promise<void> {
   const response = await fetch(
     apiBaseUrl + "/api/knowledge-documents/" + documentId,
-    { method: "DELETE" },
+    { method: "DELETE", credentials: "include" },
   );
   if (!response.ok) {
     throw new Error("删除知识文档失败（" + response.status + "）");

@@ -9,6 +9,7 @@ import { ResearchMetricsPanel } from "./research-metrics-panel";
 import { ResearchPlanPanel } from "./research-plan-panel";
 import { ResearchReport } from "./research-report";
 import {
+  ApiError,
   apiBaseUrl,
   cancelResearchRun,
   getResearchMaterials,
@@ -37,7 +38,6 @@ const stages: Array<{ id: ResearchStage; label: string }> = [
   { id: "writing", label: "撰写方案" },
   { id: "finalizing", label: "检查结果" },
 ];
-
 
 export default function ResearchWorkspace() {
   const params = useParams<{ runId: string }>();
@@ -119,6 +119,7 @@ export default function ResearchWorkspace() {
             runId +
             "/events?after=" +
             lastSequence,
+          { withCredentials: true },
         );
         source.onopen = () => setConnection("实时连接");
 
@@ -172,8 +173,12 @@ export default function ResearchWorkspace() {
         source.addEventListener("research.event", handleEvent);
         source.addEventListener("stream.ready", handleEvent);
         source.onerror = () => setConnection("连接中断");
-      } catch {
-        setError("无法读取研究任务，请确认后端已经启动。");
+      } catch (cause: unknown) {
+        setError(
+          cause instanceof ApiError && cause.status === 401
+            ? "演示访问尚未解锁，请返回 Dashboard 输入访问码。"
+            : "无法读取研究任务，请确认后端已经启动。",
+        );
         setConnection("连接失败");
       }
     }

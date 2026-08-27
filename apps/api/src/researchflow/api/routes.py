@@ -11,6 +11,7 @@ from fastapi.responses import Response, StreamingResponse
 from researchflow.api.schemas import (
     ArchiveResearchRunRequest,
     CreateResearchRunRequest,
+    DemoSessionRequest,
     DocumentChunkListResponse,
     DocumentChunkResponse,
     KnowledgeDocumentListResponse,
@@ -33,6 +34,34 @@ from researchflow.application.research_runs import (
 from researchflow.domain.research import ResearchEvent
 
 router = APIRouter(prefix="/api")
+
+
+@router.post("/demo-session", status_code=status.HTTP_204_NO_CONTENT)
+async def create_demo_session(body: DemoSessionRequest, request: Request) -> Response:
+    guard = request.app.state.demo_access_guard
+    if not guard.authenticate(body.access_code):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "INVALID_ACCESS_CODE", "message": "访问码无效"},
+        )
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.set_cookie(
+        guard.cookie_name,
+        guard.session_token,
+        httponly=True,
+        secure=guard.secure_cookie,
+        samesite="lax",
+        max_age=8 * 60 * 60,
+    )
+    return response
+
+
+@router.delete("/demo-session", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_demo_session(request: Request) -> Response:
+    guard = request.app.state.demo_access_guard
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.delete_cookie(guard.cookie_name)
+    return response
 
 
 def _application(request: Request) -> ResearchRunApplication:

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     simulation_step_delay: float = Field(default=0.7, ge=0, le=10)
     max_concurrent_runs: int = Field(default=2, ge=1, le=20)
     max_runs_per_day: int = Field(default=20, ge=1, le=1000)
+    demo_access_code: SecretStr | None = None
 
     workflow_mode: Literal["simulation", "llm", "langgraph"] = "simulation"
     llm_provider: str = Field(default="openai-compatible", min_length=1)
@@ -81,6 +82,13 @@ class Settings(BaseSettings):
                 raise ValueError("生产环境必须显式配置公开前端 CORS Origin")
             if "*" in self.cors_origins:
                 raise ValueError("生产环境不允许通配 CORS Origin")
+            demo_access_code = (
+                self.demo_access_code.get_secret_value().strip()
+                if self.demo_access_code is not None
+                else ""
+            )
+            if len(demo_access_code) < 12:
+                raise ValueError("生产环境必须设置至少 12 个字符的演示访问码")
         return self
 
     def ensure_runtime_directories(self) -> None:

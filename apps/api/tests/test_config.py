@@ -14,6 +14,19 @@ def test_production_rejects_local_cors_and_non_langgraph_workflow() -> None:
             environment="production",
             workflow_mode="langgraph",
             llm_model="model",
+            demo_access_code="long-demo-secret",
+        )
+
+
+def test_production_rejects_short_demo_access_code() -> None:
+    with pytest.raises(ValidationError, match="至少 12 个字符"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            workflow_mode="langgraph",
+            llm_model="model",
+            cors_origins=("https://demo.example.com",),
+            demo_access_code="too-short",
         )
 
 
@@ -24,5 +37,6 @@ def test_production_accepts_explicit_public_origin() -> None:
         workflow_mode="langgraph",
         llm_model="model",
         cors_origins=("https://demo.example.com",),
+        demo_access_code="long-demo-secret",
     )
     assert settings.environment == "production"

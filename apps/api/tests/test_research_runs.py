@@ -28,6 +28,34 @@ async def test_default_cors_accepts_both_local_frontend_hosts(tmp_path: Path) ->
             assert response.headers["access-control-allow-origin"] == origin
 
 
+async def test_optional_demo_access_code_protects_api_with_http_only_cookie(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_url=f"sqlite+aiosqlite:///{(tmp_path / 'access.db').as_posix()}",
+            demo_access_code="portfolio-secret",
+        )
+    )
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            blocked = await client.get("/api/research-runs")
+            invalid = await client.post("/api/demo-session", json={"access_code": "wrong"})
+            unlocked = await client.post(
+                "/api/demo-session", json={"access_code": "portfolio-secret"}
+            )
+            allowed = await client.get("/api/research-runs")
+
+    assert blocked.status_code == 401
+    assert blocked.json()["code"] == "DEMO_ACCESS_REQUIRED"
+    assert invalid.status_code == 401
+    assert unlocked.status_code == 204
+    assert "httponly" in unlocked.headers["set-cookie"].lower()
+    assert "portfolio-secret" not in unlocked.headers["set-cookie"]
+    assert allowed.status_code == 200
+
+
 async def test_research_run_completes_and_persists(tmp_path: Path) -> None:
     database_path = tmp_path / "test.db"
     app = create_app(

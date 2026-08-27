@@ -18,16 +18,17 @@ ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前
 - 前端展示研究计划、分类来源、关键主张、证据与可点击引用，刷新后仍可恢复；
 - 运行中的任务可取消；失败任务可重新运行一次；历史记录可重命名、归档和删除；
 - 运行页展示耗时、Token、来源构成、费用估算和引用覆盖率；
+- 可选共享访问码通过 HttpOnly Cookie 保护全部研究与知识库 API，生产环境强制启用；
 - Dashboard 可上传、选择、重处理和删除 PDF、Markdown、UTF-8 文本，本地引用保留页码或行号；
 - 本地资料默认使用 Gemini Embedding 2 生成语义向量并以余弦相似度检索，向量保存在 SQLite，无需独立向量数据库或 GPU；
 - 外部能力均有 Fake/Mock，常规测试不联网、不消耗模型额度；
-- 后端、前端、Ruff、ESLint 和生产构建纳入 GitHub Actions。
+- 后端、前端、Ruff、ESLint、生产构建和浏览器 E2E 纳入 GitHub Actions。
 
 固定查询验证 Exa 足以覆盖当前黄金场景所需的学术、官方和工业资料，因此暂不额外接入学术 Provider。本地检索已经升级为真正的 Embedding 检索；DOI、OCR 和独立向量数据库仍属于按需增强能力。
 
 ## 开发路线图
 
-核心研究闭环和本地可靠性已经完成，当前正在完成容器验证与作品集在线交付。详细实施历史和待确认选择见[项目路线图](docs/product/roadmap.md)。
+核心研究闭环、本地可靠性和上线配置已经完成，当前待验证容器并执行 Railway 线上部署。详细状态见[项目路线图](docs/product/roadmap.md)。
 
 ## 技术栈
 
@@ -39,6 +40,22 @@ ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前
 - OpenAI-compatible JSON Schema 结构化输出
 - pypdf 文本层解析、Gemini/OpenAI-compatible Embedding 与 SQLite 向量存储
 - ResearchFlow 自有 `ResearchWorkflow`、`LLMClient`、`SearchProvider`、`WebPageReader` 与 `KnowledgeRetriever` 接口
+
+## 架构
+
+```mermaid
+flowchart LR
+  Browser[Next.js 界面] -->|REST + SSE| API[FastAPI 应用层]
+  API --> Workflow[LangGraph 研究工作流]
+  Workflow --> LLM[LLM 适配器]
+  Workflow --> Search[Exa Web Search]
+  Workflow --> Retrieval[Embedding 本地检索]
+  API --> SQLite[(SQLite)]
+  Retrieval --> SQLite
+  API --> Files[(上传文件)]
+```
+
+LangGraph、供应商 SDK 和持久化细节都位于自有接口之后；前端只依赖 ResearchFlow 的 REST、SSE 和领域状态。
 
 ## 仓库结构
 
@@ -93,7 +110,7 @@ npm --prefix apps/web run dev -- --hostname 127.0.0.1
 
 ## 项目文档
 
-按“使用与部署、产品、架构、调研、学习、实施历史”分类的入口见[文档索引](docs/README.md)。日常启动和排错直接阅读[使用、开发与运维手册](docs/guides/development-and-operations.md)。
+按“使用与部署、产品、架构、调研、学习、实施历史”分类的入口见[文档索引](docs/README.md)。日常启动和排错直接阅读[使用、开发与运维手册](docs/guides/development-and-operations.md)，演示与简历表达见[作品集展示材料](docs/product/portfolio-presentation.md)。
 
 ## 许可证
 

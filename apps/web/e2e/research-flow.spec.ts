@@ -2,6 +2,10 @@ import { expect, test } from "@playwright/test";
 
 test("用户可以创建研究、看到完成报告并刷新恢复", async ({ page }) => {
   await page.goto("/");
+  await page.getByLabel("演示访问码").fill("e2e-portfolio-access");
+  await page.getByRole("button", { name: "进入演示" }).click();
+  await expect(page.getByRole("heading", { name: "你想研究什么？" })).toBeVisible();
+
   await page.getByRole("textbox").fill(
     "验证浏览器端到端流程能够创建研究任务完成报告并在刷新后恢复",
   );

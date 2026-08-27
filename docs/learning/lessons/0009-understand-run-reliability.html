@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 9 课：后台任务与可靠性 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0009 · 约 20 分钟</p>
+  <h1>后台任务失败后，系统怎样保持状态可信</h1>
+  <p class="lead">ResearchFlow 的研究可能运行数分钟。可靠性不是保证永不失败，而是让取消、失败、重启和重试都有明确且可恢复的结果。</p>
+  <div class="callout"><strong>先记结论：</strong>SQLite 中的 Research Run 是权威状态；内存任务只负责当前执行，事件负责解释状态怎样变化。</div>
+
+  <h2>1. 创建接口为什么立即返回</h2>
+  <p>FastAPI 先保存 <code>queued</code> 运行和 <code>run.queued</code> 事件，再创建后台 asyncio Task。浏览器马上得到 ID，随后用普通查询和 SSE 观察进度，不需要让一个 POST 请求等待整份报告。</p>
+
+  <h2>2. 状态与事件为什么同事务终结</h2>
+  <p>完成、失败和取消都通过 <code>ResearchRunOutcome</code> 写入。Repository 在一个事务里同时更新运行终态和追加终结事件，因此前端不会看到“状态已完成，但完成事件还不存在”的半成品。</p>
+
+  <h2>3. 取消为什么要等待数据库操作</h2>
+  <p>asyncio 取消会在一次 <code>await</code> 处抛出异常，但 SQLite 的提交可能已经在线程中开始。应用会屏蔽这次持久化操作的中途取消，等待提交或回滚结束，再传播取消，避免遗留写锁。</p>
+
+  <h2>4. 进程重启后发生什么</h2>
+  <p>后台 Task 存在于内存，进程退出后无法继续。下次启动扫描仍为 <code>queued</code> 或 <code>running</code> 的记录，将其标记为 <code>RUN_INTERRUPTED</code>。系统没有把失败误报为继续运行。</p>
+
+  <h2>5. “恢复”为什么是新运行</h2>
+  <p>当前 LangGraph 没有持久 checkpoint，所以失败任务会创建一个新的第二次运行，并保存 <code>retry_of</code> 与 <code>attempt</code>；原失败记录和中间材料保留。一次上限防止错误配置持续消耗额度。</p>
+  <table><thead><tr><th>行为</th><th>当前语义</th></tr></thead><tbody>
+    <tr><td>刷新页面</td><td>恢复已持久化的同一运行</td></tr>
+    <tr><td>服务重启</td><td>遗留运行明确失败</td></tr>
+    <tr><td>点击重试</td><td>创建一次有谱系的新运行</td></tr>
+    <tr><td>断点续跑</td><td>当前没有实现，也不会假装已经实现</td></tr>
+  </tbody></table>
+
+  <h2>6. 限额和日志解决什么</h2>
+  <p>并发上限保护单实例 SQLite 和外部服务；每日任务上限限制公开 Demo 的费用。JSON 日志只记录请求 ID、路径、状态和耗时，不记录目标正文、文档、密钥或供应商原始响应。</p>
+
+  <h2>7. 怎样证明可靠性</h2>
+  <p>生命周期测试覆盖完成、取消、重启中断、一次重试和配额；浏览器 E2E 覆盖创建、报告、度量和刷新恢复。备份恢复演练还会运行 SQLite 完整性检查。不同测试分别证明状态机、用户路径和数据可恢复性。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>项目把持久状态、内存执行和可重放事件分开；失败恢复采用诚实的一次新运行语义，并用事务、限额、结构化日志和端到端测试形成可靠性闭环。</div>
+  <p class="footer"><a href="0008-understand-testing-and-evaluation.html">上一课：测试与评测</a> · <a href="0010-understand-deployment.html">下一课：容器与部署</a> · <a href="../README.md">返回学习区</a></p>
+</main>
+</body>
+</html>
