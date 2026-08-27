@@ -5,7 +5,7 @@
 ## 使用与部署
 
 - [使用、开发与运维手册](guides/development-and-operations.md)：安装、启动、配置、数据、测试和排错；
-- [作品集在线 Demo 部署指南](guides/online-demo-deployment.md)：上线约束、实施顺序和验收清单。
+- [可选在线 Demo 部署指南](guides/online-demo-deployment.md)：需要公开链接时的 Railway 配置与验收清单。
 
 ## 产品与架构
 
@@ -33,7 +33,7 @@
 
 - [学习课程入口](learning/README.md)：面向从零理解前后端与 AI 工程的读者；
 - [进入 M5 前审查](product/retrospectives/pre-m5-review.md)：当前实现、文档、设计与简洁性门禁；
-- [M5 部署就绪审查](product/retrospectives/m5-deployment-readiness.md)：本地交付结论与真实上线剩余项；
+- [M5 阶段复盘](product/retrospectives/m5-deployment-readiness.md)：可靠性、测试、部署准备与作品集交付结论；
 - `product/retrospectives/`：阶段复盘与历史问题；
 - [早期 MVP 技术规格](product/mvp-spec.md)：最初纵向闭环的验收基线。
 

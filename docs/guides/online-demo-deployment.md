@@ -1,10 +1,18 @@
-# ResearchFlow 作品集在线 Demo 部署指南
+# ResearchFlow 可选在线 Demo 部署指南
 
-> 当前方案：Railway Hobby，Singapore，Next.js 与 FastAPI 各一个服务
+> 默认展示方式：本地运行并在面试中共享屏幕
 >
-> 当前状态：代码与配置已准备；平台部署、容器验证和线上验收尚未执行
+> 可选在线方案：Railway Hobby，Singapore，Next.js 与 FastAPI 各一个服务
 
-本地安装与排错见[使用、开发与运维手册](development-and-operations.md)，平台选型依据见[部署平台比较](../research/deployment-platform-comparison.md)。本文只保留首次上线所需配置和验收步骤。
+本地安装与排错见[使用、开发与运维手册](development-and-operations.md)，平台选型依据见[部署平台比较](../research/deployment-platform-comparison.md)。项目无需 Docker 或在线服务即可完成作品集演示；只有确实需要长期公开链接时才执行本文。
+
+## 是否需要部署
+
+- **本地共享屏幕**：零平台费用、数据留在本机，是当前默认方案。
+- **临时公网演示**：可按需使用隧道服务，但必须实际验证 SSE、访问码和公开风险。
+- **长期在线链接**：使用下述 Railway 方案，接受平台与外部 Provider 费用。
+
+Railway Free 每月只有 1 美元资源额度，且资源和 Volume 上限较低，可以实验但不作为稳定链接承诺；Render Free 会休眠并丢失本地 SQLite 与上传文件。需要完全零成本时，应保留本地演示，并在 GitHub 展示架构、示例报告和演示视频。
 
 ## 部署边界
 
@@ -21,7 +29,7 @@
 
 ## Railway 配置
 
-在同一个 Railway 项目中从本仓库创建 `web` 和 `api` 两个服务，不设置子目录 Root Directory；两个 Dockerfile 都需要仓库根目录作为构建上下文。
+Railway 会直接从仓库 Dockerfile 构建镜像，因此本机不必安装 Docker Compose。在同一个 Railway 项目中创建 `web` 和 `api` 两个服务，不设置子目录 Root Directory；两个 Dockerfile 都需要仓库根目录作为构建上下文。
 
 ### API 服务
 
@@ -94,4 +102,4 @@ NEXT_PUBLIC_API_BASE_URL=https://<api-domain>
 - [ ] 备份恢复、代码回滚和数据回滚各验证一次；
 - [ ] README 只在上述检查完成后加入真实在线链接和截图。
 
-Docker 当前未安装在本开发设备，因此 Dockerfile 与 Compose 尚未实际构建；线上链接、真实平台规格和恢复步骤也必须在首次部署后回填，不能把“已配置”写成“已验证”。
+Dockerfile 与 Compose 是可选交付物，当前尚未在本机实际构建。若未来执行在线部署，必须完成上述验收并回填真实链接、平台规格和恢复结果，不能把“已配置”写成“已验证”。

@@ -37,7 +37,7 @@ PDF 只读取已有文本层，不执行 OCR。扫描件会进入 `DOCUMENT_NO_T
 - uv；
 - Python 3.12，可由 uv 管理。
 
-项目不要求 Docker、Redis、GPU 或本地大模型。
+项目不要求 Docker、Docker Compose、Redis、GPU 或本地大模型。仓库中的容器文件只用于可选的干净环境验证和在线部署。
 
 ### 首次安装
 
