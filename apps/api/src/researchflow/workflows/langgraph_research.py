@@ -572,7 +572,7 @@ class LangGraphResearchWorkflow:
                     ResearchEventDraft(
                         type="report.draft.completed",
                         stage=ResearchStage.WRITING,
-                        message="基于网页证据的报告草稿已经生成",
+                        message="基于网页与本地证据的报告草稿已经生成",
                         progress=90,
                     ),
                 ),

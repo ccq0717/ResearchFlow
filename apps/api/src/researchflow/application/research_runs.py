@@ -145,13 +145,6 @@ class ResearchRunApplication:
                 *(task for task, _ in active),
                 return_exceptions=True,
             )
-        for run_id in {run_id for _, run_id in active}:
-            run = await self._repository.get(run_id)
-            if run is not None and not run.status.is_terminal:
-                await self._mark_interrupted(
-                    run_id,
-                    "后端服务停止，研究任务已中断",
-                )
 
     def _on_task_done(self, task: asyncio.Task[None]) -> None:
         run_id = self._tasks.pop(task, None)

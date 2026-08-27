@@ -44,7 +44,7 @@ ResearchRunApplication
 
 1. 模型生成 `ResearchPlan`；
 2. Search Provider 为每个问题产生网页结果；Knowledge Retriever 只在用户所选文档范围内检索；
-3. Exa 结果经 Page Reader 转成受长度限制的网页文档；本地命中保留文件名与页码或行号。两者统一转换成运行内 Source，并分别按 URL 或片段标识去重；
+3. Exa 返回的网页 highlights 经 Page Reader 做长度限制；本地命中保留文件名与页码或行号。两者统一转换成运行内 Source，并分别按 URL 或片段标识去重；
 4. 模型提取 Evidence 和它直接支持的 Claim，工作流持久化显式关系；
 5. 模型写报告，工作流确定性追加“可追溯主张与证据”章节；
 6. 确定性检查确认结构化 Claim—Evidence—Source 关联、原文可定位性、主张覆盖率和相邻来源链接；
@@ -61,6 +61,6 @@ LLM 保持 `LLM_TIMEOUT`、`LLM_CONNECTION_ERROR`、`LLM_HTTP_ERROR`、`LLM_INVA
 - 更换 Embedding 模型、维度或检索指令策略后必须重新处理已有文档，系统不会混算不兼容的向量；
 - PDF 只提取已有文本层，不执行 OCR；扫描件会进入明确的失败状态；
 - 已保存 Exa 可用的作者与发布时间并分类来源，但没有 DOI、卷期、被引量等专业学术元数据；
-- LangGraph 尚未配置持久 checkpoint；进程中断的运行会被标记为 `RUN_INTERRUPTED`；
+- LangGraph 尚未配置持久 checkpoint；进程中断遗留的运行会在下次启动时被标记为 `RUN_INTERRUPTED`；
 - Citation Coverage 只衡量结构化 Claim，不自动证明报告正文的每句话都获得语义充分的支持；
 - 自动化测试使用 Fake/Mock，真实网络兼容性由单独冒烟测试验证。

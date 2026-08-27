@@ -35,7 +35,7 @@ ResearchFlow 是一个正在分阶段实现的 AI 深度研究工作台。当前
 - REST API 与 Server-Sent Events（SSE）
 - HTTPX、Exa Search API
 - OpenAI-compatible JSON Schema 结构化输出
-- pypdf 文本层解析、Gemini 原生 Embedding（兼容 OpenAI-style 服务）与 SQLite 向量存储
+- pypdf 文本层解析、Gemini/OpenAI-compatible Embedding 与 SQLite 向量存储
 - ResearchFlow 自有 `ResearchWorkflow`、`LLMClient`、`SearchProvider`、`WebPageReader` 与 `KnowledgeRetriever` 接口
 
 ## 仓库结构
@@ -49,20 +49,9 @@ scripts        可重复运行的质量评测与开发辅助脚本
 var            本地运行数据（不提交到 Git）
 ```
 
-建议先阅读 [MVP 技术规格](docs/product/mvp-spec.md)、[核心数据模型](docs/architecture/domain-model.md)、[LLM 接入架构](docs/architecture/llm-integration.md)、[SSE 事件契约](docs/architecture/sse-events.md)和[仓库结构设计](docs/architecture/repository-structure.md)。
+## 本地启动
 
-## 环境要求
-
-- Windows 10 或 Windows 11
-- Git
-- Node.js 20.9 或更高版本
-- npm
-- uv
-- Python 3.12（也可以由 uv 管理）
-
-本地开发不需要 Docker、Redis、GPU 或本地大模型。
-
-## 初始化项目
+需要 Windows 10/11、Git、Node.js 20.9+、npm、uv 和 Python 3.12；不需要 Docker、Redis、GPU 或本地大模型。
 
 在仓库根目录打开 PowerShell：
 
@@ -72,13 +61,9 @@ Copy-Item .env.example .env
 npm install --prefix apps/web
 ```
 
-Python 虚拟环境默认创建在 `.venv`，本地数据库和日志等运行数据创建在 `var/`。
+然后分别启动后端和前端：
 
-## 本地运行
-
-从仓库根目录打开两个 PowerShell 终端。
-
-后端：
+后端终端：
 
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn researchflow.main:app `
@@ -88,59 +73,19 @@ Python 虚拟环境默认创建在 `.venv`，本地数据库和日志等运行�
   --reload
 ```
 
-前端：
+前端终端：
 
 ```powershell
-Set-Location apps/web
-npm run dev -- --hostname 127.0.0.1
+npm --prefix apps/web run dev -- --hostname 127.0.0.1
 ```
 
-启动后访问：
-
-- 前端：[http://localhost:3000](http://localhost:3000)
-- 后端健康检查：[http://localhost:8000/health](http://localhost:8000/health)
-- 后端接口文档：[http://localhost:8000/docs](http://localhost:8000/docs)
-
-## 运行检查
-
-后端测试与代码检查：
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest apps/api/tests
-.\.venv\Scripts\ruff.exe check apps/api scripts
-.\.venv\Scripts\ruff.exe format --check apps/api scripts
-```
-
-前端测试、代码检查与生产构建：
-
-```powershell
-npm test --prefix apps/web
-npm run lint --prefix apps/web
-npm run build --prefix apps/web
-```
+访问 [http://localhost:3000](http://localhost:3000)。完整测试命令和排错方式见[使用、开发与运维手册](docs/guides/development-and-operations.md)。
 
 ## 配置与安全
 
 请从 `.env.example` 复制本地配置，不要提交真实 API Key、访问令牌或个人资料。
 
-默认 `simulation` 模式不需要任何外部服务。若要启用网页与本地资料联合研究，在本地 `.env` 中设置：
-
-```dotenv
-RESEARCHFLOW_WORKFLOW_MODE=langgraph
-RESEARCHFLOW_LLM_PROVIDER=openai-compatible
-RESEARCHFLOW_LLM_MODEL=你的模型名
-RESEARCHFLOW_LLM_API_KEY=你的密钥
-RESEARCHFLOW_LLM_BASE_URL=https://你的兼容服务/v1
-RESEARCHFLOW_WEB_SEARCH_PROVIDER=exa
-RESEARCHFLOW_WEB_SEARCH_API_KEY=你的Exa密钥
-RESEARCHFLOW_EMBEDDING_PROVIDER=gemini
-RESEARCHFLOW_EMBEDDING_MODEL=gemini-embedding-2
-RESEARCHFLOW_EMBEDDING_API_KEY=你的Google AI Studio密钥
-RESEARCHFLOW_EMBEDDING_BASE_URL=https://generativelanguage.googleapis.com/v1beta
-RESEARCHFLOW_EMBEDDING_DIMENSIONS=768
-```
-
-LLM Base URL 应填写 API 根地址，客户端会自动追加 `/chat/completions`。`RESEARCHFLOW_LLM_PROVIDER` 当前是协议/来源标签，使用兼容服务时保持 `openai-compatible`。目标服务需支持 Chat Completions 和 JSON Schema 结构化输出；Exa Key 可从 Exa Dashboard 的免费 Starter 获取。本地兼容模型服务若不要求鉴权，LLM Key 可留空，但 `langgraph` 模式必须配置网页搜索 Key。修改配置后重启后端；真实密钥不得提交到 Git。完整说明见[使用、开发与运维手册](docs/guides/development-and-operations.md)。
+默认 `simulation` 模式不需要外部服务。真实联合研究需要在 `.env` 中配置 LLM、Exa 和 Embedding；变量含义及示例见 [`.env.example`](.env.example) 和[使用、开发与运维手册](docs/guides/development-and-operations.md)。真实密钥不得提交到 Git。
 
 知识文档默认保存在 `var/uploads`，支持 PDF、Markdown 和 UTF-8 纯文本。PDF 仅解析已有文本层，不含 OCR；文档片段会发送给 Embedding 服务，命中片段还会交给 LLM，使用私人文件前应同时确认两个供应商的数据政策。Embedding 配置变更后需要在页面重新处理已有文档。
 

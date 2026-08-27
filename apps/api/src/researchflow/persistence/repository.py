@@ -181,8 +181,7 @@ class SqliteResearchRepository:
         try:
             yield session
         except asyncio.CancelledError:
-            # SQLite 提交由工作线程执行。协程取消时必须等待回滚完成，
-            # 否则后台连接可能继续持有写锁，阻塞关闭流程的终态写入。
+            # SQLite 提交由工作线程执行；取消时仍需完成回滚，避免遗留写锁。
             await asyncio.shield(session.rollback())
             raise
         finally:

@@ -101,8 +101,7 @@ async def test_gemini_embedding_2_uses_search_instructions_and_native_batch() ->
     assert request.url.path.endswith("/models/gemini-embedding-2:batchEmbedContents")
     assert request.headers["x-goog-api-key"] == "gemini-secret"
     assert all(
-        item["embedContentConfig"] == {"outputDimensionality": 2}
-        for item in body["requests"]
+        item["embedContentConfig"] == {"outputDimensionality": 2} for item in body["requests"]
     )
     assert [item["content"]["parts"][0]["text"] for item in body["requests"]] == [
         "title: none | text: doc one",

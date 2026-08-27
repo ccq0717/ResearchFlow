@@ -77,7 +77,7 @@ async def test_event_history_survives_reopen_and_keeps_utc_offset(tmp_path: Path
             assert all(item["created_at"].endswith(("Z", "+00:00")) for item in items)
 
 
-async def test_shutdown_marks_active_run_as_interrupted(tmp_path: Path) -> None:
+async def test_restart_marks_active_run_as_interrupted(tmp_path: Path) -> None:
     database_path = tmp_path / "shutdown.db"
     app = create_app(_settings(database_path, step_delay=10))
 

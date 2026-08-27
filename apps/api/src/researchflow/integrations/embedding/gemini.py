@@ -64,9 +64,7 @@ class GeminiEmbeddingClient:
         config: dict[str, Any] = {}
         if not self._uses_instruction_prefix:
             config["taskType"] = (
-                "RETRIEVAL_DOCUMENT"
-                if task is EmbeddingTask.DOCUMENT
-                else "RETRIEVAL_QUERY"
+                "RETRIEVAL_DOCUMENT" if task is EmbeddingTask.DOCUMENT else "RETRIEVAL_QUERY"
             )
         if self._dimensions is not None:
             config["outputDimensionality"] = self._dimensions
