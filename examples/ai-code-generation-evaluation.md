@@ -8,10 +8,11 @@
 
 - 创建研究运行、查看研究事件、使用真实 LLM 生成结构化研究计划；
 - 使用 Exa 检索并读取论文、官方材料、工业资料和社区页面；
+- 使用 Gemini Embedding 检索用户选择的本地资料；
 - 保存来源类型、作者、发布时间和发布机构等可用元数据；
 - 展示 Claim—Evidence 关系、引用覆盖率和可点击来源；
 - 生成包含评测目标、指标、任务集、流程、评分和风险的 Markdown 报告。
 
-2026-08-26 已使用真实 LLM 与 Exa 完成一次端到端验收。公开结果快照见[黄金演示结果样例](ai-code-generation-evaluation-result.md)，固定 Exa 查询与覆盖度结论见[M3 来源覆盖度评测](../docs/research/exa-m3-source-coverage.md)。
+2026-08-27 已使用真实 LLM、Exa、Gemini Embedding 和本地资料完成一次端到端验收。公开结果快照见[黄金演示结果样例](ai-code-generation-evaluation-result.md)，固定 Exa 查询与覆盖度结论见[网页搜索覆盖度评测](../docs/evaluation/web-search.md)。
 
 这个文件只保存公开演示输入和预期范围，不包含 API Key、私人资料或未经许可复制的模型输出。

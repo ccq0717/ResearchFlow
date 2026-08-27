@@ -1,6 +1,13 @@
 $ErrorActionPreference = "Stop"
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $webDirectory = Join-Path $repositoryRoot "apps\web"
+$e2ePorts = 3100, 8100
+
+$occupiedPorts = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+    Where-Object LocalPort -in $e2ePorts
+if ($occupiedPorts) {
+    throw "E2E ports 3100 and 8100 must be free before the test starts"
+}
 
 $env:RESEARCHFLOW_DATABASE_URL = "sqlite+aiosqlite:///./var/e2e.db"
 $env:RESEARCHFLOW_KNOWLEDGE_UPLOAD_DIRECTORY = "./var/e2e-uploads"
@@ -42,5 +49,12 @@ try {
         if ($null -ne $process -and -not $process.HasExited) {
             & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null
         }
+    }
+    Start-Sleep -Milliseconds 250
+    $remainingProcessIds = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+        Where-Object LocalPort -in $e2ePorts |
+        Select-Object -ExpandProperty OwningProcess -Unique
+    foreach ($processId in $remainingProcessIds) {
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
     }
 }
