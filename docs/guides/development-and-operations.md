@@ -209,6 +209,18 @@ uv run --package researchflow-api python scripts/evaluate_local_retrieval.py
 自动化测试显式禁用仓库 `.env`，并使用 Fake 或 HTTP Mock，不会读取真实密钥或访问外部服务。
 浏览器 E2E 会在专用端口启动模拟工作流，验证创建、完成、报告、度量、刷新恢复和历史记录管理，并在结束后关闭测试服务。
 
+### GitHub Actions CI
+
+每次 `push` 和 `pull_request` 都会执行 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)：
+
+| Job | 环境 | 检查内容 |
+| --- | --- | --- |
+| Backend | Windows、Python 3.12 | Pytest、Ruff 代码检查和格式检查 |
+| Frontend | Ubuntu、Node.js 24 | Vitest、ESLint、Next.js 生产构建 |
+| Browser E2E | Windows、Python 3.12、Node.js 24、Chromium | 模拟模式下的完整浏览器用户路径 |
+
+CI 按锁文件安装依赖，不读取真实 `.env`，也不调用 LLM、Exa 或 Embedding 服务。真实服务兼容性仍需使用前述评测脚本或手动完整示例验证。
+
 ## 6. 常见问题
 
 ### 页面无法读取任务
