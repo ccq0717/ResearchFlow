@@ -2,7 +2,7 @@
 
 > 适用范围：Windows、Linux 和 macOS 本地使用、开发、测试与排错
 >
-> 最后更新：2026-08-27
+> 最后更新：2026-08-28
 
 ResearchFlow 由 Next.js 前端、FastAPI 后端、SQLite、本地上传目录以及远程 LLM、网页搜索和 Embedding 服务组成。在线部署另见[可选在线 Demo 部署指南](online-demo-deployment.md)。
 
@@ -14,13 +14,20 @@ ResearchFlow 由 Next.js 前端、FastAPI 后端、SQLite、本地上传目录�
 4. 创建任务后查看计划、进度、来源、证据、主张、度量和报告；运行期间可取消；
 5. 刷新或重新打开任务不会丢失已持久化内容。
 
-失败任务可重新运行一次。Dashboard 支持重命名、归档和删除已结束记录。
+失败任务可重新运行一次。Dashboard 支持重命名、归档和删除研究记录。
+
+### 历史记录管理
+
+- **重命名**只改变 Dashboard 中显示的标题，不修改研究目标、过程或报告；
+- **归档**只适用于已完成、失败或取消的记录。它把记录从默认列表隐藏，勾选“显示归档”后仍可查看和取消归档，不会删除数据或节省存储空间；
+- **删除**只适用于已结束的记录，会永久删除该次运行及其报告和中间材料，但不会删除知识库中的原始文档；
+- **重新运行**只适用于失败记录，最多创建一次保留原记录和谱系的新运行。
 
 三种工作流模式：
 
 | 模式 | 行为 | 外部依赖 |
 | --- | --- | --- |
-| `simulation` | 完全模拟研究流程 | 无 |
+| `simulation` | 完全模拟研究流程；默认模式 | 无 |
 | `llm` | 真实生成研究计划，其余步骤模拟 | LLM |
 | `langgraph` | 联合网页和所选本地资料完成研究 | LLM、Exa；使用本地资料时还需 Embedding |
 
@@ -131,7 +138,7 @@ Gemini 原生适配器默认使用 `https://generativelanguage.googleapis.com/v1
 | `RESEARCHFLOW_EMBEDDING_TIMEOUT_SECONDS` | `60` | Embedding 服务经常超时 |
 | `RESEARCHFLOW_EMBEDDING_BATCH_SIZE` | `32` | 供应商限制批大小 |
 
-如需在运行页估算模型费用，可配置输入、输出每百万 Token 的美元单价：`RESEARCHFLOW_LLM_INPUT_COST_PER_MILLION_TOKENS` 和 `RESEARCHFLOW_LLM_OUTPUT_COST_PER_MILLION_TOKENS`。估算值为 `输入 Token × 输入单价 / 1,000,000 + 输出 Token × 输出单价 / 1,000,000`；未配置时显示“未配置单价”。
+如需在运行页估算模型费用，可配置输入、输出每百万 Token 的美元单价：`RESEARCHFLOW_LLM_INPUT_COST_PER_MILLION_TOKENS` 和 `RESEARCHFLOW_LLM_OUTPUT_COST_PER_MILLION_TOKENS`。估算值为 `输入 Token × 输入单价 / 1,000,000 + 输出 Token × 输出单价 / 1,000,000`；未配置时显示“未配置单价”。该值只估算 LLM 标准输入与输出，不包含 Exa、Embedding、部署费用、缓存 Token 价格和供应商特殊折扣，最终以供应商账单为准。
 
 完整默认值以 [`core/config.py`](../../apps/api/src/researchflow/core/config.py) 为准。
 
@@ -200,7 +207,7 @@ uv run --package researchflow-api python scripts/evaluate_local_retrieval.py
 ```
 
 自动化测试显式禁用仓库 `.env`，并使用 Fake 或 HTTP Mock，不会读取真实密钥或访问外部服务。
-浏览器 E2E 会在专用端口启动模拟工作流，验证创建、完成、报告、度量和刷新恢复，并在结束后关闭测试服务。
+浏览器 E2E 会在专用端口启动模拟工作流，验证创建、完成、报告、度量、刷新恢复和历史记录管理，并在结束后关闭测试服务。
 
 ## 6. 常见问题
 

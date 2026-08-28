@@ -47,6 +47,10 @@ export default function Dashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<ResearchRun | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [accessRequired, setAccessRequired] = useState(false);
 
@@ -131,14 +135,32 @@ export default function Dashboard() {
     );
   }
 
-  async function renameRun(run: ResearchRun) {
-    const title = window.prompt("输入新的研究记录标题", run.title)?.trim();
-    if (!title || title === run.title) return;
+  function openRename(run: ResearchRun) {
+    setRenameTarget(run);
+    setRenameTitle(run.title);
+    setRenameError(null);
+  }
+
+  async function submitRename(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!renameTarget) return;
+    const title = renameTitle.trim();
+    if (!title || title === renameTarget.title) {
+      setRenameTarget(null);
+      return;
+    }
+    setRenameError(null);
+    setRenaming(true);
     try {
-      const updated = await renameResearchRun(run.id, title);
-      setRuns((current) => current.map((item) => (item.id === run.id ? updated : item)));
+      const updated = await renameResearchRun(renameTarget.id, title);
+      setRuns((current) =>
+        current.map((item) => (item.id === renameTarget.id ? updated : item)),
+      );
+      setRenameTarget(null);
     } catch {
-      setError("重命名研究记录失败。");
+      setRenameError("重命名研究记录失败，请稍后重试。");
+    } finally {
+      setRenaming(false);
     }
   }
 
@@ -278,7 +300,7 @@ export default function Dashboard() {
                   />
                 </div>
                 <div className="mt-3 flex gap-3 text-xs">
-                  <button className="underline" onClick={() => renameRun(run)} type="button">
+                  <button className="underline" onClick={() => openRename(run)} type="button">
                     重命名
                   </button>
                   <button className="underline" onClick={() => toggleArchive(run)} type="button">
@@ -370,6 +392,56 @@ export default function Dashboard() {
           </div>
         </section>
       </div>
+      {renameTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#17231d]/45 px-4">
+          <section
+            aria-labelledby="rename-run-title"
+            aria-modal="true"
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"
+            role="dialog"
+          >
+            <h2 className="text-xl font-semibold" id="rename-run-title">
+              重命名研究记录
+            </h2>
+            <form className="mt-5" onSubmit={submitRename}>
+              <label className="text-sm font-medium" htmlFor="rename-run-input">
+                新的研究记录标题
+              </label>
+              <input
+                autoFocus
+                className="mt-2 w-full rounded-xl border border-[#cfc9bd] px-4 py-3 outline-none focus:border-[#2f6f5e] focus:ring-4 focus:ring-[#2f6f5e]/10"
+                id="rename-run-input"
+                maxLength={160}
+                onChange={(event) => setRenameTitle(event.target.value)}
+                required
+                value={renameTitle}
+              />
+              {renameError && (
+                <p className="mt-3 text-sm text-red-700" role="alert">
+                  {renameError}
+                </p>
+              )}
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  className="rounded-full border border-[#cfc9bd] px-5 py-2.5 text-sm font-medium"
+                  disabled={renaming}
+                  onClick={() => setRenameTarget(null)}
+                  type="button"
+                >
+                  取消
+                </button>
+                <button
+                  className="rounded-full bg-[#2f6f5e] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  disabled={!renameTitle.trim() || renaming}
+                  type="submit"
+                >
+                  {renaming ? "正在保存…" : "保存"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

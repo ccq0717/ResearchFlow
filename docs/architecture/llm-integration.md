@@ -53,7 +53,7 @@ ResearchRunApplication
 
 ## 4. 结构化输出
 
-远程适配器使用 Chat Completions 的 JSON Schema 输出。Pydantic 严格校验计划、证据、Claim 文本和报告；未知字段和缺失字段会失败。适配器与工作流会过滤不存在的 `source_id`、不存在的 `question_id`，以及不能在对应正文中找到的原文片段，避免模型凭空创建关联或伪造引文。
+远程适配器使用 Chat Completions 的 JSON Schema 输出。Pydantic 严格校验计划、证据、Claim 文本和报告；计划必须包含 3～8 个研究问题和 1～8 项预期交付物，未知字段和缺失字段会失败。适配器与工作流会过滤不存在的 `source_id`、不存在的 `question_id`，以及不能在对应正文中找到的原文片段，避免模型凭空创建关联或伪造引文。
 
 模型生成的 `search_query` 使用英文，是通用 Web 检索的执行输入；界面仍展示原始研究问题。查询通过自然语言表达研究主题和来源偏好，不把论文、博客或文档限制成供应商类别。
 

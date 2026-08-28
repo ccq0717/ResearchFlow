@@ -1,7 +1,7 @@
 # ResearchFlow 核心数据模型
 
 > 状态：当前实现
-> 更新日期：2026-08-26
+> 更新日期：2026-08-28
 
 ## 1. 建模原则
 
@@ -36,6 +36,8 @@
 | `CitationAudit` | 主张数、已支持主张数、覆盖率、来源类型计数 | 从当前材料确定性计算的引用完整性摘要 |
 
 Evidence 必须同时关联已有 Source 和 Research Question，且原文片段必须能在对应来源正文中找到；Claim 通过显式关系关联一条或多条 Evidence。确定性检查保证每条结构化 Claim 都有完整的 Claim—Evidence—Source 链路，并且报告的可追溯章节包含相邻的网页链接或本地文件定位。
+
+引用覆盖率按 `拥有完整 Evidence—Source 链路的结构化 Claim 数 ÷ Claim 总数 × 100%` 计算。它衡量关系完整性；100% 不代表每条主张在语义上必然正确，也不代表报告中的每句话都被统计。
 
 来源类型是 `academic`、`official`、`industry`、`community` 或保守回退的 `other`。分类使用可解释的 URL 规则，作者和发布时间来自 Provider 可用元数据，发布机构从来源域名归一化；缺失值不会由模型猜测补齐。
 

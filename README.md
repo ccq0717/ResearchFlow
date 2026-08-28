@@ -62,7 +62,7 @@ LangGraph、供应商 SDK 和持久化细节都位于自有接口之后；前端
 ```text
 apps/web       Next.js 前端
 apps/api       FastAPI 后端
-docs           产品、架构、技术决策和调研文档
+docs           使用、产品、架构、评测和学习文档
 examples       可公开使用的演示输入
 scripts        可重复运行的质量评测与开发辅助脚本
 var            本地运行数据（不提交到 Git）
