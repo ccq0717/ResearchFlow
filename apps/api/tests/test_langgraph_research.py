@@ -13,7 +13,13 @@ from researchflow.core.config import Settings
 from researchflow.domain.citations import build_citation_audit
 from researchflow.domain.research import Claim, Evidence, SourceType
 from researchflow.domain.source_quality import classify_source, parse_published_at
-from researchflow.integrations.llm.base import EvidenceDraft, LLMEvidenceResult, LLMUsage
+from researchflow.integrations.llm.base import (
+    EvidenceDraft,
+    LLMClientError,
+    LLMEvidenceResult,
+    LLMPlanResult,
+    LLMUsage,
+)
 from researchflow.integrations.llm.fake import FakeLLMClient
 from researchflow.integrations.web.base import SearchResult, WebResearchError
 from researchflow.integrations.web.exa import ExaSearchProvider
@@ -25,10 +31,16 @@ def _settings(database_path: Path) -> Settings:
     return Settings(
         _env_file=None,
         database_url=f"sqlite+aiosqlite:///{database_path.as_posix()}",
-        workflow_mode="langgraph",
+        workflow_mode="research",
         llm_model="fake-model",
         web_search_result_limit=2,
     )
+
+
+class _FailingPlanningLLM:
+    async def create_research_plan(self, goal: str) -> LLMPlanResult:
+        del goal
+        raise LLMClientError("LLM_HTTP_ERROR", "模型服务暂时不可用")
 
 
 async def test_langgraph_web_research_persists_materials_and_report(tmp_path: Path) -> None:
@@ -130,6 +142,34 @@ async def test_langgraph_web_research_persists_materials_and_report(tmp_path: Pa
             assert len(materials["evidence"]) == 6
             assert len(materials["claims"]) == 3
             assert materials["citation_audit"]["coverage_percent"] == 100
+
+
+async def test_research_workflow_persists_safe_llm_planning_failure(tmp_path: Path) -> None:
+    app = create_app(
+        _settings(tmp_path / "llm-failure.db"),
+        llm_client=_FailingPlanningLLM(),
+        search_provider=FakeSearchProvider(),
+        page_reader=FakeWebPageReader(),
+    )
+
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            created = await client.post(
+                "/api/research-runs",
+                json={"goal": "验证真实研究模式能够安全处理模型规划错误"},
+            )
+            run_id = created.json()["id"]
+            for _ in range(100):
+                detail = await client.get(f"/api/research-runs/{run_id}")
+                if detail.json()["status"] == "failed":
+                    break
+                await asyncio.sleep(0.01)
+
+            payload = detail.json()
+            assert payload["status"] == "failed"
+            assert payload["error_code"] == "LLM_HTTP_ERROR"
+            assert payload["error_message"] == "模型服务暂时不可用"
+            assert (await client.get(f"/api/research-runs/{run_id}/plan")).json()["plan"] is None
 
 
 def test_source_quality_rules_are_stable_and_conservative() -> None:

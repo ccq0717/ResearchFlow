@@ -14,7 +14,7 @@ ResearchFlow 围绕“证据优先、过程可恢复、结果可追溯”组织�
 - 网页和本地材料统一进入 Source—Evidence—Claim 链路，并保留网页链接、PDF 页码或文本行号；
 - Next.js 界面通过 REST 与 SSE 展示计划、进度、材料、Markdown 报告和运行度量，刷新后可从 SQLite 恢复；
 - 支持取消、有限重试、历史记录管理、演示访问码、运行限额、备份和恢复；
-- `simulation`、`llm` 和 `langgraph` 三种模式分别用于离线演示、真实规划和完整联合研究；
+- `simulation` 和 `research` 两种模式分别用于离线演示和真实联合研究；
 - LLM、搜索、网页读取和 Embedding 均位于可替换接口之后，常规测试使用 Fake/Mock，不消耗真实服务额度；
 - Pytest、Vitest、Ruff、ESLint、生产构建和浏览器 E2E 由 GitHub Actions 自动检查。
 

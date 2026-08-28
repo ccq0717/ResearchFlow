@@ -100,5 +100,5 @@ class SimulatedResearchWorkflow:
 ## 模式说明
 
 当前内容由模拟工作流生成，不会调用外部 LLM 或网页搜索服务。若要执行真实网页研究，
-请将工作流模式切换为 `langgraph`。
+请将工作流模式切换为 `research`。
 """

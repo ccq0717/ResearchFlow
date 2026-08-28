@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     max_runs_per_day: int = Field(default=20, ge=1, le=1000)
     demo_access_code: SecretStr | None = None
 
-    workflow_mode: Literal["simulation", "llm", "langgraph"] = "simulation"
+    workflow_mode: Literal["simulation", "research"] = "simulation"
     llm_provider: str = Field(default="openai-compatible", min_length=1)
     llm_model: str = ""
     llm_api_key: SecretStr | None = None
@@ -73,11 +73,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_llm_configuration(self) -> "Settings":
-        if self.workflow_mode in {"llm", "langgraph"} and not self.llm_model.strip():
-            raise ValueError("LLM 或 LangGraph 模式必须设置 RESEARCHFLOW_LLM_MODEL")
+        if self.workflow_mode == "research" and not self.llm_model.strip():
+            raise ValueError("research 模式必须设置 RESEARCHFLOW_LLM_MODEL")
         if self.environment == "production":
-            if self.workflow_mode != "langgraph":
-                raise ValueError("生产环境必须使用 langgraph 工作流")
+            if self.workflow_mode != "research":
+                raise ValueError("生产环境必须使用 research 工作流")
             if any("localhost" in origin or "127.0.0.1" in origin for origin in self.cors_origins):
                 raise ValueError("生产环境必须显式配置公开前端 CORS Origin")
             if "*" in self.cors_origins:

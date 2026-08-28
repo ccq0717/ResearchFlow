@@ -46,7 +46,7 @@ Railway 会直接从仓库 Dockerfile 构建镜像，因此本机不必安装 Do
 ```dotenv
 RAILWAY_DOCKERFILE_PATH=/apps/api/Dockerfile
 RESEARCHFLOW_ENVIRONMENT=production
-RESEARCHFLOW_WORKFLOW_MODE=langgraph
+RESEARCHFLOW_WORKFLOW_MODE=research
 RESEARCHFLOW_DATABASE_URL=sqlite+aiosqlite:////data/researchflow.db
 RESEARCHFLOW_KNOWLEDGE_UPLOAD_DIRECTORY=/data/uploads
 RESEARCHFLOW_CORS_ORIGINS=["https://<web-domain>"]

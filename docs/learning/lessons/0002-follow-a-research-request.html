@@ -57,7 +57,7 @@ async def create_research_run(body, request):
     <li>构造状态为 <code>queued</code> 的领域对象；</li>
     <li>通过 Repository 保存研究任务；</li>
     <li>保存第一条 <code>run.queued</code> 事件；</li>
-    <li>创建后台异步任务，执行配置选择的模拟或 LLM 规划工作流；</li>
+    <li>创建后台异步任务，执行配置选择的模拟或真实研究工作流；</li>
     <li>立即把已创建任务返回给前端。</li>
   </ol>
   <p>这里的关键是：创建接口不需要等待整份报告完成。它先返回任务 ID，耗时工作继续在后端执行，前端随后通过 SSE 查看进度。</p>
@@ -69,7 +69,7 @@ await session.commit()</code></pre>
   <p>当前共有十四张研究与知识内容表，此外还有运行控制表和 schema 版本表。下面先列出贯穿一次请求的六张核心表：</p>
   <ul>
     <li><code>research_runs</code>：一行代表一个研究任务及其当前状态和报告；</li>
-    <li><code>research_plans</code>：保存 LLM 模式生成的结构化研究计划；</li>
+    <li><code>research_plans</code>：保存真实研究模式生成的结构化研究计划；</li>
     <li><code>research_events</code>：多行代表任务运行过程中按序产生的事件；</li>
     <li><code>research_tasks</code>：保存每个研究问题对应的检索任务；</li>
     <li><code>research_sources</code>：保存实际读取的网页或本地来源；</li>

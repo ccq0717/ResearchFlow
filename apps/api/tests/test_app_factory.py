@@ -6,7 +6,7 @@ from pathlib import Path
 
 def test_importing_app_factory_does_not_read_cwd_env(tmp_path: Path) -> None:
     (tmp_path / ".env").write_text(
-        "RESEARCHFLOW_WORKFLOW_MODE=llm\n",
+        "RESEARCHFLOW_WORKFLOW_MODE=research\n",
         encoding="utf-8",
     )
     environment = {

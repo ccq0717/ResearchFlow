@@ -16,13 +16,12 @@
     <strong>先记结论：</strong>LLM 不是直接“装进网页”。浏览器把研究目标交给后端，后端通过 HTTP 调用模型服务，再把经过校验的研究计划保存到数据库。
   </div>
 
-  <h2>1. 当前有三种工作流模式</h2>
+  <h2>1. 当前有两种工作流模式</h2>
   <table>
     <thead><tr><th>模式</th><th>是否联网调用模型</th><th>用途</th></tr></thead>
     <tbody>
       <tr><td><code>simulation</code></td><td>否</td><td>默认演示、低资源运行、没有 API Key 时开发</td></tr>
-      <tr><td><code>llm</code></td><td>是</td><td>让兼容服务真实生成结构化研究计划</td></tr>
-      <tr><td><code>langgraph</code></td><td>是</td><td>规划、网页检索、证据提取和报告写作</td></tr>
+      <tr><td><code>research</code></td><td>是</td><td>规划、网页检索、证据提取和报告写作</td></tr>
     </tbody>
   </table>
   <p>模式由 <code>RESEARCHFLOW_WORKFLOW_MODE</code> 决定。默认值是 <code>simulation</code>，所以拉取仓库后不会意外产生模型费用。</p>
@@ -84,14 +83,14 @@
   <p>密钥只放在被 Git 忽略的 <code>.env</code>，不能写进 Python、README、截图或提交记录。前端也绝不能接收模型密钥。</p>
 
   <h2>7. 为什么记录耗时和 Token</h2>
-  <p>耗时帮助判断用户等待发生在哪里；Token 是很多模型服务计费和上下文容量的基础单位。<code>langgraph</code> 模式调用模型生成研究计划、提取 Evidence/Claim、撰写报告；网页搜索、正文读取、流程编排和引用结构审计不是模型生成。</p>
+  <p>耗时帮助判断用户等待发生在哪里；Token 是很多模型服务计费和上下文容量的基础单位。<code>research</code> 模式调用模型生成研究计划、提取 Evidence/Claim、撰写报告；网页搜索、正文读取、流程编排和引用结构审计不是模型生成。</p>
   <p>运行页按输入、输出 Token 和配置的每百万 Token 单价估算 LLM 费用，不包含 Exa、Embedding 或部署平台费用，也不处理缓存 Token 等供应商特殊折扣。</p>
 
   <h2>8. 失败时会发生什么</h2>
   <p>超时、连接失败、HTTP 错误和格式错误会转换成稳定错误代码。前端得到的是安全、可理解的消息，而不是可能包含内部地址、响应正文或密钥的异常堆栈。Research Run 会进入 <code>failed</code> 终态。</p>
 
-  <h2>9. 规划模式的能力边界</h2>
-  <p><code>llm</code> 工作流只让真实 LLM 生成计划，后面的检索、分析和写作仍是演示逻辑，所以不能把该模式的报告描述为经过真实网页调研的结论。<code>langgraph</code> 模式会在同一接口基础上把计划送入网页与本地资料检索。</p>
+  <h2>9. 真实研究模式的能力边界</h2>
+  <p><code>research</code> 模式把模型计划送入网页与本地资料检索，再让模型基于实际 Source 提取证据和写作。引用检查能验证关系完整，但不能自动保证来源质量、语义充分性或事实绝对正确。</p>
 
   <h2>10. 三个适配器边界</h2>
   <div class="card"><ul>

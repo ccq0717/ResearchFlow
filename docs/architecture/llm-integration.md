@@ -20,15 +20,14 @@ FastAPI Route
 
 浏览器不接触供应商密钥、SQLite 或 LangGraph State。Application 负责用例、事务和后台运行；工作流负责研究步骤；领域对象保持供应商无关；Repository 和 integrations 分别隔离持久化与外部 HTTP。
 
-## 2. 三种工作流模式
+## 2. 两种工作流模式
 
 | 模式 | 外部调用 | 用途 |
 | --- | --- | --- |
 | `simulation` | 无 | 默认离线演示 |
-| `llm` | LLM | 只真实生成研究计划 |
-| `langgraph` | LLM + Exa Search + Gemini Embedding + 所选本地文档 | 网页与本地资料联合研究闭环 |
+| `research` | LLM + Exa Search；选择本地文档时还会使用 Embedding | 网页与本地资料联合研究闭环 |
 
-`langgraph` 模式依次执行 planning、searching、reading、extracting、writing、checking。LangGraph 只存在于 `workflows/langgraph_research.py` 内部。
+`research` 模式内部依次执行 planning、searching、reading、extracting、writing、checking。LangGraph 只存在于 `workflows/langgraph_research.py` 的实现中，不暴露为用户配置名称。
 
 ## 3. 深接口
 

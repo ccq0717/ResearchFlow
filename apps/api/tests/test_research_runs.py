@@ -68,7 +68,7 @@ async def test_production_demo_cookie_supports_separate_web_and_api_origins(
         Settings(
             _env_file=None,
             environment="production",
-            workflow_mode="langgraph",
+            workflow_mode="research",
             llm_model="model",
             cors_origins=("https://web.example.com",),
             demo_access_code="long-demo-secret",

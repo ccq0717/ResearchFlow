@@ -82,7 +82,7 @@ planning → retrieving → analyzing → writing → finalizing
 
 ## 7. 已验证的替换 seam
 
-- `ResearchWorkflow`：模拟、仅 LLM 规划、LangGraph 网页与本地联合研究；
+- `ResearchWorkflow`：模拟研究与基于 LangGraph 实现的网页、本地资料联合研究；
 - `LLMClient`：Fake 与 OpenAI-compatible；
 - `SearchProvider`：Fake 与 Exa；
 - `WebPageReader`：Fake 与供应商无关的搜索结果正文读取器；

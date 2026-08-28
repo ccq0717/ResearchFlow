@@ -30,7 +30,6 @@ from researchflow.persistence.database import (
 from researchflow.persistence.knowledge_repository import SqliteKnowledgeRepository
 from researchflow.persistence.repository import SqliteResearchRepository
 from researchflow.workflows.langgraph_research import LangGraphResearchWorkflow
-from researchflow.workflows.llm_research import LLMResearchWorkflow
 from researchflow.workflows.simulated import SimulatedResearchWorkflow
 
 logger = logging.getLogger("researchflow.http")
@@ -101,7 +100,7 @@ def create_app(
         embedding_client=resolved_embedding,
     )
 
-    if resolved_settings.workflow_mode in {"llm", "langgraph"}:
+    if resolved_settings.workflow_mode == "research":
         client = llm_client or OpenAICompatibleLLMClient(
             base_url=str(resolved_settings.llm_base_url),
             model=resolved_settings.llm_model,
@@ -113,17 +112,16 @@ def create_app(
             timeout_seconds=resolved_settings.llm_timeout_seconds,
             provider=resolved_settings.llm_provider,
         )
-    if resolved_settings.workflow_mode == "langgraph":
         if search_provider is None:
             if resolved_settings.web_search_provider != "exa":
                 raise ValueError(
                     f"不支持的网页搜索 Provider：{resolved_settings.web_search_provider}"
                 )
             if resolved_settings.web_search_api_key is None:
-                raise ValueError("LangGraph 模式必须设置 RESEARCHFLOW_WEB_SEARCH_API_KEY")
+                raise ValueError("research 模式必须设置 RESEARCHFLOW_WEB_SEARCH_API_KEY")
             api_key = resolved_settings.web_search_api_key.get_secret_value().strip()
             if not api_key:
-                raise ValueError("LangGraph 模式必须设置 RESEARCHFLOW_WEB_SEARCH_API_KEY")
+                raise ValueError("research 模式必须设置 RESEARCHFLOW_WEB_SEARCH_API_KEY")
             resolved_search = ExaSearchProvider(
                 base_url=str(resolved_settings.web_search_base_url),
                 api_key=api_key,
@@ -143,8 +141,6 @@ def create_app(
             knowledge_retriever=knowledge_retriever,
             knowledge_results_per_question=resolved_settings.knowledge_results_per_question,
         )
-    elif resolved_settings.workflow_mode == "llm":
-        workflow = LLMResearchWorkflow(client, resolved_settings.simulation_step_delay)
     else:
         workflow = SimulatedResearchWorkflow(resolved_settings.simulation_step_delay)
 

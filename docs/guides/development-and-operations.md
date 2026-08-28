@@ -23,13 +23,12 @@ ResearchFlow 由 Next.js 前端、FastAPI 后端、SQLite、本地上传目录�
 - **删除**只适用于已结束的记录，会永久删除该次运行及其报告和中间材料，但不会删除知识库中的原始文档；
 - **重新运行**只适用于失败记录，最多创建一次保留原记录和谱系的新运行。
 
-三种工作流模式：
+两种工作流模式：
 
 | 模式 | 行为 | 外部依赖 |
 | --- | --- | --- |
 | `simulation` | 完全模拟研究流程；默认模式 | 无 |
-| `llm` | 真实生成研究计划，其余步骤模拟 | LLM |
-| `langgraph` | 联合网页和所选本地资料完成研究 | LLM、Exa；使用本地资料时还需 Embedding |
+| `research` | 联合网页和所选本地资料完成真实研究 | LLM、Exa；使用本地资料时还需 Embedding |
 
 PDF 只读取已有文本层，不执行 OCR。扫描件会进入 `DOCUMENT_NO_TEXT` 失败状态。
 
@@ -99,7 +98,7 @@ Get-NetTCPConnection -State Listen |
 ### 联合研究示例
 
 ```dotenv
-RESEARCHFLOW_WORKFLOW_MODE=langgraph
+RESEARCHFLOW_WORKFLOW_MODE=research
 
 RESEARCHFLOW_LLM_MODEL=供应商提供的模型名
 RESEARCHFLOW_LLM_API_KEY=本机真实密钥
@@ -264,7 +263,7 @@ CI 按锁文件安装依赖，不读取真实 `.env`，也不调用 LLM、Exa �
 - 当前 SQLite 和进程内任务适合单实例、低流量演示，不适合直接横向扩展；
 - API 日志只记录请求 ID、路径、状态和耗时，不记录请求正文、密钥或文档内容；
 - 本地可不设置访问码；设置 `RESEARCHFLOW_DEMO_ACCESS_CODE` 后，Dashboard 会先要求解锁，Cookie 只保存后端签发的会话值；
-- `production` 环境强制使用 `langgraph`、公开 CORS Origin 和至少 12 字符的访问码；
+- `production` 环境强制使用 `research`、公开 CORS Origin 和至少 12 字符的访问码；
 - 线上限流、费用上限、持久磁盘和备份要求见[部署指南](online-demo-deployment.md)。
 
 演示前只需确认：前后端健康、真实服务密钥有效、知识文档为 `ready`、任务能够完成、来源链接可打开且页面未暴露敏感信息。

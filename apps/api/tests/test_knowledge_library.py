@@ -231,7 +231,7 @@ async def test_selected_local_document_joins_web_research_and_keeps_locator(
 ) -> None:
     settings = _settings(tmp_path).model_copy(
         update={
-            "workflow_mode": "langgraph",
+            "workflow_mode": "research",
             "llm_model": "fake-model",
             "web_search_result_limit": 2,
         }

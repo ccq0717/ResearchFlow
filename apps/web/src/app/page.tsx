@@ -230,7 +230,7 @@ export default function Dashboard() {
             />
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-[#6d746f]">
-                已选择 {selectedDocumentIds.length} 个本地文档；LangGraph 模式会联合 Exa
+                已选择 {selectedDocumentIds.length} 个本地文档；真实研究模式会联合 Exa
                 公开网页形成证据。
               </p>
               <button

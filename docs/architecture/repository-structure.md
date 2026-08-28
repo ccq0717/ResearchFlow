@@ -69,7 +69,7 @@ apps/api/
 │   │   ├── llm/         OpenAI-compatible LLM 与 Fake
 │   │   └── web/         Exa、结果读取与 Fake
 │   ├── persistence/     SQLAlchemy 表、schema 版本和两个仓储
-│   ├── workflows/       模拟、仅规划和 LangGraph 联合研究
+│   ├── workflows/       模拟与真实联合研究
 │   ├── app_factory.py   依赖装配和 FastAPI 生命周期
 │   └── main.py          服务器入口
 ├── tests/               后端单元与集成测试
@@ -86,7 +86,6 @@ FastAPI Route
   → ResearchRunApplication
     → ResearchWorkflow
       ├─ SimulatedResearchWorkflow
-      ├─ LLMResearchWorkflow
       └─ LangGraphResearchWorkflow
            ├─ LLMClient
            ├─ SearchProvider
