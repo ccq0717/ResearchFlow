@@ -29,7 +29,12 @@ try {
         -ArgumentList "run", "dev", "--", "--hostname", "127.0.0.1", "--port", "3100" `
         -WorkingDirectory $webDirectory -WindowStyle Hidden -PassThru
 
-    foreach ($url in "http://127.0.0.1:8100/health", "http://127.0.0.1:3100") {
+    $readinessUrls = @(
+        "http://127.0.0.1:8100/health",
+        "http://127.0.0.1:3100",
+        "http://127.0.0.1:3100/research/00000000-0000-0000-0000-000000000000"
+    )
+    foreach ($url in $readinessUrls) {
         $ready = $false
         for ($attempt = 0; $attempt -lt 60; $attempt++) {
             try {

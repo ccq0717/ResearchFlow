@@ -9,9 +9,20 @@ test("用户可以创建研究、看到完成报告并刷新恢复", async ({ pa
   await page.getByRole("textbox").fill(
     "验证浏览器端到端流程能够创建研究任务完成报告并在刷新后恢复",
   );
+  const createResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/api/research-runs"),
+    { timeout: 20_000 },
+  );
   await page.getByRole("button", { name: "开始研究" }).click();
+  const createResponse = await createResponsePromise;
+  expect(
+    createResponse.status(),
+    `创建研究接口返回异常：${await createResponse.text()}`,
+  ).toBe(201);
 
-  await expect(page).toHaveURL(/\/research\/[0-9a-f-]+/);
+  await expect(page).toHaveURL(/\/research\/[0-9a-f-]+/, { timeout: 15_000 });
   const runId = page.url().split("/").at(-1);
   expect(runId).toBeTruthy();
   await expect(page.getByRole("heading", { name: "研究结果" })).toBeVisible();
