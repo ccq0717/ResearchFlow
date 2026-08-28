@@ -2,9 +2,9 @@
 
 > 状态：当前实现
 >
-> 更新日期：2026-08-27
+> 更新日期：2026-08-28
 
-本文说明每个目录的职责和主要依赖方向。使用与配置见[运行手册](../guides/development-and-operations.md)，业务实体见[核心数据模型](domain-model.md)。
+本文说明每个目录的职责和主要依赖方向。完整运行链路见[系统架构与完整研究工作流](llm-integration.md)，使用与配置见[运行手册](../guides/development-and-operations.md)，业务实体见[核心数据模型](domain-model.md)。
 
 ## 1. 顶层目录
 
@@ -34,7 +34,6 @@ ResearchFlow/
 apps/web/
 ├── e2e/
 │   └── research-flow.spec.ts       浏览器黄金流程
-├── public/                         静态资源
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx                Dashboard 与知识文档管理
