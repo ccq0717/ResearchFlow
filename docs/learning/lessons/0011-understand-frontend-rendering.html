@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 11 课：前端状态与研究报告渲染 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0011 · 约 15 分钟</p>
+  <h1>前端怎样把持续变化的研究运行变成可读页面</h1>
+  <p class="lead">这一课把 React 状态、REST 快照、SSE 增量事件和 Markdown 报告串起来，解释刷新恢复与实时更新为什么可以同时成立。</p>
+  <div class="callout"><strong>先记结论：</strong>SQLite 中的数据是真相来源，REST 负责取得完整快照，SSE 只推送此后发生的变化；Markdown 渲染器负责展示，不负责判断研究结论是否正确。</div>
+
+  <h2>1. Dashboard 和研究页各自负责什么</h2>
+  <p><a href="../../../apps/web/src/app/page.tsx"><code>app/page.tsx</code></a> 保存输入框、文档选择和历史列表等短暂界面状态。创建接口返回运行 ID 后，路由跳转到 <code>/research/[runId]</code>。</p>
+  <p><a href="../../../apps/web/src/app/research/%5BrunId%5D/page.tsx"><code>research/[runId]/page.tsx</code></a> 不依赖 Dashboard 留在内存中的数据，而是根据 URL 中的运行 ID 重新读取后端。因此直接打开链接或刷新浏览器都能恢复页面。</p>
+
+  <h2>2. 三类状态不要混在一起</h2>
+  <table>
+    <thead><tr><th>状态</th><th>例子</th><th>丢失后果</th></tr></thead>
+    <tbody>
+      <tr><td>React 本地状态</td><td>按钮是否正在提交、弹窗是否打开</td><td>刷新后重置，不影响研究数据</td></tr>
+      <tr><td>REST 快照</td><td>运行、计划、材料、历史事件和度量</td><td>可从 SQLite 重新读取</td></tr>
+      <tr><td>SSE 增量</td><td>新阶段、进度和终态事件</td><td>断线后按序号补取历史</td></tr>
+    </tbody>
+  </table>
+  <p>研究页先并行读取运行、计划和材料，再读取事件历史；若任务尚未结束，才从最后一个事件序号之后建立 EventSource。这样不会把“连接成功”误认为“数据已经完整”。</p>
+
+  <h2>3. 为什么不能只使用 SSE</h2>
+  <p>SSE 适合服务器单向推送进度，但新打开的页面没有此前事件，也不应该依赖一条长期连接恢复整份报告。REST 读取稳定快照，SSE 降低等待期间的刷新成本，两者承担不同职责。</p>
+  <p>收到终态事件后，前端重新读取运行、计划、材料和度量，而不是仅凭事件消息拼出最终页面。这保证展示结果与后端已经提交的状态一致。</p>
+
+  <h2>4. Markdown 和公式怎样渲染</h2>
+  <pre><code>LLM 返回 Markdown 字符串
+→ 规范化常见模型格式差异
+→ react-markdown 生成 React 元素
+→ remark-gfm 处理表格等 GFM 语法
+→ remark-math 识别行内与块级公式
+→ rehype-katex + KaTeX CSS 生成可读公式</code></pre>
+  <p><a href="../../../apps/web/src/app/research/%5BrunId%5D/research-report.tsx"><code>research-report.tsx</code></a> 还为标题、列表、表格、代码块和外部链接定义统一样式。规范化只修正常见的模型输出差异，例如 <code>\(...\)</code>、<code>\[...\]</code> 和紧邻中文的加粗标记，不改写报告含义，也跳过代码围栏。</p>
+
+  <h2>5. 为什么不直接插入模型生成的 HTML</h2>
+  <p>研究报告来自外部模型和网页材料，应当视为不可信文本。项目让 Markdown 解析器创建受控 React 元素，没有启用原始 HTML 解析；外部链接统一在新页面打开并设置 <code>noopener</code> 与 <code>noreferrer</code>。这减少脚本注入和页面结构被任意改写的风险。</p>
+  <p>这不等于整个应用自动安全：API 鉴权、上传限制、CORS、Secret 和供应商数据政策仍由后端与部署配置负责。</p>
+
+  <h2>6. 怎样验证这一层</h2>
+  <p>组件测试检查中文加粗、GFM 表格、行内公式和块级公式是否产生预期 HTML；浏览器 E2E 从创建任务开始，检查报告、度量、刷新恢复和历史管理。前者快速定位渲染规则，后者证明真实页面路径能够协作。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>前端采用“REST 快照 + SSE 增量”的状态同步方式，以 SQLite 持久状态为真相来源；报告通过受控 Markdown AST 管线渲染 GFM 与 KaTeX，没有直接执行模型生成的 HTML。</div>
+  <p class="footer"><a href="0010-understand-deployment.html">上一课：容器与部署</a> · <a href="../README.md">返回学习区</a> · <a href="../reference/current-full-stack-map.html">查看当前实现地图</a> · <a href="../RESOURCES.md">本课资料依据</a></p>
+</main>
+</body>
+</html>

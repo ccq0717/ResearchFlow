@@ -12,6 +12,14 @@
   HTTP 请求、响应和基于 HTTP 的 API 概览。
 - [React Learn — React](https://react.dev/learn)
   React 官方入门课程。用于组件、状态、事件处理和副作用等前端基础。
+- [react-markdown — remarkjs](https://github.com/remarkjs/react-markdown)
+  ResearchFlow 把 Markdown 语法树转换成 React 元素所使用的渲染组件。
+- [remark-math 与 rehype-katex — remarkjs](https://github.com/remarkjs/remark-math)
+  用于理解 Markdown 数学语法如何经过语法树转换并交给 KaTeX 渲染。
+- [KaTeX Browser API](https://katex.org/docs/browser)
+  KaTeX 的浏览器端渲染与样式说明。
+- [GitHub Actions documentation](https://docs.github.com/actions)
+  GitHub 官方的工作流、Runner、事件触发、Secret 和部署自动化文档。
 - [FastAPI Tutorial](https://fastapi.tiangolo.com/tutorial/)
   FastAPI 官方教程。用于路由、请求模型、依赖注入、错误处理和异步接口。
 - [SQLite Is Serverless — SQLite](https://www.sqlite.org/serverless.html)

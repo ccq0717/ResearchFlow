@@ -21,7 +21,8 @@
 - [第 7 课：检索结果怎样变成可追溯结论](lessons/0007-understand-evidence-and-citations.html)
 - [第 8 课：Fake、Mock、集成测试与真实评测](lessons/0008-understand-testing-and-evaluation.html)
 - [第 9 课：后台任务、失败恢复、日志与可靠性](lessons/0009-understand-run-reliability.html)
-- [第 10 课：Docker、Secret、持久化与在线部署](lessons/0010-understand-deployment.html)
+- [第 10 课：Docker、Secret、CI/CD 与在线部署](lessons/0010-understand-deployment.html)
+- [第 11 课：前端状态、Markdown 与公式怎样变成研究页面](lessons/0011-understand-frontend-rendering.html)
 
 ## 速查资料
 
@@ -32,7 +33,7 @@
 
 课程已经覆盖理解、运行和讲解当前项目所需的主线知识：
 
-1. 浏览器、HTTP/REST、React、FastAPI 和一次全栈请求；
+1. 浏览器、HTTP/REST、React、FastAPI、前端状态与报告渲染；
 2. SQLite、SQLAlchemy、SSE 和异步任务；
 3. LLM 适配器、结构化输出、LangGraph 工作流；
 4. RAG、Embedding、来源、证据、主张与引用；
