@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0014 · 约 60 分钟</p>
+  <p class="eyebrow">Lesson 0014 · 约 80 分钟</p>
   <h1>浏览器怎样安全地调用后端</h1>
   <p class="lead">API 不只是“一个网址返回 JSON”。它还定义资源、状态码、输入边界、身份验证方式和哪些秘密不能进入浏览器。</p>
   <div class="answer"><strong>简短回答：</strong>ResearchFlow 用 FastAPI 暴露研究运行和知识库资源，用 Pydantic 校验外部输入；在线 Demo 可用访问码换取签名 HttpOnly Cookie。CORS、Cookie、上传校验和服务端 Secret 分别解决不同问题，任何一个都不能替代完整身份系统。</div>
@@ -107,7 +107,28 @@ http://localhost:8000</code></pre>
     <li>来源网页可能包含提示注入文字，LLM 仍应把它当资料而不是系统指令；</li>
     <li>HTTPS 由部署平台或反向代理提供，本地 HTTP 不代表生产配置。</li>
   </ul>
-  <div class="callout success"><strong>面试表达：</strong>项目把 API Schema、CORS、Demo 访问会话、服务端 Secret 和上传限制当成不同安全层；当前方案满足受控作品集展示，同时主动声明它不是多租户生产认证系统。</div>
+  <h2>9. Threat Modeling 怎样做</h2>
+  <p>Threat Modeling（威胁建模）先列资产、入口、信任边界、攻击者和失败影响。项目资产包括 API Key、上传文档、研究历史和预算；入口包括表单、文件上传、Cookie、外部网页与供应商响应。之后再为伪造、篡改、泄露、拒绝服务和权限提升设计控制，而不是只安装一个安全库。</p>
+
+  <h2>10. Authentication 与 Object-level Authorization</h2>
+  <p>通过访问码只证明“知道共享秘密”，没有用户身份。对象级授权要在每次读取 Run、文档和内容时验证当前用户是否拥有该对象。当前所有通过访问码的人共享数据空间，因此只适合受控 Demo；加登录页面却不改查询条件，仍然不是多用户安全。</p>
+
+  <h2>11. CSRF Token 什么时候需要</h2>
+  <p>Cookie 会被浏览器自动携带，恶意网站可能诱导用户发起修改请求。SameSite 能减少部分跨站发送，但跨站前后端、浏览器兼容和复杂请求仍要评估。生产多用户系统可使用不可预测 CSRF Token、校验 Origin/Referer，并避免用 GET 修改状态。当前访问码 Demo 风险较低但不是通用免疫。</p>
+
+  <h2>12. SSRF 为什么与网页研究相关</h2>
+  <p>SSRF（Server-Side Request Forgery，服务端请求伪造）发生在攻击者让后端访问内网或云元数据地址。当前系统把查询交给 Exa，并读取 Provider 已返回的内容片段，没有按用户任意 URL 自行抓取，攻击面较小。若未来增加 URL 导入，必须限制协议、解析 DNS 后阻止私网地址、限制重定向和响应大小。</p>
+
+  <h2>13. 上传文件为什么需要纵深防御</h2>
+  <p>扩展名、Magic Bytes、页数、内容流和字符上限分别拦截不同风险；服务端 UUID 文件名与 resolve 检查防路径逃逸；原文件不作为可执行代码运行。高风险场景还需要恶意文件扫描、低权限隔离进程、CPU/内存限制和内容类型嗅探。任何单项检查都不是完整沙箱。</p>
+
+  <h2>14. 日志为什么也可能泄密</h2>
+  <p>Authorization、Cookie、API Key、完整 Prompt、上传正文和供应商错误响应都可能包含敏感信息。结构化日志应记录 request_id、run_id、错误码、阶段和耗时，而对正文和凭据进行省略或脱敏。调试时临时打印 Secret 也可能进入 CI Artifact 或云日志长期保存。</p>
+
+  <h2>15. 依赖与供应链安全</h2>
+  <p>锁文件固定解析结果，提高可复现性；仍需检查已知漏洞、维护者变更、恶意包、构建脚本和基础镜像。自动升级不应跳过测试，长期不升级也会积累漏洞。最小化运行镜像、只安装必要依赖并让容器以非特权用户运行，可减少攻击面。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>项目把 Schema、CORS、Demo 会话、服务端 Secret、外部内容和上传限制视为不同信任边界。当前共享访问码不是多租户授权；若增加用户和 URL 抓取，还必须补对象级授权、CSRF、SSRF 防护、隔离解析、供应链治理与敏感日志策略。</div>
 
   <p class="footer"><a href="0000-understand-full-stack-basics.html">相关课程：全栈基础</a> · <a href="../index.html">返回学习区</a> · <a href="../../guides/development-and-operations.md">查看运行配置</a></p>
 </main>

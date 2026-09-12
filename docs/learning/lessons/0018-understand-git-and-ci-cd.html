@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0018 · 约 60 分钟</p>
+  <p class="eyebrow">Lesson 0018 · 约 80 分钟</p>
   <h1>提交代码之后，自动化检查做了什么</h1>
   <p class="lead">Git 负责版本历史，CI 负责自动验证，CD 负责把通过验证的版本交付或部署。三者有关联，但不是同一件事。</p>
   <div class="answer"><strong>简短回答：</strong>ResearchFlow 在 push 和 pull request 时由 GitHub Actions 分别检查后端、前端和浏览器端到端流程。当前只实现 CI，没有自动部署；因此绿色勾表示这些检查通过，不表示已经上线，也不证明没有任何缺陷。</div>
@@ -115,7 +115,35 @@
 → 生产发布
 → 健康监控与回滚</code></pre>
   <p>ResearchFlow 当前停在 CI 和可手工部署阶段。对本地作品集这已经合理；若提供长期在线服务，再根据实际平台实现 CD。</p>
-  <div class="callout success"><strong>面试表达：</strong>项目用三个 GitHub Actions Job 覆盖 Python 测试与静态检查、TypeScript 测试与生产构建，以及 Windows Chromium 端到端主路径；外部 AI 服务使用 Fake 保持 CI 稳定，发布前另做真实验收。当前是 CI，不冒充已经实现自动 CD。</div>
+  <h2>10. Git Object 为什么说明 Commit 不是“差异文件”</h2>
+  <p>Git 用 Blob 保存文件内容、Tree 保存目录映射、Commit 指向根 Tree 和父 Commit。差异是比较两个快照计算出来的视图，而不是 Commit 的唯一存储形式。内容寻址让相同内容复用，也使修改历史对象会改变哈希。</p>
+
+  <h2>11. Merge Commit 与 Rebase 的历史差异</h2>
+  <p>Merge 保留两个分支的祖先并创建汇合 Commit，真实反映并行历史；Rebase 把提交复制到新基线，形成线性历史但会改变哈希。已共享分支强制 Rebase 会影响他人。选择取决于团队历史策略，代码最终内容可能相同。</p>
+
+  <h2>12. CI Cache 为什么不能当 Artifact</h2>
+  <p>Cache 用于加速可重新生成的依赖，可能被淘汰且不应成为唯一结果；Artifact 是某次运行需要保留或下载的测试报告、trace、覆盖率或构建产物。缓存命中失败应只让 Job 变慢，不应让构建无法进行。</p>
+
+  <h2>13. Branch Protection 提供什么门禁</h2>
+  <p>保护规则可以要求 Pull Request、指定检查通过、评审数量、禁止强推和要求分支最新。Workflow 只负责产生检查结果；没有分支保护时，维护者仍可能直接合并红色 Commit。自动检查与治理规则需要配合。</p>
+
+  <h2>14. 为什么供应链要求 Pin Action 和依赖</h2>
+  <p>CI Runner 会执行依赖安装和第三方 Action，它们拥有源码及可能的 Secret 权限。锁文件固定包版本；关键 Action 可以固定主版本或完整 Commit SHA，并使用依赖更新工具和漏洞扫描。来自 Fork 的工作流不应获得高权限 Secret。</p>
+
+  <h2>15. Continuous Delivery 与 Deployment 的审批差异</h2>
+  <p>持续交付保证每个通过检查的版本都可发布，但生产发布通常需要人工批准；持续部署则自动把每个合格变更推到生产。二者都需要构建不可变产物、环境配置、迁移、健康验证和回滚。当前项目只有 CI 与手工部署说明，没有自动发布流水线。</p>
+
+  <h2>16. 一次可靠发布应怎样流动</h2>
+  <pre><code>Commit / Pull Request
+→ 离线测试、静态检查、生产构建、E2E
+→ 构建并扫描不可变镜像
+→ 测试环境部署与真实服务验收
+→ 备份和 Schema 兼容检查
+→ 人工批准或自动发布
+→ 健康、错误率和核心路径观察
+→ 失败时回滚应用并处理数据兼容</code></pre>
+
+  <div class="callout success"><strong>面试表达：</strong>项目用三个 GitHub Actions Job 覆盖 Python、TypeScript 构建测试和 Windows Chromium 端到端主路径；外部 AI 服务使用 Fake 保持 CI 稳定，发布前另做真实验收。CI Cache 只加速依赖，Artifact 保存结果；分支保护、供应链固定、环境审批和回滚是从 CI 走向 CD 的必要补充。</div>
 
   <p class="footer"><a href="0008-understand-testing-and-evaluation.html">相关课程：测试与评测</a> · <a href="0019-interview-system-design.html">进入面试深挖阶段</a> · <a href="../index.html">返回学习区</a> · <a href="../../guides/development-and-operations.md">查看正式 CI 说明</a></p>
 </main>

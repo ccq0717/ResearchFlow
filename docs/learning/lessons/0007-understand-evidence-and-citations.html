@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0007 · 约 45 分钟</p>
+  <p class="eyebrow">Lesson 0007 · 约 60 分钟</p>
   <h1>检索结果怎样变成可追溯结论</h1>
   <p class="lead">这节课解释为什么“搜到了网页”“找到了一段话”“报告写了一句话”和“这句话有证据支持”是四件不同的事。</p>
   <div class="callout"><strong>先记结论：</strong>RAG 负责把相关资料带到模型面前；Evidence 和 Claim 的显式关系负责说明报告中的关键结论由什么支持。</div>
@@ -108,7 +108,29 @@
   <p>代码很容易检查 ID 存不存在、excerpt 是否为原文子串、链接是否出现，却很难只靠规则判断一段自然语言是否真正蕴含另一句话。语义核验可以使用更强模型、专门的 NLI（Natural Language Inference，自然语言推断）模型或人工审阅，但每种方法都有误差和成本。</p>
   <p>项目选择诚实展示自动审计边界，而不是把结构覆盖率命名成“真实性得分”。</p>
 
-  <div class="callout success"><strong>面试表达：</strong>项目没有把 RAG 命中直接当成引用，而是建立 Source、Evidence、Claim 三层领域模型和显式关系；确定性审计检查结构完整与原文定位，同时承认语义支持仍需要模型评估和人工抽查。</div>
+  <h2>10. Provenance 为什么重要</h2>
+  <p>Provenance（来源谱系）记录一项内容从哪里来、何时取得、经过哪些转换。项目让网页 Source 保留 URL 和 retrieved_at，本地 Source 保留 document_id 与页码/行号 locator，Evidence 再保存 excerpt。这样即使报告是模型生成的，读者仍能沿链回到材料位置。</p>
+
+  <h2>11. 一条 Claim 应该多大</h2>
+  <p>Claim 应是可以单独判断真假的原子陈述。若一句话同时包含“方法更快、更便宜且更准确”，一条证据可能只支持其中一部分，覆盖率却会误判整句已支持。拆成更小 Claim 能提高审计精度，但数量过多会增加提取、展示和人工复核成本。</p>
+
+  <h2>12. 多来源一致是否等于正确</h2>
+  <p>不一定。多个网页可能转载同一错误信息，表面是三条来源、实际只有一个信息源。去重需要考虑规范 URL、内容相似度、原始出处和发布时间。独立的一手来源交叉支持通常比多个转载页面更有价值，来源数量不能替代来源独立性。</p>
+
+  <h2>13. 如何处理证据冲突</h2>
+  <p>系统不应静默选择符合预期的一方。应保留各自 Source 和 Evidence，在报告中说明冲突可能来自时间、样本、定义或利益立场，并标注无法解决的边界。当前工作流能保存多条证据，但没有专门的冲突检测器；冲突识别主要依赖 LLM 写作和人工复核。</p>
+
+  <h2>14. 引用审计还可以怎样加强</h2>
+  <ul>
+    <li>用 NLI 或评审模型判断 excerpt 是否蕴含 Claim。</li>
+    <li>检查链接可访问性、发布日期、作者和来源类型。</li>
+    <li>检测多个 Source 是否为重复转载。</li>
+    <li>给高风险结论要求两个独立来源。</li>
+    <li>抽取报告每个外部事实，检查是否都映射到结构化 Claim。</li>
+  </ul>
+  <p>自动化越强，仍越需要保存评审模型、规则版本和人工抽查，因为“审计器本身”也可能错。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>项目没有把 RAG 命中直接当成引用，而是建立 Source、Evidence、Claim 三层领域模型和显式关系；确定性审计检查结构完整与原文定位，来源谱系保留 URL 或本地页码/行号。系统同时承认语义蕴含、来源独立性和冲突处理仍需要更强评测与人工抽查。</div>
 
   <p class="footer"><a href="0006-understand-rag-embeddings.html">上一课：RAG 与 Embedding</a> · <a href="0008-understand-testing-and-evaluation.html">下一课：测试与评测</a> · <a href="../index.html">返回学习区</a></p>
 </main>

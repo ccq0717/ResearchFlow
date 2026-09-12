@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0006 · 约 60 分钟</p>
+  <p class="eyebrow">Lesson 0006 · 约 80 分钟</p>
   <h1>RAG 与 Embedding 在 ResearchFlow 中怎样工作</h1>
   <p class="lead">这节课从一份上传文档出发，解释它怎样变成向量、怎样被查询命中，以及为什么命中结果还不是最终答案。</p>
   <div class="callout"><strong>先记结论：</strong>RAG 不是“让模型记住文件”，而是在生成答案前，先从外部资料中找出相关片段，再把这些片段作为上下文交给模型。</div>
@@ -139,7 +139,32 @@
     <li><strong>“换模型不用重建向量”：</strong>不同向量空间不可直接比较。</li>
     <li><strong>“用了 RAG 就不会幻觉”：</strong>模型仍可能误读、遗漏或超出证据。</li>
   </ul>
-  <div class="callout success"><strong>面试表达：</strong>项目使用真正的云端 Embedding 和余弦相似度完成小规模语义检索，但把向量保存在 SQLite，避免为作品集过早引入向量数据库；模型配置变化会强制重建索引，保证查询与文档向量兼容。</div>
+  <h2>12. 检索的时间和空间复杂度</h2>
+  <p>当前精确扫描对每个候选 Chunk 计算一次 D 维余弦，相似度计算约为 O(ND)，排序约为 O(N log N)；N 是候选数，D 是向量维度。向量存储约随 N×D 增长，JSON 编码还有额外字符开销。小知识库简单可靠，数据大时需要堆选择 Top-K 或 ANN 索引。</p>
+
+  <h2>13. 为什么不设置固定相似度阈值</h2>
+  <p>不同模型、维度、语言和查询的分数分布不同，0.7 不是通用“相关”边界。当前直接返回 Top-K，保证有候选；代价是即使所有内容都不相关也可能返回最高的几个。更成熟方案应从标注集校准阈值，并在低置信度时允许“没有足够本地证据”。</p>
+
+  <h2>14. Chunk Overlap 的收益与代价</h2>
+  <p>Overlap 在相邻 Chunk 重复边界文本，减少关键信息被切断；但会增加向量、存储和重复召回，模型可能看到多份几乎相同证据。当前实现没有 overlap，而优先保留页码和行号。是否增加应通过边界型查询评测，而不是默认越大越好。</p>
+
+  <h2>15. 向量为什么必须与策略一起版本化</h2>
+  <p>同一模型名若改变维度、DOCUMENT/QUERY task type 或指令前缀，向量空间就可能不同。项目的 model 标识包含 Provider、模型、维度和策略；选择文档时检查是否存在当前标识的向量，不匹配则要求重处理。这比只检查维度更严格，因为维度相同也不代表空间兼容。</p>
+
+  <h2>16. Dense Retrieval 的典型失败</h2>
+  <ul>
+    <li>错误码、版本号和专有缩写需要精确匹配，语义向量可能弱化字面信息。</li>
+    <li>问题过长包含多个意图，一个向量难同时表达。</li>
+    <li>Chunk 太大带入噪声，太小又缺上下文。</li>
+    <li>Embedding 训练域与科研材料差异较大。</li>
+    <li>Top-K 固定，简单问题过多、复杂问题不足。</li>
+  </ul>
+  <p>这些失败分别指向查询拆分、混合检索、分块实验、模型比较和动态 K，而不是统一换成“更贵模型”。</p>
+
+  <h2>17. 精确检索与 ANN 怎样选择</h2>
+  <p>ANN（Approximate Nearest Neighbor，近似最近邻）通过索引减少需要比较的向量，牺牲少量召回来换速度。当前候选只来自用户选择的少量文档，精确扫描结果稳定且无需索引维护。只有基准显示延迟或内存成为瓶颈时，才值得引入 HNSW、IVF 等索引并评估 recall-latency 曲线。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>项目使用真正的云端 Embedding 和余弦相似度完成小规模语义检索，但把向量保存在 SQLite，避免为作品集过早引入向量数据库；模型、维度与用途策略共同版本化，配置变化会强制重建索引。当前精确扫描约为 O(ND)，是否增加阈值、Overlap、混合检索或 ANN 都应由标注查询集驱动。</div>
 
   <p class="footer"><a href="0005-understand-langgraph-web-research.html">上一课：LangGraph 联合研究</a> · <a href="0016-understand-rag-evaluation.html">深入：RAG 优化与评测</a> · <a href="0007-understand-evidence-and-citations.html">下一课：证据与引用</a> · <a href="../index.html">返回学习区</a> · <a href="../resources.html">本课资料依据</a></p>
 </main>

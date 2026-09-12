@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0011 · 约 55 分钟</p>
+  <p class="eyebrow">Lesson 0011 · 约 75 分钟</p>
   <h1>前端怎样把持续变化的研究运行变成可读页面</h1>
   <p class="lead">这一课把 React 状态、REST 快照、SSE 增量事件和 Markdown 报告串起来，解释刷新恢复与实时更新为什么可以同时成立。</p>
   <div class="callout"><strong>先记结论：</strong>SQLite 中的数据是真相来源，REST 负责取得完整快照，SSE 只推送此后发生的变化；Markdown 渲染器负责展示，不负责判断研究结论是否正确。</div>
@@ -102,7 +102,28 @@
   <h2>7. 怎样验证这一层</h2>
   <p>组件测试检查中文加粗、GFM 表格、行内公式和块级公式是否产生预期 HTML；浏览器 E2E 从创建任务开始，检查报告、度量、刷新恢复和历史管理。前者快速定位渲染规则，后者证明真实页面路径能够协作。</p>
 
-  <div class="callout success"><strong>面试表达：</strong>前端采用“REST 快照 + SSE 增量”的状态同步方式，以 SQLite 持久状态为真相来源；报告通过受控 Markdown AST 管线渲染 GFM 与 KaTeX，没有直接执行模型生成的 HTML。</div>
+  <h2>8. Server Component 与 Client Component 怎样划分</h2>
+  <p>Server Component 默认在服务器渲染，适合不需要浏览器状态和事件的内容；Client Component 使用 <code>"use client"</code>，可以访问 useState、useEffect、EventSource 和文件选择。ResearchFlow 的交互页面需要大量客户端能力。划分过大增加浏览器 JavaScript，划分过碎则增加数据与组件边界复杂度。</p>
+
+  <h2>9. Hydration Mismatch 为什么出现</h2>
+  <p>服务器生成的初始 HTML 与浏览器第一次渲染结果不同，会产生 Hydration Mismatch。例如渲染时直接读取当前时间、随机数或仅浏览器存在的对象。需要把客户端专属逻辑放进 Effect，或确保初始值在两侧一致。当前 API 数据主要在客户端加载，避免服务器预渲染时访问本地后端。</p>
+
+  <h2>10. 为什么 SSE 回调不能随意使用旧 State</h2>
+  <p>JavaScript 闭包会捕获创建回调时的变量值，长连接回调可能拿到旧 sequence 或旧列表，称为 stale closure。项目把事件合并逻辑做成纯函数并使用当前最大序号建立连接。复杂状态继续增长时可使用函数式 setState、Reducer 或 Ref 明确维护最新游标。</p>
+
+  <h2>11. 列表渲染为什么需要稳定 key</h2>
+  <p>React 用 key 判断元素是新增、删除还是同一个对象。事件、来源和证据应使用稳定 ID，而不是数组下标；否则排序或插入后可能复用错误 DOM 与组件状态。稳定领域 ID 同时帮助测试定位元素和前端去重。</p>
+
+  <h2>12. 大报告会带来什么性能问题</h2>
+  <p>Markdown 解析、KaTeX 渲染和大量 DOM 都在浏览器消耗 CPU 与内存；频繁 SSE 更新若每次重新渲染整页也会放大开销。当前报告上限较小且只在相关事件后刷新。规模扩大时可拆分组件、记忆化稳定内容、虚拟化超长列表，并对报告大小和公式复杂度设限。</p>
+
+  <h2>13. 可访问性不只是加 aria-label</h2>
+  <p>语义标题让屏幕阅读器理解结构；按钮需要明确名称和禁用状态；错误提示应可被辅助技术感知；对话框要管理焦点、Escape 和焦点回归；颜色不能是唯一状态信号；表格应有表头。键盘完成创建、重命名、归档和删除，是比视觉截图更实际的检查。</p>
+
+  <h2>14. 前端如何处理竞态请求</h2>
+  <p>用户快速切换 Run 或组件卸载时，旧请求可能晚于新请求返回并覆盖状态。简单页面可在 Effect 清理时标记忽略；复杂场景使用 AbortController 取消 fetch，并在写状态前核对 runId。EventSource 也必须随 runId 变化关闭旧连接。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>前端采用“REST 快照 + SSE 增量”的状态同步方式，以 SQLite 持久状态为真相来源；报告通过受控 Markdown AST 管线渲染 GFM 与 KaTeX，没有直接执行模型生成的 HTML。实现还需要关注水合一致性、闭包旧状态、稳定 key、异步竞态、长报告性能和键盘可访问性。</div>
   <p class="footer"><a href="0010-understand-deployment.html">上一课：容器与部署</a> · <a href="../index.html">返回学习区</a> · <a href="../reference/current-full-stack-map.html">查看当前实现地图</a> · <a href="../resources.html">本课资料依据</a></p>
 </main>
 </body>

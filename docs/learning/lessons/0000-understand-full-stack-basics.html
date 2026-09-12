@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0000 · 约 60 分钟</p>
+  <p class="eyebrow">Lesson 0000 · 约 75 分钟</p>
   <h1>从浏览器、网络到前后端：先建立完整地图</h1>
   <p class="lead">如果你只学过单机程序，这一课会从“网页为什么需要服务器”开始，解释 URL、端口、HTTP、JSON、React、Next.js、Python 和 FastAPI 在 ResearchFlow 中分别是什么。</p>
   <div class="answer"><strong>简短回答：</strong>ResearchFlow 是一个 Web 应用。浏览器运行 TypeScript/React 前端，通过 HTTP 请求 Python/FastAPI 后端；后端保存数据、调用外部 AI 服务并执行研究流程。前端和后端是两个独立进程，即使它们都运行在你的电脑上，也要通过网络协议通信。</div>
@@ -177,7 +177,29 @@ async def create_research_run(
     <li><strong>“API 成功就是业务成功”：</strong>创建返回 201 只表示运行已入队，最终研究仍可能失败。</li>
   </ul>
 
-  <div class="callout success"><strong>面试表达：</strong>ResearchFlow 是前后端分离的 Web 应用。Next.js/React 前端在浏览器运行，通过 HTTP/JSON 调用 FastAPI；后端掌握业务、密钥、持久化和长任务。创建接口快速返回运行 ID，研究页再通过 REST 快照与 SSE 增量展示执行过程。</div>
+  <h2>20. DNS、TCP 和 HTTP 是什么关系</h2>
+  <p>访问线上域名时，DNS（Domain Name System，域名系统）先把域名解析为 IP 地址；浏览器再与目标建立传输连接，HTTP 在连接上传递请求和响应。本地 <code>localhost</code>通常不需要公网 DNS。传统 HTTP/1.1 和 HTTP/2 常运行在 TCP 上，HTTP/3 则基于 QUIC/UDP；应用代码通常通过浏览器和服务器框架使用这些能力，不需要自己编写网络包。</p>
+
+  <h2>21. HTTPS 比 HTTP 多了什么</h2>
+  <p>HTTPS 是运行在 TLS（Transport Layer Security，传输层安全协议）之上的 HTTP。TLS 通过证书帮助浏览器验证服务器身份，并为传输提供加密与完整性保护。它保护“传输途中”，不能阻止服务器自身泄露数据，也不能替代登录、授权和输入校验。本地开发可用 HTTP，公开部署必须使用 HTTPS。</p>
+
+  <h2>22. 浏览器拿到 HTML 后怎样出现可交互页面</h2>
+  <ol>
+    <li>解析 HTML，构建 DOM（Document Object Model，文档对象模型）。</li>
+    <li>解析 CSS，计算每个元素的样式和布局。</li>
+    <li>下载并执行 JavaScript；React 将组件状态与 DOM 更新关联起来。</li>
+    <li>Next.js 返回的初始内容与浏览器组件连接，称为 Hydration（水合）。</li>
+    <li>点击事件触发状态变化或 API 请求，React 再渲染受影响部分。</li>
+  </ol>
+  <p>“页面由 Next.js 生成”和“交互在浏览器运行”可以同时成立。具体取决于组件是 Server Component 还是 Client Component。</p>
+
+  <h2>23. 为什么前后端要约定数据契约</h2>
+  <p>TypeScript 接口只在前端编译期工作，Python 类型只在后端代码侧工作；它们不会自动跨网络同步。真正的边界是 HTTP 方法、路径、状态码和 JSON 字段。后端 Pydantic 负责运行时校验，前端类型帮助开发时发现错误。若接口字段变化，应同步 Schema、前端类型和契约测试，否则任一侧都可能“单独编译通过、联调失败”。</p>
+
+  <h2>24. 前后端分离的收益和成本</h2>
+  <p>收益是界面与业务可以独立组织，后端 API 也能被其他客户端复用；成本是多一个部署单元、跨域配置、网络错误和数据同步问题。ResearchFlow 需要长任务、SSE、上传与丰富研究页面，分离较自然。小型静态站若没有复杂后端，没必要照搬这种结构。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>ResearchFlow 是前后端分离的 Web 应用。Next.js/React 前端在浏览器运行，通过 HTTP/JSON 调用 FastAPI；后端掌握业务、密钥、持久化和长任务。创建接口快速返回运行 ID，研究页再通过 REST 快照与 SSE 增量展示执行过程。线上链路还包含 DNS、传输连接和 TLS，前后端真正共享的是 API 契约而不是语言类型。</div>
   <p class="footer"><a href="0001-understand-sse.html">下一课：从零理解 SSE</a> · <a href="../index.html">返回学习区</a> · <a href="../reference/current-full-stack-map.html">当前全栈实现地图</a> · <a href="../resources.html">资料依据</a></p>
 </main>
 </body>

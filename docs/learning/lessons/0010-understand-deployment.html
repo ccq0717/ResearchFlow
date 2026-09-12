@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0010 · 约 55 分钟</p>
+  <p class="eyebrow">Lesson 0010 · 约 75 分钟</p>
   <h1>本地能运行，为什么还不等于可以上线</h1>
   <p class="lead">在线 Demo 需要把构建、网络、数据、Secret、费用和恢复方式一起固定下来。Docker 只解决其中的运行环境一致性。</p>
   <div class="callout"><strong>先记结论：</strong>容器可以替换，数据卷和 Secret 不能写进镜像；当前架构必须保持单个 API 写入实例。</div>
@@ -94,7 +94,32 @@
   </tbody></table>
   <p>作品集项目不必为了显得“生产化”而长期付费在线。能解释部署方案、展示 Docker 和上线清单，再用本地真实运行演示，也是一种合理选择。</p>
 
-  <div class="callout success"><strong>面试表达：</strong>项目明确区分镜像、运行配置和持久数据；单实例是基于 SQLite 与进程内任务的主动约束，并通过健康检查、限额、版本门禁和备份恢复控制作品集 Demo 风险。</div>
+  <h2>10. Docker 镜像为什么使用分层</h2>
+  <p>Dockerfile 每个构建步骤形成可缓存层。通常先复制依赖清单并安装，再复制经常变化的源码；源码修改时可以复用依赖层。镜像层是只读模板，容器增加可写层。把数据库写进镜像不会形成运行时持久化，更新镜像也不会自动带走旧容器数据。</p>
+
+  <h2>11. Multi-stage Build 有什么价值</h2>
+  <p>多阶段构建在 builder 阶段安装编译工具并生成产物，再只把运行需要的文件复制到最终镜像，可减少体积和攻击面。前端 Next.js 生产构建尤其适合分离依赖安装、构建和运行阶段。代价是 Dockerfile 更复杂，需要保证运行时文件复制完整。</p>
+
+  <h2>12. 容器端口和宿主机端口为什么不同</h2>
+  <p>应用在容器内监听例如 8000，宿主机可以映射为其他端口。容器之间通过 Compose 网络和服务名通信，不应把容器内的 localhost 当成另一容器；localhost 永远指当前网络命名空间自身。浏览器访问的则是宿主机或公网域名。</p>
+
+  <h2>13. Volume、Bind Mount 和镜像文件</h2>
+  <ul>
+    <li><strong>镜像文件：</strong>随版本发布，只读，适合代码和固定资源。</li>
+    <li><strong>Volume：</strong>由容器平台管理，适合 SQLite 与 uploads 持久数据。</li>
+    <li><strong>Bind Mount：</strong>直接映射宿主路径，开发方便，但路径、权限和可移植性更敏感。</li>
+  </ul>
+
+  <h2>14. 为什么更新不能直接覆盖数据库</h2>
+  <p>应用镜像是可替换版本，数据库是长期状态。更新前应备份并验证 Schema 兼容，再替换容器；若旧代码不能读取新 Schema，单纯回滚镜像会失败。当前版本门禁选择在不兼容时拒绝启动，避免悄悄损坏数据。</p>
+
+  <h2>15. 零停机部署为什么对当前架构困难</h2>
+  <p>零停机通常需要新旧实例同时存在并由负载均衡切流；当前进程内 Task、SQLite 和本地上传使两个 API 实例难以协调。作品集更适合短暂停机更新。需要零停机时，应先外置任务队列、数据库和对象存储，再设计向前兼容迁移与优雅终止。</p>
+
+  <h2>16. 容器资源限制为什么重要</h2>
+  <p>PDF 解析、并发请求或异常输入可能消耗大量内存和 CPU。平台应设置内存、CPU、进程与请求大小限制，并观察 OOM（Out of Memory，内存耗尽）重启。应用内页数和字符限制是第一层，容器限制是最后的隔离边界。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>项目明确区分镜像、运行配置和持久数据；镜像分层提高构建复用，Volume 保存 SQLite 与 uploads，反向代理提供 HTTPS。单实例是进程内任务和本地状态决定的主动约束，零停机与水平扩容需要先外置队列、数据库和对象存储。</div>
   <p class="footer"><a href="0009-understand-run-reliability.html">上一课：后台任务与可靠性</a> · <a href="0018-understand-git-and-ci-cd.html">深入：Git 与 CI/CD</a> · <a href="0011-understand-frontend-rendering.html">下一课：前端状态与报告渲染</a> · <a href="../index.html">返回学习区</a> · <a href="../../guides/online-demo-deployment.md">部署指南</a></p>
 </main>
 </body>

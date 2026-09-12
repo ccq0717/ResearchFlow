@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0005 · 约 50 分钟</p>
+  <p class="eyebrow">Lesson 0005 · 约 70 分钟</p>
   <h1>网页与本地资料怎样穿过 LangGraph</h1>
   <p class="lead">学完后，你应该能解释节点、状态、适配器、来源、证据和持久化更新怎样协作。</p>
   <div class="callout"><strong>先记结论：</strong>LangGraph 负责工作流内部编排，但产品对外只暴露 ResearchFlow 自己的领域对象和事件。</div>
@@ -122,7 +122,22 @@ self._graph = builder.compile()</code></pre>
     <li>可靠性仍需要事务、错误映射、限额、日志和测试。</li>
   </ul>
 
-  <h2>8. 关联关系总结</h2>
+  <h2>8. State 为什么使用 TypedDict</h2>
+  <p>TypedDict 描述图状态可能包含哪些键，帮助静态检查和阅读节点输入输出；<code>total=False</code>允许早期节点尚未产生后续字段。它不是运行时验证器，节点仍可能返回语义错误内容。真正跨边界的数据由领域对象和 Pydantic/构造逻辑进一步约束。</p>
+
+  <h2>9. 节点更新是覆盖还是合并</h2>
+  <p>节点返回状态字典的部分字段，LangGraph 将其合并进当前 State。若多个节点并行写同一字段，需要 Reducer 定义如何合并；当前图是固定串行边，没有并行写冲突，也没有自定义 Reducer。未来并行搜索时应显式决定结果列表的合并、排序和去重。</p>
+
+  <h2>10. 条件边什么时候有价值</h2>
+  <p>当前无论材料质量如何都按固定六步前进，失败通过异常转为 failed。若要根据引用覆盖不足返回搜索、由用户批准计划后继续、或按问题类型选择不同工具，可以增加条件边。但循环必须设置最大次数、成本预算和终止原因，否则 Agent 可能无界运行。</p>
+
+  <h2>11. Checkpointer 能解决什么，不能解决什么</h2>
+  <p>LangGraph Checkpointer 可以在节点边界保存 Graph State，支持暂停、恢复和线程历史。它不能自动让外部 API 调用幂等，也不能代替产品数据库、权限、Run 列表和材料模型。当前项目没有启用，因此重启时不会从 reading 节点继续，而是把非终态 Run 标记失败。</p>
+
+  <h2>12. 为什么搜索按问题串行执行</h2>
+  <p>串行实现容易控制 Provider 限流、费用、日志顺序和错误处理。并行可以降低总延迟，但瞬时请求数和失败扇出更高。优化时可用 <code>TaskGroup</code>并行独立问题，再用 Semaphore 限制并发，并保证最终结果按 question 顺序稳定合并。</p>
+
+  <h2>13. 关联关系总结</h2>
   <p>六个 StateGraph 节点用固定边按顺序连接；Fake 与真实搜索/本地检索实现遵守相同接口，因此测试无需访问互联网。数据关系从 Research Question 开始，经 ResearchTask 记录检索，再由 Source 保存实际读取的网页或本地片段，Evidence 把原文关联回问题和来源，Claim 最后把报告中的关键陈述关联到一条或多条 Evidence。</p>
   <div class="callout success"><strong>面试表达：</strong>项目用 LangGraph 表达固定、有状态、可观察的研究流程，而不是把全部控制权交给开放式 Agent；框架状态与 SQLite 产品状态分离，工作流通过领域更新向应用层报告结果。</div>
   <p class="footer"><a href="0015-understand-web-search.html">深入：网页搜索</a> · <a href="../index.html">返回学习区</a></p>

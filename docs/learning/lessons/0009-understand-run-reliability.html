@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0009 · 约 45 分钟</p>
+  <p class="eyebrow">Lesson 0009 · 约 60 分钟</p>
   <h1>后台任务失败后，系统怎样保持状态可信</h1>
   <p class="lead">ResearchFlow 的研究可能运行数分钟。可靠性不是保证永不失败，而是让取消、失败、重启和重试都有明确且可恢复的结果。</p>
   <div class="callout"><strong>先记结论：</strong>SQLite 中的 Research Run 是权威状态；内存任务只负责当前执行，事件负责解释状态怎样变化。</div>
@@ -76,7 +76,30 @@
   <h2>7. 怎样证明可靠性</h2>
   <p>生命周期测试覆盖完成、取消、重启中断、一次重试和配额；浏览器 E2E 覆盖创建、报告、度量和刷新恢复。备份恢复演练还会运行 SQLite 完整性检查。不同测试分别证明状态机、用户路径和数据可恢复性。</p>
 
-  <div class="callout success"><strong>面试表达：</strong>项目把持久状态、内存执行和可重放事件分开；失败恢复采用诚实的一次新运行语义，并用事务、限额、结构化日志和端到端测试形成可靠性闭环。</div>
+  <h2>8. Crash Consistency 是什么</h2>
+  <p>Crash Consistency（崩溃一致性）关注进程或机器在任意时刻停止后，持久数据是否仍处于可解释状态。项目用短事务保存阶段更新，用同一事务保存终态与终态事件；启动时将遗留非终态标记失败。它不保证恢复计算进度，但保证用户不会永远看到一个实际已不存在的运行仍在 running。</p>
+
+  <h2>9. 取消与自然完成发生竞争时怎么办</h2>
+  <p>用户点击取消时，工作流可能正好完成。Application 在 lifecycle lock 内先读取状态、取消并等待 Task，再重新读取数据库；若此时已进入终态，就拒绝再次取消。这样不会用 cancelled 覆盖 completed。并发控制的关键是操作前后重新验证，而不是只相信最初读到的状态。</p>
+
+  <h2>10. 为什么 Retry 创建新 Run</h2>
+  <p>覆盖旧 Run 会丢失错误、耗时、材料和审计线索。新 Run 用 <code>retry_of</code>和 attempt 建立谱系，原运行保持不可变历史。当前最多一次重试，并检查是否已有子尝试，避免用户反复点击造成无限费用。它是产品级重新执行，不是从失败节点 Resume。</p>
+
+  <h2>11. At-most-once、At-least-once 与 Exactly-once</h2>
+  <ul>
+    <li><strong>At-most-once：</strong>最多执行一次，失败可能丢失。</li>
+    <li><strong>At-least-once：</strong>确保最终执行，但可能重复，需要幂等。</li>
+    <li><strong>Exactly-once：</strong>外部效果看起来精确一次，通常依赖事务、去重和严格边界。</li>
+  </ul>
+  <p>当前进程内任务接近一次尝试，重启后不自动重投；SSE 通知允许重复并由 sequence 去重。引入消息队列后通常采用至少一次任务投递，再让阶段写入和外部副作用幂等。</p>
+
+  <h2>12. 可用性和数据持久性为何不同</h2>
+  <p>服务暂时不可访问属于可用性问题；已完成报告在重启后丢失属于持久性问题。SQLite 和上传卷提高数据持久性，却没有备用实例；健康检查能发现不可用，却不能恢复数据。可靠性设计要分别回答检测、隔离、恢复和防止丢失。</p>
+
+  <h2>13. 怎样定义降级策略</h2>
+  <p>网页搜索失败但本地资料可用时，工作流可以继续并记录 warning；两类资料都没有才失败。这是有明确质量边界的降级。不能在 LLM 或 Embedding 完全不可用时悄悄返回“成功”假报告。降级必须让用户知道缺失了什么，并在指标中保留来源构成。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>项目把持久状态、内存执行和可重放事件分开；终态写入关注崩溃一致性，取消操作通过锁与二次读取解决完成竞争，失败重试创建有谱系的新 Run。当前选择重启后诚实失败而非伪装断点续跑，并用限额、日志和端到端测试形成可靠性闭环。</div>
   <p class="footer"><a href="0008-understand-testing-and-evaluation.html">上一课：测试与评测</a> · <a href="0013-understand-python-async.html">深入：Python 异步</a> · <a href="0010-understand-deployment.html">下一课：容器与部署</a> · <a href="../index.html">返回学习区</a></p>
 </main>
 </body>

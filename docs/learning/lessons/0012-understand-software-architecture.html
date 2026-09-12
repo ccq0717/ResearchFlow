@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0012 · 约 50 分钟</p>
+  <p class="eyebrow">Lesson 0012 · 约 70 分钟</p>
   <h1>代码为什么要分层，接口为什么重要</h1>
   <p class="lead">这一课不背架构名词，而是回答一个实际问题：一条研究请求经过很多部件时，怎样避免所有代码互相依赖。</p>
   <div class="answer"><strong>简短回答：</strong>架构是在约束“职责放在哪里、依赖指向哪里、哪些细节可以替换”。ResearchFlow 采用单体分层结构：一个后端进程内完成业务，但用领域对象和接口隔开 API、工作流、外部服务与数据库。</div>
@@ -115,7 +115,31 @@
     <li>Demo 访问码不是多用户权限系统；</li>
     <li>接口降低替换影响，但无法消除供应商能力差异。</li>
   </ul>
-  <div class="callout success"><strong>面试表达：</strong>项目采用模块化单体而不是微服务；通过 Application、Domain、Workflow、Integration 和 Persistence 分离职责，并在 LLM、搜索、Embedding 与工作流边界使用接口和适配器，使真实实现与 Fake 可以替换。</div>
+  <h2>11. SOLID 在项目中怎样落地</h2>
+  <ul>
+    <li><strong>单一职责：</strong>Route 翻译 HTTP，Application 组织用例，Workflow 编排研究。</li>
+    <li><strong>开闭与里氏替换：</strong>SearchProvider 可替换，但实现必须维持相同语义契约。</li>
+    <li><strong>接口隔离：</strong>LLMClient 暴露规划、提取、写作，而不是万能 request 方法泄漏供应商协议。</li>
+    <li><strong>依赖倒置：</strong>高层 Workflow 依赖 LLM/Search/Retriever 抽象，具体对象在装配入口创建。</li>
+  </ul>
+  <p>SOLID 是判断职责和变化的工具，不要求每个字母都产生一层类。</p>
+
+  <h2>12. 什么是贫血模型与充血模型</h2>
+  <p>贫血领域模型主要保存数据，规则集中在服务；充血模型把行为和不变量放入领域对象。ResearchFlow 的 dataclass/模型偏数据化，复杂生命周期规则在 Application，引用审计在 Domain 函数。对当前规模清晰可测；若状态转换继续复杂，可把允许转换等规则下沉为领域方法。</p>
+
+  <h2>13. Repository 为什么不等于 DAO</h2>
+  <p>DAO（Data Access Object）通常围绕表和 CRUD；Repository 以领域聚合和业务查询提供“像集合一样”的接口。当前 Repository 同时承担 Run、计划、材料和事件，较宽但保持事务边界集中。规模扩大后可按聚合拆分，不能只按每张表机械创建一个 Repository。</p>
+
+  <h2>14. 架构中的稳定依赖原则</h2>
+  <p>变化频繁的供应商 SDK、HTTP JSON 和数据库 Row 应依赖较稳定的领域契约，而不是让领域层导入 FastAPI、SQLAlchemy 或 Exa 类型。这样框架升级主要影响外圈。完全隔离不现实：接口能力仍受供应商共同子集限制，替换后必须做回归。</p>
+
+  <h2>15. 什么时候该拆模块或服务</h2>
+  <p>信号包括模块拥有独立数据与生命周期、需要独立扩缩容、发布节奏冲突、团队所有权明确，或故障必须隔离。单纯文件多、类多或“微服务更高级”不是理由。ResearchFlow 最可能先分离的是持久 Worker，而不是把每个 LangGraph 节点变成服务。</p>
+
+  <h2>16. 架构决策怎样验证</h2>
+  <p>接口价值可通过 Fake 替换和供应商契约测试验证；分层价值可通过依赖方向检查和修改影响范围验证；模块化单体选择可通过部署复杂度与实际容量验证。架构不是图画正确，而是关键变化和失败是否被限制在预期边界。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>项目采用模块化单体而不是微服务；通过 Application、Domain、Workflow、Integration 和 Persistence 分离职责，并在 LLM、搜索、Embedding 与工作流边界使用接口和适配器。设计遵循职责与稳定依赖，而不是机械套模式；最可能的规模化拆分是独立持久 Worker。</div>
 
   <p class="footer"><a href="0003-understand-sqlite-persistence.html">相关课程：SQLite 持久化</a> · <a href="../index.html">返回学习区</a> · <a href="../../architecture/llm-integration.md">查看正式架构文档</a></p>
 </main>

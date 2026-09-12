@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0013 · 约 55 分钟</p>
+  <p class="eyebrow">Lesson 0013 · 约 75 分钟</p>
   <h1>async、await 和后台任务到底在做什么</h1>
   <p class="lead">研究流程会等待多个网络服务，若逐步阻塞线程，API 就很难同时响应查看状态和取消请求。</p>
   <div class="answer"><strong>简短回答：</strong><code>async</code> 定义协程，<code>await</code> 在等待 I/O 时把执行权交回事件循环，<code>create_task</code> 把协程安排为可独立推进的任务。它们提高等待型工作的并发能力，不会自动让 CPU 计算变快。</div>
@@ -100,7 +100,25 @@ task = asyncio.create_task(fetch())  # 安排它独立推进</code></pre>
     <li><strong>“取消会回滚一切”：</strong>取消只是一种异常传播，必须显式设计一致性和清理。</li>
     <li><strong>“单进程锁能管多台服务器”：</strong>不能，它只保护当前事件循环内的共享状态。</li>
   </ul>
-  <div class="callout success"><strong>面试表达：</strong>ResearchFlow 把耗时研究作为进程内 asyncio Task 运行，让创建接口立即返回并通过 SSE 汇报进度；对并发、取消和退出恢复做了边界处理，同时明确多实例场景需要持久任务队列。</div>
+  <h2>11. Event Loop 一轮做什么</h2>
+  <p>事件循环维护就绪回调、计时器和 I/O 完成通知。协程运行到 await 一个尚未完成的操作时暂停，把控制权交回；I/O 就绪后对应 Task 再进入可运行队列。协作式调度要求代码主动 await，长时间纯计算不会被自动抢占。</p>
+
+  <h2>12. GIL 与 asyncio 有什么关系</h2>
+  <p>CPython 的 GIL（Global Interpreter Lock，全局解释器锁）限制同一进程中多个线程同时执行 Python 字节码。asyncio 主要在单线程中交替等待 I/O，本来就不依赖多线程并行，因此适合网络型工作。CPU 密集任务需要进程池、原生扩展或独立 Worker；to_thread 主要避免阻塞事件循环，不保证 Python 计算并行加速。</p>
+
+  <h2>13. Task 和 Future 有什么区别</h2>
+  <p>Future 表示未来会得到一个结果的占位对象；Task 是包装协程并由事件循环推进的一种 Future。通常应用代码创建 Task、await 协程，底层库用 Future 连接 I/O 完成通知。创建 Task 后若不保留引用，异常和生命周期会难以管理；项目用字典保存 Task→Run ID。</p>
+
+  <h2>14. Structured Concurrency 为什么重要</h2>
+  <p>结构化并发要求子任务生命周期受一个明确作用域管理：离开作用域前等待完成或统一取消。Python TaskGroup 就体现这一点。项目的研究 Task 有应用级注册、shutdown 统一取消；若在搜索节点并行多个问题，TaskGroup 比裸 create_task 更容易正确传播失败。</p>
+
+  <h2>15. 取消是请求，不是强制终止</h2>
+  <p><code>task.cancel()</code>安排 CancelledError 在下一个可取消 await 点抛出；同步 CPU 循环或不配合取消的库不会立刻停止。清理代码应使用 finally，并避免吞掉 CancelledError。外部 HTTP 请求是否真正停止还取决于客户端能否关闭连接，供应商可能已经开始计费。</p>
+
+  <h2>16. 异步数据库 Session 为什么不能跨 Task 随意共享</h2>
+  <p>Session 包含事务和对象状态，不适合作为全局可并发对象。项目每个 Repository 方法通过 session factory 创建独立 Session，并在上下文结束时关闭。并行任务若共享同一 Session，可能交叉提交、状态冲突或触发驱动限制。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>ResearchFlow 把耗时研究作为进程内 asyncio Task 运行，让创建接口立即返回并通过 SSE 汇报进度。事件循环适合 LLM、搜索与数据库的 I/O 等待，不解决 CPU 密集计算；Task 被显式注册和统一取消，持久化更新用 shield 保护，并明确多实例需要持久任务队列。</div>
 
   <p class="footer"><a href="0009-understand-run-reliability.html">相关课程：后台任务可靠性</a> · <a href="../index.html">返回学习区</a> · <a href="../resources.html">本课资料依据</a></p>
 </main>

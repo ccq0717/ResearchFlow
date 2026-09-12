@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0001 · 约 45 分钟</p>
+  <p class="eyebrow">Lesson 0001 · 约 60 分钟</p>
   <h1>从零理解 SSE：服务器怎样持续通知浏览器</h1>
   <p class="lead">从全称、中文含义和应用场景开始，逐步理解 HTTP 流、事件格式、浏览器 EventSource、断线重连，以及 ResearchFlow 的真实前后端实现。</p>
   <div class="answer"><strong>简短回答：</strong>SSE 的全称是 <strong>Server-Sent Events</strong>，中文通常译为“服务器发送事件”或“服务端推送事件”。浏览器先建立一条普通 HTTP 连接，服务器保持响应不结束，并以规定的文本格式不断向浏览器发送事件。它适合进度、通知、日志和状态变化等“服务器持续向客户端单向更新”的场景。</div>
@@ -163,7 +163,25 @@ source.close();</code></pre>
     <li>HTTPS、认证、限流和代理配置属于完整部署的一部分，不由 SSE 自动提供。</li>
   </ul>
 
-  <div class="callout success"><strong>面试表达：</strong>SSE 即 Server-Sent Events，是基于 HTTP 的服务器到浏览器单向文本事件流。ResearchFlow 用 REST 创建和读取权威快照，用 SSE 推送增量进度；事件按 sequence 持久化并支持 after/Last-Event-ID 补发，前端按序号去重，终态后重新读取最终快照并关闭连接。</div>
+  <h2>16. SSE 的投递语义是什么</h2>
+  <p>网络可能在客户端收到事件后立即断开，服务器不知道客户端是否已经处理；重连从边界序号补发时就可能重复。因此该实现更接近 <strong>at-least-once</strong>（至少一次）投递，而不是 exactly-once（精确一次）。前端按 sequence 去重，使“重复通知”不会重复显示。精确一次需要确认、幂等消费和持久消费位置，UI 进度没有必要承担那种复杂度。</p>
+
+  <h2>17. 慢客户端和背压会怎样</h2>
+  <p>Backpressure（背压）指生产速度超过消费速度后，系统需要限制、缓存或丢弃数据。ResearchFlow 的事件频率很低，StreamingResponse 与网络栈会自然等待写出；事件正文也很小。若改成逐 Token 高频流式输出，慢连接会占用更多缓冲与资源，需要限制单连接队列、合并更新、断开过慢客户端或采用专门消息基础设施。</p>
+
+  <h2>18. HTTP/1.1、HTTP/2 对连接数量有什么影响</h2>
+  <p>HTTP/1.1 下浏览器对同一 Origin 的并发连接数有限，多个标签页和多个 SSE 可能占用连接；HTTP/2 可以在一条连接上多路复用多个流。具体限制由浏览器、代理和协议版本共同决定。当前页面每个 Run 只建立一个 EventSource，终态与卸载时主动关闭，避免无意义占用。</p>
+
+  <h2>19. 为什么代理缓冲会让 SSE 看似失效</h2>
+  <p>某些反向代理为了提高普通响应吞吐，会积累一批字节后再转发。后端虽然已经 yield，浏览器却迟迟收不到，最后突然出现多条事件。<code>Cache-Control: no-cache</code>防止缓存复用，<code>X-Accel-Buffering: no</code>提示兼容代理不要缓冲；部署平台仍需检查自己的超时和流式响应设置。</p>
+
+  <h2>20. 为什么不用 SSE 直接传模型 Token</h2>
+  <p>当前产品的可观察单位是研究阶段和持久材料，不是聊天打字效果。逐 Token 推送会显著增加事件数量、数据库体积、前端更新频率和断线恢复复杂度，而且草稿 Token 未必适合展示。若未来需要流式报告，可把临时 Token 流与持久业务事件分开：前者允许丢失，后者仍按 sequence 可靠补发。</p>
+
+  <h2>21. SSE 端点如何做容量规划</h2>
+  <p>需要估算同时在线连接数、每连接持续时间、心跳频率、数据库轮询频率和代理空闲超时。当前每 0.2 秒查一次状态和新事件，10 个连接约产生每秒 100 次读取；作品集足够，连接数上升后应减少轮询、用通知机制唤醒或共享发布订阅通道。优化前要测数据库和事件循环负载。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>SSE 即 Server-Sent Events，是基于 HTTP 的服务器到浏览器单向文本事件流。ResearchFlow 用 REST 创建和读取权威快照，用 SSE 推送增量进度；事件按 sequence 持久化并支持 after/Last-Event-ID 补发，前端按序号去重，形成至少一次通知下的幂等显示。代理缓冲、慢客户端、连接数和数据库轮询是规模化时的主要边界。</div>
 
   <p class="footer"><a href="0000-understand-full-stack-basics.html">上一课：前后端基础地图</a> · <a href="0002-follow-a-research-request.html">下一课：跟随一次完整请求</a> · <a href="../index.html">返回学习区</a> · <a href="../../architecture/sse-events.md">SSE 事件契约</a> · <a href="../reference/web-communication-cheatsheet.html">通信方式速查表</a></p>
 </main>

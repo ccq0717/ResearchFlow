@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0002 · 约 35 分钟</p>
+  <p class="eyebrow">Lesson 0002 · 约 50 分钟</p>
   <h1>一次研究任务如何穿过前端、后端和数据库</h1>
   <p class="lead">学完这一课，你应该能从用户点击“开始研究”讲到 SQLite 写入记录，再讲到网页为什么跳转到研究工作区。</p>
 
@@ -124,7 +124,19 @@ await session.commit()</code></pre>
   </ol>
   <p>Network 说明浏览器实际发送和收到什么；Console 更适合看前端运行错误；后端终端说明 Python 服务发生什么。不要只盯着页面上的一句通用提示。</p>
 
-  <h2>13. 请求路径速记</h2>
+  <h2>13. 结构校验和业务校验为什么分两层</h2>
+  <p>Pydantic Schema 能判断 goal 长度、document_ids 是否为 UUID；它不知道文档是否存在、是否 ready、是否使用当前 Embedding 模型。后者由 Application 与 KnowledgeLibrary 查询业务状态后判断。把数据库业务规则塞进字段 Schema，会让校验依赖基础设施，也更难复用和测试。</p>
+
+  <h2>14. 如果用户连续点击两次会怎样</h2>
+  <p>当前两个 POST 都可能创建独立 Run，只要没有超过并发和每日额度。按钮应在提交中禁用以减少误操作，但前端措施不是强一致保证。需要网络重试安全时，可以让客户端发送 Idempotency-Key，后端以唯一约束保存“Key→创建结果”，相同 Key 返回同一个 Run。</p>
+
+  <h2>15. X-Request-ID 与 Run ID 有什么区别</h2>
+  <p>Request ID 标识一次短 HTTP 请求，用于日志关联；Run ID 标识跨越很多请求和几十秒研究过程的业务执行。一次 Run 会对应创建、快照、材料、指标和 SSE 等多个 Request ID。排障时前者定位某次接口，后者串起整个研究生命周期。</p>
+
+  <h2>16. 网络超时后能否判断创建失败</h2>
+  <p>不能。浏览器超时只说明没有及时收到响应，服务器可能已经提交 Run。客户端若盲目重发可能重复创建。当前低风险 Demo 通过历史列表让用户看到已有记录；生产系统应使用幂等键，或者先查询请求结果再决定是否重试。</p>
+
+  <h2>17. 请求路径速记</h2>
   <div class="card">
     <p><strong>表单 → API 客户端 → FastAPI 路由 → 应用层 → Repository → SQLite</strong></p>
     <p>表单收集目标；API 客户端发送 JSON；路由接收 HTTP；应用层组织创建用例；Repository 转换并提交数据；SQLite 把记录写进本地文件。</p>

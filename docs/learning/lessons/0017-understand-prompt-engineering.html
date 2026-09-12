@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0017 · 约 60 分钟</p>
+  <p class="eyebrow">Lesson 0017 · 约 80 分钟</p>
   <h1>怎样让 LLM 成为可靠的程序组件</h1>
   <p class="lead">Prompt 工程不是寻找一句“神奇咒语”，而是定义任务边界、输入数据、输出契约和失败处理。</p>
   <div class="answer"><strong>简短回答：</strong>ResearchFlow 把 LLM 拆成规划、证据提取和报告写作三个窄任务；每次请求给出系统规则和业务数据，并要求 JSON Schema 结构化输出，再由 Pydantic 二次校验。模型负责语义判断，代码负责 ID 关联、状态和确定性检查。</div>
@@ -113,7 +113,28 @@
     <li>分析是检索、上下文、Schema 还是生成问题；</li>
     <li>记录模型和 Prompt 版本，避免无依据地凭感觉修改。</li>
   </ol>
-  <div class="callout success"><strong>面试表达：</strong>项目把 LLM 设计为三个有 Schema 的窄接口，结合 Pydantic 与业务白名单二次校验；模型承担语义规划、证据理解和写作，确定性代码掌握状态、关联与审计。</div>
+  <h2>11. Prompt 的优先级怎样理解</h2>
+  <p>System 消息定义应用级规则，User 消息携带任务数据；外部网页和上传文档即使包含命令，也应被视为 User 内容中的不可信数据。模型通常遵循消息优先级，但不是安全隔离边界。真正敏感的权限必须由代码控制，不能靠“请不要泄露 Secret”保护。</p>
+
+  <h2>12. 指令、数据和示例为什么要分隔</h2>
+  <p>清楚标注“研究目标”“研究问题”“来源正文”，并用结构边界包围数据，可以减少模型把来源文字误当指令。分隔符本身不能抵御所有 Prompt Injection，但能提升可读性和稳定性。数据中可能出现相同分隔符时，JSON 结构或长度编码比随意文本拼接更可靠。</p>
+
+  <h2>13. 输出长度怎样影响截断</h2>
+  <p>Schema 允许报告最多 20000 字符，但供应商还有 max output token 和上下文总上限。模型在 JSON 字符串中途截断会导致整个响应无法解析。应控制证据数量、报告目标长度，并在供应商支持时设置合理 max_tokens；不能在无效 JSON 后简单截字符串当成功。</p>
+
+  <h2>14. 为什么业务白名单比 Prompt 更可靠</h2>
+  <p>Prompt 要求模型只返回现有 source_id，仍可能出错。代码构建 allowed_sources 与 allowed_questions 并过滤，再检查 excerpt 原文。白名单是确定性授权：无论模型如何表达，都不能让不存在的 ID 进入领域数据。安全和一致性规则应尽量落到这种机器检查。</p>
+
+  <h2>15. Prompt Injection 与 Jailbreak 的区别</h2>
+  <p>Jailbreak 通常由用户直接诱导模型绕过规则；间接 Prompt Injection 藏在模型读取的网页或文件里。研究系统尤其容易遭遇后者，因为它主动摄取外部文本。防护包括最小工具权限、数据与指令隔离、输出 Schema、敏感操作人工确认和攻击样例评测，而不是寻找一句万能 System Prompt。</p>
+
+  <h2>16. Prompt 缓存适用于哪里</h2>
+  <p>长且重复的 System Prompt 或固定上下文可能命中供应商缓存，降低延迟与价格；每次变化的网页正文和证据未必可复用。缓存键、有效期和计费由供应商决定。当前只汇总普通 prompt/completion token，没有单独计算缓存创建或读取 Token。</p>
+
+  <h2>17. 怎样防止 Prompt 改动悄悄退化</h2>
+  <p>把 Prompt 与 Schema 当版本化源码，保存代表性输入和期望性质；每次修改运行格式成功率、证据原文率、引用、报告 Rubric、Token 和延迟对比。真实模型具有波动，应多次运行或固定评测窗口，不能凭单个“看起来更好”的报告合并。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>项目把 LLM 设计为三个有 Schema 的窄接口，结合 Pydantic、ID 白名单和 excerpt 原文检查；模型承担语义规划、证据理解和写作，确定性代码掌握状态、关联与审计。Prompt 是需要版本化和评测的接口，但绝不是认证或安全边界。</div>
 
   <p class="footer"><a href="0004-understand-llm-adapters.html">上一层基础：LLM 适配器</a> · <a href="../index.html">返回学习区</a> · <a href="../resources.html">本课资料依据</a></p>
 </main>

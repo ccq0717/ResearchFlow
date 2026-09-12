@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0008 · 约 55 分钟</p>
+  <p class="eyebrow">Lesson 0008 · 约 75 分钟</p>
   <h1>Fake、Mock、集成测试与真实评测分别证明什么</h1>
   <p class="lead">AI 应用不能只靠“运行一次看起来不错”。这节课用 ResearchFlow 的测试分层解释怎样把代码正确性、协议兼容性和结果质量分开验证。</p>
   <div class="callout"><strong>先记结论：</strong>自动化测试追求稳定、快速和可重复；真实服务评测确认外部兼容性与效果。二者互补，不能互相替代。</div>
@@ -115,7 +115,25 @@ rank = 3 → reciprocal rank = 1/3</code></pre>
   → 固定真实服务评测
   → 浏览器端到端体验
   → 把结果和限制写入评测/复盘文档</code></pre>
-  <div class="callout success"><strong>面试表达：</strong>项目区分 Fake 集成测试、HTTP 协议 Mock、固定质量评测和真实端到端验证；常规 CI 完全离线，真实服务只作为明确授权的手动门禁，并且每个指标都说明它不能证明什么。</div>
+  <h2>9. Contract Test 解决什么</h2>
+  <p>Contract Test（契约测试）验证边界双方是否遵守同一请求响应约定。对外部 Provider，可以用固定 HTTP 响应检查请求路径、认证头、Schema 和错误映射；对前后端，可以检查 OpenAPI 或关键 JSON 字段。它比纯单元测试更接近真实协议，又比每次访问远端更稳定。</p>
+
+  <h2>10. Snapshot Test 为什么要谨慎</h2>
+  <p>Snapshot 保存一次完整输出，后续变化需要人工确认，适合稳定 UI 结构或序列化格式。对 LLM 长报告做逐字 Snapshot 会因非确定性频繁失败，也容易让开发者盲目更新快照。更合适的是断言必需章节、引用关系、Schema 和安全渲染结果。</p>
+
+  <h2>11. Property-Based Testing 是什么</h2>
+  <p>属性测试不是只列几个输入，而是生成大量数据验证始终成立的性质。例如事件合并后 sequence 必须严格递增且无重复；余弦相似度应在有效范围；任意非法文件名都不能逃离上传目录。当前主要使用示例测试，复杂边界增多时可引入属性测试补充。</p>
+
+  <h2>12. Flaky Test 怎样识别和治理</h2>
+  <p>Flaky Test（不稳定测试）在代码不变时有时成功、有时失败，常见原因是时间、端口、共享文件、网络、并发与动画。治理方法是固定时钟和随机种子、使用临时目录、等待健康条件而非固定 sleep、隔离进程、保存 trace。重复重试只能收集证据，不能当作修复。</p>
+
+  <h2>13. 哪些测试最值得优先写</h2>
+  <p>优先覆盖失败代价高且容易回归的边界：终态与事件事务、取消竞争、重启中断、Embedding 维度、模型无效 ID、excerpt 原文检查、上传逃逸、Cookie 过期和 SSE 去重。简单 getter 的覆盖价值通常低于这些系统不变量。</p>
+
+  <h2>14. 测试数据怎样避免自证</h2>
+  <p>如果 Fake、实现和断言都根据同一错误假设编写，测试会稳定地证明错误逻辑。关键契约应参考规范和真实响应样例；RAG qrels 由人工独立标注；真实验收用于发现 Fake 未覆盖的供应商差异。测试来源越独立，发现共同盲点的概率越高。</p>
+
+  <div class="callout success"><strong>面试表达：</strong>项目区分 Fake 集成测试、HTTP 契约 Mock、固定质量评测和真实端到端验证；常规 CI 完全离线，真实服务只作为明确授权的手动门禁。测试优先保护事务、取消、重连、上传和证据等不变量，并通过真实样例避免 Fake 与实现共享同一错误假设。</div>
 
   <p class="footer"><a href="0007-understand-evidence-and-citations.html">上一课：证据与引用</a> · <a href="0016-understand-rag-evaluation.html">深入：RAG 评测</a> · <a href="0018-understand-git-and-ci-cd.html">深入：Git 与 CI/CD</a> · <a href="../index.html">返回学习区</a> · <a href="../resources.html">检索评测资料依据</a></p>
 </main>
