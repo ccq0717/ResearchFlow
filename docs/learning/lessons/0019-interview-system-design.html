@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 19 课：系统设计深挖 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0019 · Interview Deep Dive</p>
+  <h1>资深面试官会怎样深挖系统设计</h1>
+  <p class="lead">这一课不再只问“用了什么”，而是追问需求如何变成边界、状态如何流动、设计怎样承受失败，以及为什么没有选择看起来更复杂的方案。</p>
+  <div class="answer"><strong>回答原则：</strong>先说当前实现，再说设计原因，最后说适用边界和演进方案。不要把“未来可以做”说成“现在已经做了”，也不要只用框架名称代替设计解释。</div>
+
+  <h2>1. 用一分钟介绍这个系统</h2>
+  <p><strong>问题：</strong>ResearchFlow 解决什么问题，主链路是什么？</p>
+  <p><strong>完整回答：</strong>它面向科研与技术预研场景，把一个开放研究目标转化为可追踪的研究运行。系统先由 LLM 规划研究问题，再针对每个问题搜索公开网页并检索用户选择的本地资料，随后提取可定位证据、生成带引用的 Markdown 报告，最后执行引用结构审计。前端持续显示计划、来源、证据、进度、报告和运行指标。核心价值不是“让模型写一段长文本”，而是让研究过程可观察、材料可回看、结论可追溯。</p>
+  <p><strong>代码证据：</strong><a href="../../../apps/api/src/researchflow/workflows/langgraph_research.py">六节点工作流</a>负责研究步骤，<a href="../../../apps/api/src/researchflow/application/research_runs.py">应用服务</a>负责生命周期与持久化，<a href="../../../apps/web/src/app/research/%5BrunId%5D/page.tsx">研究页面</a>负责展示。</p>
+
+  <h2>2. 核心功能需求与非功能需求</h2>
+  <table><thead><tr><th>类型</th><th>当前项目中的例子</th><th>为什么必须区分</th></tr></thead><tbody>
+    <tr><td>功能需求</td><td>创建研究、上传资料、搜索、提取证据、生成报告、取消与重试</td><td>描述系统“做什么”</td></tr>
+    <tr><td>可靠性</td><td>状态持久化、终态与事件同事务、重启标记中断</td><td>描述失败时是否仍保持一致</td></tr>
+    <tr><td>性能</td><td>创建接口立即返回、异步等待外部服务、限制并发</td><td>描述响应速度和吞吐</td></tr>
+    <tr><td>安全</td><td>上传限制、路径校验、访问码 Cookie、Secret 留在后端</td><td>描述谁能访问、输入能造成什么影响</td></tr>
+    <tr><td>可维护性</td><td>接口、适配器、领域对象和 Repository 分层</td><td>描述修改供应商或存储时影响多大</td></tr>
+    <tr><td>可观测性</td><td>事件时间线、请求 ID、耗时、Token 与来源统计</td><td>描述出错后能否定位</td></tr>
+  </tbody></table>
+
+  <h2>3. 为什么选择模块化单体</h2>
+  <p><strong>追问：</strong>既然是 Agent 系统，为什么不用微服务？</p>
+  <p>当前目标是单机和低流量在线 Demo，数据规模与团队规模都不需要分布式部署。模块化单体把 API、应用层、工作流、集成和持久化放在一个后端进程里，调试、事务和部署更简单；同时通过模块与接口保留边界。微服务会额外引入服务发现、网络失败、分布式追踪、跨服务认证、消息一致性和独立部署成本。只有当不同模块需要独立扩缩容、独立发布或由不同团队维护时，拆服务才可能带来净收益。</p>
+  <div class="callout warning"><strong>不能夸大：</strong>“代码分了目录”不自动等于模块化。真正的边界来自依赖方向：路由不直接编排研究，工作流不直接处理 HTTP，供应商响应不泄漏成领域对象。</div>
+
+  <h2>4. 为什么分成 API、Application、Domain、Workflow 和 Integration/Persistence</h2>
+  <ul>
+    <li><strong>API：</strong>把 HTTP 请求转换为应用调用，把异常映射为稳定状态码和错误码。</li>
+    <li><strong>Application：</strong>组织创建、取消、重试、归档等产品用例，并控制任务生命周期。</li>
+    <li><strong>Domain：</strong>表达 ResearchRun、Source、Evidence、Claim 等业务概念和不变量。</li>
+    <li><strong>Workflow：</strong>决定规划、搜索、阅读、提取、写作、检查的研究顺序。</li>
+    <li><strong>Integration/Persistence：</strong>处理 LLM、Exa、Embedding 和 SQLite 的具体协议。</li>
+  </ul>
+  <p>分层的目的不是让文件变多，而是让每种变化有稳定落点。例如供应商换掉只应主要影响 Integration；产品增加“只允许失败任务重试”的规则应落在 Application；报告引用链的定义属于 Domain。</p>
+
+  <h2>5. 一次研究为什么建模成 Run</h2>
+  <p>Run 是一次不可混淆的执行尝试，包含目标、状态、阶段、进度、时间、报告、错误、重试来源和 attempt。把“研究主题”与“执行尝试”区分后，失败重试可以生成新 Run，并保留原始失败记录用于审计。若覆盖旧记录，就无法回答哪一次失败、哪一次成功、分别消耗多少资源。</p>
+
+  <h2>6. 状态、阶段、进度和事件为什么同时存在</h2>
+  <table><thead><tr><th>概念</th><th>回答的问题</th><th>例子</th></tr></thead><tbody>
+    <tr><td>Status</td><td>任务总体是否还能继续</td><td>queued、running、completed、failed、cancelled</td></tr>
+    <tr><td>Stage</td><td>当前正在做哪类工作</td><td>planning、retrieving、analyzing、writing、finalizing</td></tr>
+    <tr><td>Progress</td><td>给用户一个近似完成度</td><td>0–100</td></tr>
+    <tr><td>Event</td><td>此前发生过什么</td><td>run.queued、workflow.started、plan.created</td></tr>
+  </tbody></table>
+  <p>状态是当前快照，事件是追加式历史。只存事件需要每次重放才能得到当前状态；只存快照则无法解释状态怎样到达。当前项目两者都存，但并不是完整 Event Sourcing：领域状态仍直接保存在表中，事件主要用于观察和重连。</p>
+
+  <h2>7. 为什么创建接口返回 201，而不是一直等报告</h2>
+  <p>研究可能等待多个外部 API 数十秒甚至更久。同步阻塞会让浏览器请求超时，用户也无法观察或取消。创建接口只负责可靠建立一个 queued Run，因此返回 HTTP 201 Created；后台 Task 执行工作流，前端用 REST 读取快照并用 SSE 接收变化。这是“异步业务任务”，不是说 HTTP 响应本身异步返回一半。</p>
+
+  <h2>8. 为什么要有 Workflow 接口</h2>
+  <p><code>ResearchWorkflow.execute()</code>向外产出 <code>ResearchWorkflowUpdate</code>，Application 不需要知道内部是固定模拟步骤还是 LangGraph。这个 seam 让测试使用确定性的 Simulated Workflow，真实运行使用 LangGraph；也让生命周期、数据库和 API 不依赖某个编排框架。</p>
+  <p><strong>追问：</strong>既然生产只用 research，simulation 是否仍有价值？有。它是无外部费用、可重复的开发和 E2E 测试实现，验证前后端、SSE、持久化和生命周期，而不是模拟 AI 质量。</p>
+
+  <h2>9. 为什么 LangGraph 不直接写 SQLite</h2>
+  <p>图节点只生成领域更新，Application 决定何时保存。这避免节点同时承担研究语义、数据库事务和产品生命周期三种职责。否则取消保护、错误终结、事件追加等规则会散落在六个节点中，未来换编排器也会被数据库细节绑住。</p>
+
+  <h2>10. 当前架构怎样完成依赖注入</h2>
+  <p><a href="../../../apps/api/src/researchflow/app_factory.py"><code>create_app()</code></a>是 Composition Root：读取配置，创建 Engine、Repository、LLM、Embedding、SearchProvider、Workflow 和 Application，再放入 FastAPI 的 app state。测试可以直接传入 Fake 或 Mock Transport。依赖注入的核心是“对象从外部获得依赖”，不要求一定使用专门 DI 框架。</p>
+
+  <h2>11. Protocol 与具体类的取舍</h2>
+  <p>Python <code>Protocol</code>采用结构化子类型：对象只要提供约定方法就符合接口，不强制继承。它适合 LLM、搜索、Embedding、Retriever、Workflow 这类需要替换的边界。内部只有一个稳定实现、又不会独立测试的简单辅助函数没有必要都抽接口，否则会形成“每个类配一个无意义接口”的仪式化设计。</p>
+
+  <h2>12. 数据一致性最关键的保证是什么</h2>
+  <p>完成、失败或取消时，Run 终态与对应终态事件由 Repository 的 <code>finalize()</code>在同一个数据库事务中提交。因此 SSE 先看到终态快照后，再查询事件时必然能读到已提交的终态事件，不会出现页面结束但时间线永远缺最后一条的正常提交状态。</p>
+  <p><strong>边界：</strong>中间阶段的状态、材料和多条事件不是一个覆盖整个工作流的大事务。这样避免长事务占锁，但某个阶段可能保存部分更新后发生失败；项目通过幂等 merge、终态失败记录和可观察事件处理，而不是假装整场研究具有原子性。</p>
+
+  <h2>13. 这个项目最重要的不变量</h2>
+  <ul>
+    <li>只有非终态 Run 才能取消，只有 failed Run 才能重试。</li>
+    <li>一次失败 Run 最多创建一次新尝试，原 Run 不被覆盖。</li>
+    <li>只有终态 Run 可以归档或删除。</li>
+    <li>研究只能选择存在、ready 且拥有当前模型向量的文档。</li>
+    <li>Evidence 必须引用允许的 source_id 和 question_id，excerpt 必须能在对应正文定位。</li>
+    <li>Claim 的 evidence_ids 必须能沿 Evidence 找到 Source，才算结构覆盖。</li>
+  </ul>
+
+  <h2>14. 最大性能瓶颈在哪里</h2>
+  <p>低流量下主要延迟来自三个 LLM 调用、每个研究问题的网页搜索，以及有本地资料时的查询 Embedding。当前搜索按问题顺序执行，SQLite 中向量用 Python 全量余弦扫描，SSE 也每 200 ms 查询数据库。它们在作品集规模简单可靠，但数据量、问题数或并发增长后会分别成为网络等待、CPU/内存扫描和数据库查询压力。</p>
+
+  <h2>15. 如果流量扩大十倍，先改什么</h2>
+  <ol>
+    <li>用持久任务队列和独立 Worker 替代进程内 Task，使任务跨进程存活。</li>
+    <li>把 SQLite 迁移到 PostgreSQL，并用事务或原子序列生成避免事件 sequence 竞争。</li>
+    <li>对外部调用增加带抖动的指数退避、熔断、全局速率限制和配额。</li>
+    <li>在有数据证明后并行搜索，并用 Semaphore 控制供应商并发。</li>
+    <li>向量规模增大后迁移到支持 ANN 索引的向量数据库或 PostgreSQL 扩展。</li>
+    <li>把 SSE 的频繁数据库轮询替换为消息通知，同时保留数据库事件用于断线补发。</li>
+  </ol>
+  <p>演进顺序由测量决定，不应因为“生产系统通常这样”就提前引入全部组件。</p>
+
+  <h2>16. 当前方案最诚实的局限</h2>
+  <ul>
+    <li>后台任务在进程内运行，重启后只能标记失败，不能从节点断点续跑。</li>
+    <li>LangGraph 未启用 Checkpointer，也没有动态工具循环或人工审批节点。</li>
+    <li>SQLite 与本地上传目录要求单实例和持久卷，不适合水平扩容。</li>
+    <li>引用审计证明关联完整，不证明自然语言结论一定真实。</li>
+    <li>网页搜索依赖 Provider 返回的 highlights，不保证获得完整正文。</li>
+    <li>当前评测集很小，只能做回归检查，不能证明普遍研究质量。</li>
+  </ul>
+
+  <div class="callout success"><strong>面试总结：</strong>这是一个以可追溯研究运行作为核心领域对象的模块化单体。固定 LangGraph 管线负责语义工作，Application 掌握生命周期，SQLite 保存快照、材料和可重放事件，接口隔离外部供应商。设计主动优化低成本、可演示和可验证性，并明确任务队列、多实例数据库、向量索引与更强评测是规模化后的演进方向。</div>
+  <p class="footer"><a href="0018-understand-git-and-ci-cd.html">上一课：Git 与 CI/CD</a> · <a href="0020-interview-web-backend.html">下一课：Web 与后端深挖</a> · <a href="../index.html">返回学习区</a></p>
+</main>
+</body>
+</html>

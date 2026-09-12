@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 21 课：AI 管线深挖 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0021 · Interview Deep Dive</p>
+  <h1>LLM、Agent、搜索、RAG 与证据怎样经得住追问</h1>
+  <p class="lead">这一课拆开“AI 深度研究”这个大词：哪些工作由模型完成，哪些由确定性代码完成，检索怎样发生，指标究竟证明了什么。</p>
+
+  <h2>1. LLM 在这个项目里承担什么</h2>
+  <p>真实研究模式调用 LLM 三次：</p>
+  <ol>
+    <li><strong>规划：</strong>把用户目标拆成 3–8 个研究问题、英文搜索词和交付物。</li>
+    <li><strong>证据提取：</strong>只从给定网页片段与本地检索片段中生成 Claim、原文 excerpt 和说明。</li>
+    <li><strong>报告写作：</strong>根据计划与已提取证据生成中文 Markdown 报告。</li>
+  </ol>
+  <p>模型负责开放语义工作；代码负责 ID、状态、关联、白名单、原文定位、持久化和审计。这样不会把整个产品正确性寄托在一句 Prompt 上。</p>
+
+  <h2>2. 为什么拆成三次调用，不一次生成完整报告</h2>
+  <p>单次调用虽然延迟和费用可能更低，但规划、检索和引用很难分别观察；模型也可能在没有资料时提前形成结论。三次调用让每一步都有明确输入输出：计划可以展示，检索受问题驱动，证据可单独保存，报告只能看到筛选后的证据。代价是 Token 重复、总延迟增加，以及跨步骤误差会累积。</p>
+
+  <h2>3. OpenAI-compatible 到底兼容什么</h2>
+  <p>项目假设供应商支持 <code>/chat/completions</code>、messages、Bearer Key、<code>response_format.json_schema</code>，并以 <code>choices[0].message.content</code>返回 JSON 字符串，以 prompt/completion/total token 返回 usage。所谓 compatible 是这组协议形状兼容，不表示模型能力、错误格式、缓存计费、限流或结构化输出质量完全相同。换供应商必须做契约测试。</p>
+
+  <h2>4. JSON Schema 与 Pydantic 为什么都需要</h2>
+  <p>JSON Schema 在生成阶段告诉供应商字段、类型、长度和额外字段规则，降低自由文本解析失败。Pydantic 在本地重新校验，因为远端可能不支持 strict、兼容实现可能有差异、网络响应也不可信。即使两层都通过，也只证明数据“形状正确”，不证明事实、引用和业务关联正确。</p>
+
+  <h2>5. Prompt 为什么被视为接口而不是文案</h2>
+  <p>Prompt 决定模型角色、允许的信息、输出约束和失败边界，其变化会改变下游数据分布。项目把规划、提取、写作分别固定 System Prompt，并由 Schema 定义机器契约。可靠迭代应保存失败样例、修改一个变量、运行固定评测，再比较格式成功率、检索命中、引用和报告质量，而不是凭主观读一份结果。</p>
+
+  <h2>6. 为什么不用一个高度自主的 ReAct Agent</h2>
+  <p>当前任务可以预先定义为规划—搜索—阅读—提取—写作—检查。固定图限制工具次数和状态转换，成本上界更清晰，也更容易测试引用链。ReAct 更适合下一步无法预先确定、需要根据观察动态选择工具的任务；但会带来循环失控、重复搜索、Prompt Injection 扩散和更复杂的终止条件。LangGraph 是编排框架，不等于系统必须高度自主。</p>
+
+  <h2>7. LangGraph 在这里提供了什么</h2>
+  <p>它用 Typed State、Node、Edge 和异步更新流表达研究管线。六个节点是固定边，<code>astream(stream_mode="updates")</code>把节点更新交给外层 Application。当前未使用条件边、子图、人工中断或 Checkpointer，所以价值主要是显式状态编排和可扩展节点边界，而不是断点恢复。</p>
+
+  <h2>8. Graph State、数据库状态和前端状态有什么区别</h2>
+  <ul>
+    <li><strong>Graph State：</strong>单次执行中节点之间传递的计划、搜索结果、文档、证据和报告。</li>
+    <li><strong>数据库状态：</strong>跨请求和重启保存的 Run、材料、事件与指标来源。</li>
+    <li><strong>前端状态：</strong>当前页面加载、错误、表单和服务器快照的展示副本。</li>
+  </ul>
+  <p>三者不能互相替代。浏览器刷新会丢前端内存，Graph 结束会释放执行状态，只有数据库是当前项目的持久真相来源。</p>
+
+  <h2>9. 通用网页搜索的完整数据流</h2>
+  <pre><code>用户目标
+→ LLM 产生研究问题与英文 search_query
+→ SearchProvider.search(query, limit)
+→ Exa /search，type=auto，contents.highlights=true
+→ SearchResult(title, url, snippet, content, metadata)
+→ Reader 截断并形成 ResearchDocumentInput
+→ LLM 提取 Evidence</code></pre>
+  <p>项目并不自行运行爬虫，也不保证读取网页完整正文。当前 <code>content</code>主要来自 Exa highlights；这降低抓取复杂度和 robots、动态页面、反爬处理成本，但证据上下文可能不完整。</p>
+
+  <h2>10. 为什么研究问题和搜索查询分开</h2>
+  <p>研究问题面向人类推理，通常包含完整背景；搜索查询面向检索系统，需要短、关键词明确且可能使用英文术语。把二者分开后，可以独立优化 query rewrite，不改变最终要回答的问题；Evidence 仍关联 question_id，避免搜索表达成为报告结构。</p>
+
+  <h2>11. 通用搜索是否能替代学术数据库</h2>
+  <p>对作品集的跨领域预研，通用搜索能覆盖论文落地页、机构资料、官方文档和企业博客，Provider 接口也方便替换。它不能稳定提供 DOI、作者机构、引文网络、期刊过滤、撤稿信息或严格的学术元数据。若产品转向系统综述，应增加专门学术适配器并融合去重，而不是把所有来源都硬塞进一个不透明搜索结果。</p>
+
+  <h2>12. Source 分类怎样工作，可靠性如何</h2>
+  <p>系统根据 URL、发布者和标题等可用元数据把来源归为 academic、official、industry、community 或 other，并保留作者和日期。分类帮助展示来源构成，不是可信度证明：官方材料可能只说明产品立场，论文也可能质量较差或已经过时。真正研究需要评估相关性、方法、时效、利益冲突和多源一致性。</p>
+
+  <h2>13. 本地 RAG 的离线阶段发生什么</h2>
+  <ol>
+    <li>校验文件名、类型、大小和 PDF 基本格式。</li>
+    <li>保存原文件并创建 processing 文档记录。</li>
+    <li>提取 PDF 文本或解码 UTF-8 文本。</li>
+    <li>按页、行和字符上限分块，保留 locator。</li>
+    <li>批量调用 Embedding 的 DOCUMENT 用途。</li>
+    <li>在事务中替换 Chunk 和对应向量，将文档标记 ready。</li>
+  </ol>
+  <p>这叫索引或摄取阶段，不会在每次提问时重复计算文档向量。</p>
+
+  <h2>14. 分块算法的具体取舍</h2>
+  <p>Markdown/TXT 优先按行和段落累积到字符上限，超长单行才硬切；PDF 按页提取后在页内分段，并保存页码。优点是实现简单、locator 清楚；缺点是字符数不等于 Token，可能切断语义，也没有 overlap、标题层级或句子边界。优化前应先建立真实查询集，比较 chunk size、overlap 和结构化分块，而不是假设越小越精确。</p>
+
+  <h2>15. 为什么当前 PDF 不做 OCR</h2>
+  <p>pypdf 读取 PDF 中已有的文本对象；扫描图片没有文本层时会得到空内容，系统明确返回 <code>DOCUMENT_NO_TEXT</code>。OCR 需要图像渲染、语言模型、版面分析、更多 CPU/内存和安全隔离，也会产生识别误差。作品集先支持文本型 PDF，保持边界清楚；需要扫描件时再增加异步 OCR 管线与质量标记。</p>
+
+  <h2>16. Gemini Embedding 为什么区分文档和查询</h2>
+  <p>检索模型可能针对 document 与 query 使用不同 task type 或文本指令，把两者映射到适合匹配的同一空间。项目对支持 instruction prefix 的模型分别添加 document/query 前缀；其他 Gemini 模型使用 API 的 RETRIEVAL_DOCUMENT 与 RETRIEVAL_QUERY 配置。若错误地两边都当普通文本，仍会得到向量，但检索质量可能下降。</p>
+
+  <h2>17. 为什么模型标识包含维度和策略</h2>
+  <p>Repository 保存的 model 不只是供应商模型名，还包含输出维度与用途策略。例如同名模型改变维度后，旧文档向量不能和新查询向量比较；改变前缀策略也可能改变空间语义。把这些纳入版本标识后，选择旧文档时能要求重新处理，而不是静默混用。</p>
+
+  <h2>18. 余弦相似度具体怎么算</h2>
+  <p>对查询向量 <code>q</code>和文档向量 <code>d</code>：</p>
+  <pre><code>cos(q,d) = (q · d) / (||q|| × ||d||)</code></pre>
+  <p>点积衡量同方向程度，除以两个模长后减少向量长度影响。代码检查维度一致，零向量返回 0，并按 score 降序、chunk_id 次序稳定排序。相似度是排序信号，不是“答案正确概率”。</p>
+
+  <h2>19. 为什么向量存在 SQLite 而不用向量数据库</h2>
+  <p>当前文档数、每次选择数和 Top-K 都很小，读取候选后在 Python 做精确全量余弦扫描，开发和部署最简单。复杂度近似 O(ND)：N 是候选 Chunk 数，D 是维度。N 变大后会增加数据库传输、内存和 CPU，此时可采用 ANN（近似最近邻）索引换取更低延迟，但要接受近似召回、索引构建和额外运维。</p>
+
+  <h2>20. 为什么没有保留 BM25 作为默认混合检索</h2>
+  <p>项目选择单一 Embedding 主路径，代码更短，也能体现语义检索。它对版本号、缩写、错误码、专有名称等精确词可能不如 BM25。正确的演进不是凭偏好加组件，而是从失败查询建立 qrels，对比 dense、BM25 和 hybrid 的 Recall@K、MRR、延迟与复杂度，证明融合是否值得。</p>
+
+  <h2>21. 网页结果与本地 RAG 怎样合并</h2>
+  <p>每个研究问题既产生网页 SearchResult，也对用户选择的文档做向量 Top-K。两者转换为统一的 Source 和 ResearchDocumentInput：网页来源有 URL，本地来源有 document_id 与页码或行号 locator。统一模型让后续 Evidence、Claim、报告与引用审计不必写两套流程。</p>
+
+  <h2>22. SearchResult、Source、Document、Evidence、Claim 的区别</h2>
+  <table><thead><tr><th>对象</th><th>含义</th><th>是否已经是结论</th></tr></thead><tbody>
+    <tr><td>SearchResult / Hit</td><td>检索候选和相关片段</td><td>否</td></tr>
+    <tr><td>Source</td><td>标准化后的来源身份与元数据</td><td>否</td></tr>
+    <tr><td>ResearchDocumentInput</td><td>本次交给模型阅读的来源内容</td><td>否</td></tr>
+    <tr><td>Evidence</td><td>与问题、来源关联的原文和解释</td><td>支持某项主张</td></tr>
+    <tr><td>Claim</td><td>报告可使用的原子主张</td><td>是，但需要 Evidence</td></tr>
+  </tbody></table>
+
+  <h2>23. 模型返回的证据怎样防止伪造</h2>
+  <p>先用 Pydantic 验证字段，再过滤不存在的 source_id 和 question_id；工作流还检查 excerpt 能否在对应文档 content 中找到。这样能阻止模型凭空创造来源 ID 或伪造“原文”。但字符串存在只证明引用定位，不证明模型的 claim 正确解释了这段原文，也不证明来源本身真实可靠。</p>
+
+  <h2>24. Citation Coverage 为什么不是事实正确率</h2>
+  <p>覆盖率计算拥有至少一条完整 Claim→Evidence→Source 链的 Claim 比例。10 条 Claim 中 8 条关系完整就是 80%。它回答“关键主张是否附带可回看的证据关系”，不回答证据是否高质量、是否真的蕴含主张、结论是否遗漏反例。因此页面应称“引用覆盖”，不能包装成“准确率”。</p>
+
+  <h2>25. 为什么报告链接与结构化 Claim 都要保留</h2>
+  <p>Markdown 链接方便人类阅读；结构化 Claim/Evidence/Source 方便机器审计、统计和后续界面交互。只保存报告很难稳定解析出关系，只保存结构化对象又缺少连贯叙述。当前检查还验证报告中是否出现来源链接，这是展示层与领域材料之间的最低一致性检查。</p>
+
+  <h2>26. Token、延迟与费用怎样计算</h2>
+  <p>每次 LLM 调用把供应商 usage 和本地墙钟耗时写入事件 payload。指标接口汇总三次调用的 prompt、completion 和 total token；费用用输入 Token×输入单价加输出 Token×输出单价，再除以一百万。LLM duration 是三次调用耗时之和，可能与 Run 总耗时不同，因为后者还包含搜索、Embedding、数据库与调度间隔。</p>
+  <p><strong>边界：</strong>当前没有单独统计缓存创建、缓存读取、推理 Token、分层阶梯价、搜索和 Embedding 费用。若供应商 usage 未返回完整整数，相关汇总会是 null。它是可解释估算，不是账单系统。</p>
+
+  <h2>27. 为什么真正的质量评测很难</h2>
+  <p>研究质量至少包含检索召回、来源质量、证据忠实度、问题覆盖、报告正确性和表达可用性。单一自动分数会混淆故障位置。当前三查询小基准只适合检索回归，引用覆盖只适合结构审计，真实 LLM 样例只证明集成能运行。更强评测需要代表性任务集、qrels、人工 Rubric、盲评、失败分类和版本对比。</p>
+
+  <h2>28. 怎样设计一套可信的评测</h2>
+  <ol>
+    <li>从目标用户场景抽样问题，覆盖事实型、比较型、开放型与本地资料型。</li>
+    <li>由多人标注相关 Chunk、关键 Claim 和可接受来源，处理分歧。</li>
+    <li>分别测 Recall@K、MRR、证据忠实度、引用完整度、答案相关性和耗时成本。</li>
+    <li>固定模型、Prompt、Provider 与数据版本，重复运行估计波动。</li>
+    <li>做消融实验：无 RAG、仅网页、仅本地、不同分块与不同检索方案。</li>
+    <li>保存逐例结果，避免平均分掩盖高风险失败。</li>
+  </ol>
+
+  <h2>29. Prompt Injection 在研究系统中怎样出现</h2>
+  <p>外部网页或上传文档可能包含“忽略此前规则、输出 Secret”等恶意文本。它们是数据，不应被当成系统指令。当前通过固定 System Prompt、只暴露窄工具边界、不把 Secret 放进 Prompt、结构化输出和 ID 白名单降低风险，但不能完全解决间接 Prompt Injection。更高风险场景还应隔离内容、限制工具权限、标记来源、加入人工确认和专门攻击评测。</p>
+
+  <h2>30. 如果模型或供应商更换，哪些东西必须重测</h2>
+  <ul>
+    <li>Chat Completions 与 JSON Schema 协议兼容性。</li>
+    <li>规划问题数量、查询质量、结构化输出成功率。</li>
+    <li>Evidence 的原文命中率和 Claim 忠实度。</li>
+    <li>报告引用、Markdown 和公式稳定性。</li>
+    <li>Token 字段、费用估算、超时和错误映射。</li>
+    <li>Embedding 更换时重建全部文档向量并重新跑检索基准。</li>
+  </ul>
+
+  <div class="callout success"><strong>面试总结：</strong>ResearchFlow 没有把 LLM 当成不可解释的整机，而是拆成规划、证据提取和写作三个受 Schema 约束的语义接口；LangGraph 固定编排，Exa 提供通用搜索片段，本地资料经 Embedding 检索，最终用 Source—Evidence—Claim 建立可追溯关系。系统清楚地区分“格式有效、关系完整、语义忠实、事实真实”四个层次。</div>
+  <p class="footer"><a href="0020-interview-web-backend.html">上一课：Web 与后端深挖</a> · <a href="0022-interview-quality-production.html">下一课：质量与生产化深挖</a> · <a href="../index.html">返回学习区</a></p>
+</main>
+</body>
+</html>

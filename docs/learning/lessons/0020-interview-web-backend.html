@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 20 课：Web 与后端深挖 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0020 · Interview Deep Dive</p>
+  <h1>从浏览器到数据库，每一层怎样经得住追问</h1>
+  <p class="lead">本课沿真实请求路径回答 HTTP、SSE、React 状态、Python 异步、数据库事务、上传安全与访问控制中的细节问题。</p>
+
+  <h2>1. 浏览器输入 localhost:3000 后发生什么</h2>
+  <p>浏览器解析 URL，确定协议为 HTTP、主机为本机、端口为 3000，并向 Next.js 开发服务器发起请求。Next.js 返回页面所需的 HTML、JavaScript 和样式；客户端组件完成 Hydration 后开始响应点击。页面再向独立的 8000 端口请求 FastAPI，所以从浏览器安全模型看它们是不同 Origin，需要后端 CORS 允许前端 Origin。</p>
+
+  <h2>2. 前端为什么要单独配置 API Base URL</h2>
+  <p><code>NEXT_PUBLIC_API_BASE_URL</code>决定浏览器请求哪个后端。带 <code>NEXT_PUBLIC_</code> 的变量可能被打进前端产物，用户可以看见，因此只能放公开地址，不能放 API Key。线上前端与后端域名变化时，只改部署配置和 CORS，不应散落修改每个请求函数。</p>
+
+  <h2>3. 创建研究的 HTTP 契约是什么</h2>
+  <pre><code>POST /api/research-runs
+Content-Type: application/json
+
+{"goal":"研究目标","document_ids":["..."]}
+
+201 Created
+{"id":"...","status":"queued", ...}</code></pre>
+  <p>POST 表示创建新资源，201 表示已创建 Run，而不是整份研究已完成。请求 Schema 检查字段形状和长度，Application 再检查文档状态、并发和每日额度。结构校验与业务校验必须分开，因为“是合法 UUID”不代表“这个文档存在且可用”。</p>
+
+  <h2>4. 为什么 GET、POST、PATCH、DELETE 混合使用</h2>
+  <table><thead><tr><th>方法</th><th>当前语义</th><th>幂等性</th></tr></thead><tbody>
+    <tr><td>GET</td><td>读取 Run、计划、材料、指标或文档</td><td>应幂等且不修改业务状态</td></tr>
+    <tr><td>POST</td><td>创建 Run、取消动作、重试、重处理</td><td>动作通常不天然幂等</td></tr>
+    <tr><td>PATCH</td><td>局部修改标题或 archived</td><td>设置相同值时结果可相同</td></tr>
+    <tr><td>DELETE</td><td>删除终态运行或知识文档</td><td>第二次可能返回不存在，但目标状态一致</td></tr>
+  </tbody></table>
+
+  <h2>5. 为什么 API 同时返回 HTTP 状态码和业务错误码</h2>
+  <p>HTTP 状态码供代理、浏览器和通用客户端理解大类，例如 404、409、429；业务错误码如 <code>RUN_NOT_RETRYABLE</code>提供稳定而精确的产品语义。前端不应解析中文错误文本决定逻辑，因为文本可以改写或翻译。当前映射中不存在是 404，容量和每日额度是 429，非法状态转换通常是 409。</p>
+
+  <h2>6. CORS 到底在保护谁</h2>
+  <p>CORS（Cross-Origin Resource Sharing，跨源资源共享）是浏览器执行的响应读取策略，主要保护用户浏览器中的凭据和数据不被任意网页读取。它不是服务器身份认证：命令行或服务器端客户端可以不受浏览器 CORS 限制直接发请求。由于项目发送 Cookie，后端必须显式列出 Origin 并允许 credentials，不能在线上使用通配符。</p>
+
+  <h2>7. 访问码为什么换成签名 Cookie</h2>
+  <p>用户只在创建 Demo Session 时提交访问码。后端用访问码作为 HMAC-SHA256 密钥，对签发时间与固定命名空间签名，浏览器随后携带 HttpOnly Cookie。这样前端 JavaScript 不保存访问码，也不能通过普通脚本读取会话 Cookie。验证时同时检查签名、最长 8 小时有效期和少量时钟偏差。</p>
+  <p><strong>追问：</strong>这是完整账户系统吗？不是。它没有用户身份、权限角色、撤销列表、密码哈希库或审计主体，只适合保护作品集 Demo。多人产品应使用成熟身份系统并做对象级授权。</p>
+
+  <h2>8. SameSite=None 为什么必须配合 Secure</h2>
+  <p>生产环境前后端可能跨站，Cookie 需要 <code>SameSite=None</code>才能随跨站请求发送；现代浏览器要求它同时设置 <code>Secure</code>，只能通过 HTTPS 传输。本地开发使用 lax 且不设 Secure，避免 HTTP localhost 无法保存 Cookie。HttpOnly 降低脚本窃取风险，但不能消除所有 CSRF 或 XSS 风险。</p>
+
+  <h2>9. SSE 在 HTTP 层到底是什么</h2>
+  <p>SSE 不是额外服务器，也不是 WebSocket。它是一个保持打开的 HTTP 响应，媒体类型为 <code>text/event-stream</code>。服务器不断写入以空行分隔的 UTF-8 文本事件，浏览器 <code>EventSource</code>逐条解析。它适合服务器单向推送研究进度；取消等客户端到服务器的命令仍用普通 HTTP。</p>
+
+  <h2>10. Last-Event-ID 与 after 为什么都存在</h2>
+  <p>标准 EventSource 重连可以发送 <code>Last-Event-ID</code>请求头；前端主动建立新连接时则用查询参数 <code>after</code>携带本地最大 sequence。后端取两者最大值，只发送更大的持久事件。这样既支持浏览器自动重连，也支持刷新页面先加载历史再继续订阅。</p>
+
+  <h2>11. 为什么 SSE 仍可能重复，前端怎样处理</h2>
+  <p>网络可能在客户端收到事件后、服务器确认连接状态前断开，重连就可能再次收到边界事件，因此实际语义接近 at-least-once。前端按 sequence 合并、去重并排序；显示逻辑必须幂等。项目不承诺 exactly-once，因为跨网络精确一次需要更复杂的确认协议，而且 UI 更新没有必要承担这种成本。</p>
+
+  <h2>12. 心跳解决什么，不解决什么</h2>
+  <p>后端约每 3 秒发送 <code>: heartbeat</code>注释，避免代理或网络设备把完全空闲的连接过早回收，也让连接保持活动。心跳不证明研究工作流健康，不代表数据库有新事件，也不替代应用级健康检查。代理仍需禁用长时间缓冲，所以响应设置 <code>X-Accel-Buffering: no</code>。</p>
+
+  <h2>13. 为什么 SSE 事件只触发重新取快照</h2>
+  <p>事件是变化通知和时间线，不承载整份计划、所有材料和报告。收到相关事件后前端重新 GET 对应资源，使 SQLite 快照保持唯一真相来源。代价是多几个请求；收益是事件轻量、可重放，前端刷新与实时更新走同一数据模型，也不会因漏掉一个复杂增量补丁而永久偏离。</p>
+
+  <h2>14. React 为什么需要 useEffect 清理 EventSource</h2>
+  <p>组件挂载时建立外部连接，卸载或 runId 变化时必须关闭。否则旧连接仍会触发回调，造成重复请求、状态竞争和资源泄漏。React 开发模式可能有额外的建立—清理检查，正确的 Effect 应能承受这一过程，而不是依赖“只执行一次”的偶然现象。</p>
+
+  <h2>15. 为什么页面要区分 Loading、Error、Empty、Success</h2>
+  <p>它们代表不同事实：Loading 尚未得到结论；Error 请求失败；Empty 请求成功但没有数据；Success 有数据。把前三种都显示成空白，会让用户无法区分后端未启动、研究尚未产生计划和真实空结果。Run 自身的 failed 又是业务状态，不等于页面网络请求 Error。</p>
+
+  <h2>16. Markdown 渲染怎样兼顾功能与安全</h2>
+  <p>模型返回 Markdown，前端通过语法树插件渲染 GFM 和数学公式，而不直接执行模型生成的 HTML。这样可以支持标题、表格、链接、加粗与 KaTeX，同时缩小脚本注入面。仍需谨慎处理链接协议、超长报告、复杂公式和依赖库安全更新；“用了 Markdown”不自动等于绝对安全。</p>
+
+  <h2>17. asyncio 为什么适合这个后端</h2>
+  <p>主要耗时来自等待 LLM、搜索、Embedding 和数据库 I/O。协程在 <code>await</code>处把执行权交还事件循环，同一线程可继续服务其他请求。它提升等待型并发，不让单次外部调用变快，也不能自动加速 PDF 解析或大规模余弦计算这类 CPU 工作。</p>
+
+  <h2>18. create_task 的生命周期风险是什么</h2>
+  <p>进程内 <code>asyncio.create_task</code>简单且低成本，但任务只活在当前进程内。若进程崩溃或滚动发布，它不会在另一实例继续。项目在启动时把遗留非终态 Run 标记为 <code>RUN_INTERRUPTED</code>，诚实终结状态；真正生产队列需要持久消息、Worker 心跳、租约、重投递和幂等处理。</p>
+
+  <h2>19. 为什么要同时有 create_lock 和 lifecycle_lock</h2>
+  <p><code>create_lock</code>把“检查当前并发/每日额度并创建任务”串行化，避免两个创建请求同时看见还有一个名额后都通过。<code>lifecycle_lock</code>保护取消、重试和 shutdown 等任务生命周期操作。锁的粒度不同，若用一把大锁包住整个研究，会把所有运行串行化。</p>
+
+  <h2>20. asyncio.shield 为什么用于保存更新</h2>
+  <p>取消可能在任意 await 点到达。如果数据库提交被中途取消，内存任务和持久状态可能不一致。项目把一次更新持久化放进独立 Task，并用 <code>shield</code>让外层取消先等待该持久化完成，再继续传播 CancelledError。它保护的是当前更新的提交边界，不是让整条工作流不可取消。</p>
+
+  <h2>21. SQLite 为什么必须打开 foreign_keys</h2>
+  <p>SQLite 默认连接行为可能没有启用外键约束。Engine 在每次连接时执行 <code>PRAGMA foreign_keys=ON</code>，让 Claim—Evidence、文档—Chunk 等引用在数据库层得到约束。否则应用代码即使通常正确，异常路径或未来修改仍可能写入孤儿记录。</p>
+
+  <h2>22. append_event 的 sequence 有什么并发边界</h2>
+  <p>当前实现查询某 Run 的最大 sequence 再加一。单进程、当前写入方式下足够直观，但多个进程同时为同一 Run 写事件时可能读到同一最大值，形成竞争。规模化后应使用数据库唯一约束配合重试、原子计数、序列机制或让单一 Worker 成为该 Run 的事件写入者。</p>
+
+  <h2>23. 为什么上传先读 max+1 字节</h2>
+  <p>如果只读取允许大小，无法区分文件恰好达到上限还是后面还有数据。路由读取 <code>max_document_bytes + 1</code>，Application 再检查长度，能在不把任意大文件全部载入内存的情况下识别超限。当前仍是内存上传方式；更大文件应流式写临时文件并边读边限额。</p>
+
+  <h2>24. 文件上传怎样防路径穿越和伪 PDF</h2>
+  <p>系统用 <code>Path(filename).name</code>剥离目录，只允许白名单扩展名；实际存储名由服务端 UUID 生成，目标路径 resolve 后必须仍以上传目录为父目录。PDF 还检查 <code>%PDF-</code>魔数，并限制大小、页数、单页内容流和总提取字符。魔数只做快速格式判断，不是恶意文档沙箱；高风险产品还需要杀毒、隔离解析进程和资源限制。</p>
+
+  <h2>25. 为什么原子写文件仍不等于文件与数据库原子</h2>
+  <p>文件先写到临时路径，再 replace 到目标，避免半个文件被读取；若数据库 create 失败会尝试删除文件。但文件系统和 SQLite 不共享同一个事务，进程恰好在两个操作之间崩溃仍可能留下孤儿文件。生产方案可用定期清理、状态表、对象存储生命周期或事务性 Outbox/Saga 思路补偿。</p>
+
+  <h2>26. Schema Migration 当前为什么很轻量</h2>
+  <p>数据库保存 <code>schema_migrations</code>版本。启动时若版本不等于代码期望值就失败，避免新代码静默操作不兼容旧表；首次创建则生成当前 Schema。它是兼容性护栏，不是完整迁移工具：当前没有多步向前升级脚本，正式演进可引入 Alembic、备份验证和回滚计划。</p>
+
+  <h2>27. 怎样从一个“页面不更新”故障逐层定位</h2>
+  <ol>
+    <li>看浏览器 Console 是否有渲染异常。</li>
+    <li>看 Network 中 REST 快照是否 200、SSE 是否保持 pending。</li>
+    <li>检查 SSE 响应类型、事件内容、Cookie 与 CORS。</li>
+    <li>直接请求事件历史，判断数据库是否已有事件。</li>
+    <li>检查 Run 快照是否推进，区分工作流停滞与推送停滞。</li>
+    <li>用 X-Request-ID 对照后端日志和外部服务错误码。</li>
+  </ol>
+  <p>排障的关键是先确定故障在哪条边界，而不是一看到页面不动就修改 React。</p>
+
+  <div class="callout success"><strong>面试总结：</strong>前端把 REST 当完整快照、SSE 当持久事件通知；后端用异步 I/O 保持响应能力，以应用锁和 shield 保护生命周期边界；SQLite 负责低成本持久化，上传模块执行分层校验。每项设计都对应当前规模，也都明确了多实例和高风险输入下的升级方向。</div>
+  <p class="footer"><a href="0019-interview-system-design.html">上一课：系统设计深挖</a> · <a href="0021-interview-ai-pipeline.html">下一课：AI 管线深挖</a> · <a href="../index.html">返回学习区</a></p>
+</main>
+</body>
+</html>
