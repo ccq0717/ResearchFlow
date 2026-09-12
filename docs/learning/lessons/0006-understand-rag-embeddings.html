@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0006 · 约 30 分钟</p>
+  <p class="eyebrow">Lesson 0006 · 约 60 分钟</p>
   <h1>RAG 与 Embedding 在 ResearchFlow 中怎样工作</h1>
   <p class="lead">这节课从一份上传文档出发，解释它怎样变成向量、怎样被查询命中，以及为什么命中结果还不是最终答案。</p>
   <div class="callout"><strong>先记结论：</strong>RAG 不是“让模型记住文件”，而是在生成答案前，先从外部资料中找出相关片段，再把这些片段作为上下文交给模型。</div>
@@ -17,6 +17,26 @@
   <p>LLM 的参数不会因为用户上传一个 PDF 就自动改变。只把问题发给模型，它看不到本地文件，也无法引用文件中的具体页码。Retrieval-Augmented Generation（检索增强生成）把流程拆成两部分：</p>
   <div class="flow"><span>Retrieval 检索</span><b>→</b><span>Augmentation 补充上下文</span><b>→</b><span>Generation 生成</span></div>
   <p>ResearchFlow 先从用户选定的文档中取回相关片段，把命中转换成带文件名和定位的 Source，再让 LLM 从这些 Source 中提取 Evidence、形成 Claim 并写报告。</p>
+
+  <h2>1.1 RAG 全称中的三个词</h2>
+  <table><thead><tr><th>词</th><th>中文</th><th>在系统中的动作</th></tr></thead><tbody>
+    <tr><td>Retrieval</td><td>检索</td><td>根据问题从外部知识中找相关片段</td></tr>
+    <tr><td>Augmented</td><td>增强的</td><td>把片段加入模型本次请求的上下文</td></tr>
+    <tr><td>Generation</td><td>生成</td><td>模型基于问题和材料生成证据或报告</td></tr>
+  </tbody></table>
+  <p>RAG 的全称是 <strong>Retrieval-Augmented Generation</strong>，中文通常译为“检索增强生成”。它增强的是本次生成时可见的信息，不是修改模型权重。</p>
+
+  <h2>1.2 为什么不用“把整个文件直接塞给模型”</h2>
+  <ul>
+    <li>长文档可能超过上下文窗口；</li>
+    <li>大量无关文本会提高输入 Token、延迟和费用；</li>
+    <li>模型在很长上下文中也可能忽略关键段落；</li>
+    <li>难以稳定保留页码、行号和证据定位；</li>
+    <li>同一知识库的每次问题都重复发送全文，浪费计算。</li>
+  </ul>
+
+  <h2>1.3 RAG 用在哪些领域</h2>
+  <p>常见场景包括企业知识问答、客服手册、法律文档辅助、医学资料检索、代码仓库问答和学术研究。共同特点是：回答需要依赖一批外部、可更新、可追溯的资料，而不是只依赖模型训练知识。</p>
 
   <h2>2. 一份文档怎样进入检索库</h2>
   <pre><code>上传文件
@@ -37,11 +57,29 @@
   </ul>
   <p>每个片段还保存 PDF 页码或文本行号。检索负责“找到什么”，定位信息负责“回到哪里核对”。</p>
 
+  <h2>3.1 Chunk、Chunk Size 和 Overlap</h2>
+  <p>Chunk 是文档切分后的片段，Chunk Size 是目标片段大小，Overlap 是相邻片段重复保留的内容。Overlap 可减少一句话恰好被边界截断，但会增加向量数量和重复命中。</p>
+  <p>当前项目以字符长度为主进行简单分块，并保留定位；没有实现按标题树、句法或语义边界的高级分块。参数是否合理应通过真实文档和检索指标判断。</p>
+
+  <h2>3.2 PDF 解析与 OCR</h2>
+  <p>PDF 是页面描述格式，不保证内部一定有连续正文。带文本层的 PDF 可以提取字符并保留页码；扫描版 PDF 主要是图片，需要 OCR（Optical Character Recognition，光学字符识别）才能得到文本。ResearchFlow 当前不做 OCR，因此扫描件会无法形成有效知识片段。</p>
+
   <h2>4. Embedding 是什么</h2>
   <p>Embedding 模型把文本转换成一串浮点数，例如：</p>
   <pre><code>"生成代码中的依赖漏洞" → [0.012, -0.084, 0.137, ...]</code></pre>
   <p>单个数字通常没有可直接解释的业务含义；整个向量的位置用于表达模型学到的语义关系。语义相近的文本通常会落在更接近的方向，因此“软件供应链风险”可能命中包含“第三方依赖漏洞”的片段，即使两边没有完全相同的词。</p>
   <p>这正是当前方案相对旧词法匹配的主要价值：检索不再只依赖字面重合。</p>
+
+  <h2>4.1 向量、维度和向量空间</h2>
+  <p>Vector（向量）可以理解为按顺序排列的一组数字；Dimension（维度）是数字个数。Embedding 模型把不同文本映射到同一个向量空间，只有处在同一模型和配置空间中的向量才适合比较。</p>
+  <p>维度更高不自动等于效果更好：它影响表达容量、存储和计算成本，最终仍要由目标语料的检索评测决定。</p>
+
+  <h2>4.2 Embedding 与生成模型的区别</h2>
+  <table><thead><tr><th>模型</th><th>输入</th><th>输出</th><th>项目用途</th></tr></thead><tbody>
+    <tr><td>Embedding 模型</td><td>文本</td><td>固定长度浮点向量</td><td>相似度检索</td></tr>
+    <tr><td>生成式 LLM</td><td>Prompt 与上下文</td><td>逐 Token 文本/结构化内容</td><td>规划、证据提取、报告</td></tr>
+  </tbody></table>
+  <p>Embedding API Key 和 LLM API Key 可以来自不同 Provider；它们的接口、模型名和计费也互相独立。</p>
 
   <h2>5. 文档向量和查询向量</h2>
   <p>检索是非对称任务：一边是等待被搜索的资料，另一边是表达信息需求的问题。ResearchFlow 用统一的 <code>DOCUMENT</code> / <code>QUERY</code> 语义告诉适配器输入用途，再由适配器翻译成供应商当前模型要求的格式。</p>
@@ -57,6 +95,13 @@
   <pre><code>cosine(a, b) = (a · b) / (||a|| × ||b||)</code></pre>
   <p>点积衡量两个向量方向的一致程度，分母消除向量长度影响。项目按分数从高到低排列，只保留 Top-K。当前规模很小，所以直接在 Python 中计算；当片段达到大规模、并发查询增多或需要高效索引时，才有理由引入专门向量数据库。</p>
 
+  <h2>6.1 用二维例子理解余弦</h2>
+  <p>假设查询向量是 <code>[1, 0]</code>，片段 A 是 <code>[2, 0]</code>，片段 B 是 <code>[0, 1]</code>。A 与查询方向相同，余弦为 1；B 垂直，余弦为 0。余弦主要关心方向而不是长度。</p>
+  <p>真实向量有数百或更多维，不能画出来，但计算原理相同。相似度是排序信号，不是“相关概率”；0.8 不能直接解释为 80% 正确。</p>
+
+  <h2>6.2 Top-K 是什么</h2>
+  <p>Top-K 表示只取排序最前面的 K 个片段。K 小，成本低但可能漏证据；K 大，召回可能提高但噪声和模型输入增加。ResearchFlow 的本地 K 由后端配置决定，并对每个研究问题分别检索。</p>
+
   <h2>7. 为什么向量保存在 SQLite</h2>
   <p>当前每个片段的向量以 JSON 浮点数组保存在 <code>document_chunk_embeddings</code>。这不是最高效的海量向量方案，但它有三个现实优势：</p>
   <ul>
@@ -66,12 +111,34 @@
   </ul>
   <p>技术选型要回答当前约束，而不是因为“RAG 项目通常使用向量数据库”就预先增加基础设施。</p>
 
-  <h2>8. 为什么换模型后必须重新处理</h2>
+  <h2>7.1 向量数据库解决什么</h2>
+  <p>专门向量数据库或向量扩展通常提供近似最近邻索引、元数据过滤、批量更新和分布式扩展。在百万级片段中逐个计算余弦会很慢，ANN（Approximate Nearest Neighbor，近似最近邻）用少量精度换更快查询。</p>
+  <p>当前只有小型本地知识库，SQLite 顺序扫描更简单、可复现。未来迁移向量库不会自动提高语义质量，它主要解决规模和延迟；Embedding、分块和查询质量仍然重要。</p>
+
+  <h2>8. RAG 一次查询的完整路径</h2>
+  <pre><code>ResearchQuestion + search_query
+  → 生成 QUERY 向量
+  → 读取所选文档的 DOCUMENT 向量
+  → 检查模型身份和维度
+  → 逐个计算余弦相似度
+  → 排序并取 Top-K
+  → 转换为 local Source
+  → 与网页 Source 一起交给证据提取 LLM</code></pre>
+
+  <h2>9. 为什么换模型后必须重新处理</h2>
   <p>不同模型、Provider、输出维度或检索指令策略产生的坐标空间不能假定兼容。ResearchFlow 把这些信息组合成向量身份，只允许查询当前身份对应的文档向量。</p>
   <p>如果配置改变，旧文档仍然存在，但创建研究任务时会得到 <code>EMBEDDING_REPROCESS_REQUIRED</code>。点击“重新处理”后，系统重新解析文档、生成向量并原子替换旧片段与向量，避免把不同空间的数字混在一起比较。</p>
 
-  <h2>9. 检索命中为什么还不是证据</h2>
+  <h2>10. 检索命中为什么还不是证据</h2>
   <p>Top-K 只表示“这些片段相对更相似”，不保证它们正确、充分或真的支持某条结论。ResearchFlow 还要经过 Source、Evidence、Claim 和 Citation Audit。RAG 提高模型看到相关资料的机会，证据链负责限制模型怎样使用资料。</p>
+  <h2>11. RAG 常见误区</h2>
+  <ul>
+    <li><strong>“RAG 就是向量数据库”：</strong>向量存储只是检索实现之一，RAG 还包括解析、分块、查询、上下文和生成。</li>
+    <li><strong>“相似度最高一定正确”：</strong>它只在候选中相对相似。</li>
+    <li><strong>“上传后模型学会了文件”：</strong>文件没有进入模型参数，只在查询时检索。</li>
+    <li><strong>“换模型不用重建向量”：</strong>不同向量空间不可直接比较。</li>
+    <li><strong>“用了 RAG 就不会幻觉”：</strong>模型仍可能误读、遗漏或超出证据。</li>
+  </ul>
   <div class="callout success"><strong>面试表达：</strong>项目使用真正的云端 Embedding 和余弦相似度完成小规模语义检索，但把向量保存在 SQLite，避免为作品集过早引入向量数据库；模型配置变化会强制重建索引，保证查询与文档向量兼容。</div>
 
   <p class="footer"><a href="0005-understand-langgraph-web-research.html">上一课：LangGraph 联合研究</a> · <a href="0016-understand-rag-evaluation.html">深入：RAG 优化与评测</a> · <a href="0007-understand-evidence-and-citations.html">下一课：证据与引用</a> · <a href="../index.html">返回学习区</a> · <a href="../resources.html">本课资料依据</a></p>

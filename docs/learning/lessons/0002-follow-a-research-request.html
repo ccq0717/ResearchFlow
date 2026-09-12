@@ -8,7 +8,7 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0002 · 约 15 分钟</p>
+  <p class="eyebrow">Lesson 0002 · 约 35 分钟</p>
   <h1>一次研究任务如何穿过前端、后端和数据库</h1>
   <p class="lead">学完这一课，你应该能从用户点击“开始研究”讲到 SQLite 写入记录，再讲到网页为什么跳转到研究工作区。</p>
 
@@ -93,7 +93,38 @@ await session.commit()</code></pre>
     </tbody>
   </table>
 
-  <h2>9. 请求路径速记</h2>
+  <h2>9. 序列化和反序列化发生了什么</h2>
+  <p>浏览器内存中的对象不能原样穿过网络。<strong>序列化</strong>是把对象转换成可传输的 JSON 文本；<strong>反序列化</strong>是接收方把文本解析成自己的数据结构。</p>
+  <pre><code>TypeScript object
+  → JSON.stringify / fetch json body
+  → 网络字节
+  → FastAPI + Pydantic
+  → Python object</code></pre>
+  <p>响应走相反方向。时间、UUID、枚举等类型在 JSON 中通常表现为字符串，双方必须通过 API Schema 对字段含义达成一致。</p>
+
+  <h2>10. UUID 为什么适合任务 ID</h2>
+  <p>UUID 全称是 <strong>Universally Unique Identifier</strong>，中文是“通用唯一标识符”。项目用 UUID 标识一次研究运行。相比从 1 开始的连续整数，它可以在应用内独立生成，也不容易让访问者猜出相邻任务地址。</p>
+  <p>UUID 不是访问权限。知道一个难猜的 ID 不能替代认证；在线 Demo 仍要使用访问码会话。</p>
+
+  <h2>11. 请求生命周期和研究生命周期不同</h2>
+  <table><thead><tr><th>生命周期</th><th>开始</th><th>结束</th></tr></thead><tbody>
+    <tr><td>创建 HTTP 请求</td><td>用户提交表单</td><td>后端返回 queued 运行</td></tr>
+    <tr><td>后台研究运行</td><td>Application 创建 asyncio Task</td><td>completed、failed 或 cancelled</td></tr>
+    <tr><td>SSE 观察连接</td><td>研究页建立 EventSource</td><td>终态、离开页面或网络断开</td></tr>
+  </tbody></table>
+  <p>三者不能绑死：HTTP 请求结束后研究继续；SSE 断开后研究也继续；刷新页面后可以通过运行 ID 和数据库快照恢复展示。</p>
+
+  <h2>12. 浏览器开发者工具怎么看一条请求</h2>
+  <ol>
+    <li>打开浏览器开发者工具的 Network 面板；</li>
+    <li>提交研究并找到 <code>research-runs</code> 请求；</li>
+    <li>查看 Request URL、Method、Status Code 和 Request Payload；</li>
+    <li>查看 Response，确认是否返回运行 ID 和状态；</li>
+    <li>若状态码非 2xx，再对照后端日志和稳定错误码。</li>
+  </ol>
+  <p>Network 说明浏览器实际发送和收到什么；Console 更适合看前端运行错误；后端终端说明 Python 服务发生什么。不要只盯着页面上的一句通用提示。</p>
+
+  <h2>13. 请求路径速记</h2>
   <div class="card">
     <p><strong>表单 → API 客户端 → FastAPI 路由 → 应用层 → Repository → SQLite</strong></p>
     <p>表单收集目标；API 客户端发送 JSON；路由接收 HTTP；应用层组织创建用例；Repository 转换并提交数据；SQLite 把记录写进本地文件。</p>

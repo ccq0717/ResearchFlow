@@ -8,10 +8,14 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0018 · 约 35 分钟</p>
+  <p class="eyebrow">Lesson 0018 · 约 60 分钟</p>
   <h1>提交代码之后，自动化检查做了什么</h1>
   <p class="lead">Git 负责版本历史，CI 负责自动验证，CD 负责把通过验证的版本交付或部署。三者有关联，但不是同一件事。</p>
   <div class="answer"><strong>简短回答：</strong>ResearchFlow 在 push 和 pull request 时由 GitHub Actions 分别检查后端、前端和浏览器端到端流程。当前只实现 CI，没有自动部署；因此绿色勾表示这些检查通过，不表示已经上线，也不证明没有任何缺陷。</div>
+
+  <h2>0. Version Control 为什么存在</h2>
+  <p>Version Control System（版本控制系统）记录文件随时间的变化，让开发者查看差异、恢复旧版本、并行开发和合并协作。Git 是分布式版本控制系统：每个完整 clone 都拥有本地历史，不是只能在线编辑 GitHub 文件。</p>
+  <p>Git 是工具，GitHub 是托管 Git 仓库并提供 PR、Issue 和 Actions 的平台。两者不是同一个产品。</p>
 
   <h2>1. Git 的四个位置</h2>
   <pre><code>工作区 --git add--&gt; 暂存区 --git commit--&gt; 本地仓库 --git push--&gt; 远程仓库</code></pre>
@@ -23,8 +27,29 @@
   </ul>
   <p>Commit 不等于 push。合理的提交应表达一个完成的小阶段，既不必每改一行就提交，也不要把多个无关阶段挤进一个巨大提交。</p>
 
+  <h2>1.1 Git 保存的是快照和关系</h2>
+  <p>每个 Commit 保存项目快照的引用、父 Commit、作者和消息，形成有向历史。Commit Hash 是内容相关标识。分支只是指向某个 Commit 的可移动引用，因此创建分支通常很轻量。</p>
+  <pre><code>A──B──C  main
+    \
+     D──E  feature</code></pre>
+
+  <h2>1.2 常用只读检查</h2>
+  <ul>
+    <li><code>git status</code>：哪些文件修改、暂存或未跟踪；</li>
+    <li><code>git diff</code>：工作区与暂存区的差异；</li>
+    <li><code>git diff --cached</code>：下一次提交将包含什么；</li>
+    <li><code>git log --oneline</code>：查看提交历史。</li>
+  </ul>
+  <p>提交前先检查 diff，可以避免把 <code>.env</code>、运行数据或无关修改带入提交。</p>
+
   <h2>2. Branch 和 Pull Request</h2>
   <p>分支是指向某个 Commit 的可移动名字，使新功能能与稳定主线并行。Pull Request 是托管平台上的审阅和合并流程，不是 Git 本身的数据对象。CI 常在 PR 上运行，帮助审阅者先看到自动检查结果。</p>
+
+  <h2>2.1 Merge 和 Rebase</h2>
+  <p>Merge 创建或推进合并结果，保留两条历史汇合；Rebase 把一组提交重新放到新的基点，会改写这些提交的 Hash。共享历史上随意 rebase 可能给协作者造成冲突。当前项目无需为了“历史漂亮”频繁改写已推送提交。</p>
+
+  <h2>2.2 Merge Conflict 是什么</h2>
+  <p>当两条分支对同一位置做了 Git 无法自动组合的修改，就出现合并冲突。开发者要理解双方意图，编辑成正确最终内容，再测试并提交；不能仅机械选择“ours”或“theirs”。</p>
 
   <h2>3. CI 工作流的组成</h2>
   <table><thead><tr><th>概念</th><th>在 GitHub Actions 中</th></tr></thead><tbody>
@@ -34,6 +59,15 @@
     <tr><td>Step</td><td>检出代码、安装运行时、安装依赖、执行命令</td></tr>
     <tr><td>Runner</td><td>GitHub 提供的临时 Windows 或 Ubuntu 环境</td></tr>
   </tbody></table>
+
+  <h2>3.1 YAML 是什么</h2>
+  <p>YAML 是常见配置数据格式，使用缩进表达层级。GitHub Actions 读取 <code>.github/workflows/*.yml</code>。缩进或字段位置错误会让工作流无法解析；具体语义由 GitHub Actions Schema 决定。</p>
+
+  <h2>3.2 Runner 是临时机器</h2>
+  <p>GitHub-hosted Runner 每次 Job 获得新的环境。它不会继承你电脑上手工安装的依赖或 `.env`。因此 CI 必须显式检出代码、设置 Python/Node、按锁文件安装依赖并安装 Chromium。</p>
+
+  <h2>3.3 Job 为什么可以并行</h2>
+  <p>没有 <code>needs</code> 依赖的 Job 可以在不同 Runner 同时运行。Backend、Frontend 和 E2E 互不共享内存或安装结果。一个 Job 安装过 Python，另一个 Job 仍需自己安装。</p>
 
   <h2>4. 当前三个 Job 检查什么</h2>
   <table><thead><tr><th>Job</th><th>平台</th><th>检查</th></tr></thead><tbody>
@@ -45,6 +79,12 @@
 
   <h2>5. 为什么使用锁文件安装</h2>
   <p><code>uv sync --locked</code> 和 <code>npm ci</code> 按仓库锁文件安装确定版本，避免开发机与 CI 因依赖自动升级产生不同结果。缓存只加快下载，不应改变最终解析出的依赖集合。</p>
+
+  <h2>5.1 Dependency Cache 和 Artifact</h2>
+  <p>Cache 缓存可复用依赖下载以加速后续运行，不应作为永久结果；Artifact 制品保存本次工作流产生的报告、日志或构建包供下载。当前 CI 使用依赖缓存，没有发布部署制品。</p>
+
+  <h2>5.2 Secret 在 CI 中怎样处理</h2>
+  <p>GitHub Secret 可以在明确步骤中注入敏感值，但来自不可信 PR 的工作流要格外谨慎。当前常规 CI 不需要真实 AI Secret，因为全部使用 Simulation、Fake 或 Mock。</p>
 
   <h2>6. 为什么 CI 不调用真实 LLM</h2>
   <p>自动测试使用 Simulation 或 Fake，结果确定、速度快、不需要 Secret，也不会每次 push 都产生外部费用。真实 LLM、Exa 和 Embedding 验收用于发布前人工验证，因为外部服务会受网络、额度、模型更新和随机性影响。</p>
@@ -65,6 +105,16 @@
     <li>Fake 不能替代真实供应商验收；</li>
     <li>安全、可用性和报告质量还需要配置审查、真实示例与人工判断。</li>
   </ul>
+  <h2>9. 一条成熟发布流水线还需要什么</h2>
+  <pre><code>代码审阅
+→ CI 测试、静态检查、构建
+→ 生成有版本的镜像/制品
+→ 部署到预发布环境
+→ 数据迁移与黄金路径验证
+→ 人工批准
+→ 生产发布
+→ 健康监控与回滚</code></pre>
+  <p>ResearchFlow 当前停在 CI 和可手工部署阶段。对本地作品集这已经合理；若提供长期在线服务，再根据实际平台实现 CD。</p>
   <div class="callout success"><strong>面试表达：</strong>项目用三个 GitHub Actions Job 覆盖 Python 测试与静态检查、TypeScript 测试与生产构建，以及 Windows Chromium 端到端主路径；外部 AI 服务使用 Fake 保持 CI 稳定，发布前另做真实验收。当前是 CI，不冒充已经实现自动 CD。</div>
 
   <p class="footer"><a href="0008-understand-testing-and-evaluation.html">相关课程：测试与评测</a> · <a href="0010-understand-deployment.html">下一课：部署</a> · <a href="../index.html">返回学习区</a> · <a href="../../guides/development-and-operations.md">查看正式 CI 说明</a></p>

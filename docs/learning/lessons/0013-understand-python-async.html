@@ -8,10 +8,21 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0013 · 约 30 分钟</p>
+  <p class="eyebrow">Lesson 0013 · 约 55 分钟</p>
   <h1>async、await 和后台任务到底在做什么</h1>
   <p class="lead">研究流程会等待多个网络服务，若逐步阻塞线程，API 就很难同时响应查看状态和取消请求。</p>
   <div class="answer"><strong>简短回答：</strong><code>async</code> 定义协程，<code>await</code> 在等待 I/O 时把执行权交回事件循环，<code>create_task</code> 把协程安排为可独立推进的任务。它们提高等待型工作的并发能力，不会自动让 CPU 计算变快。</div>
+
+  <h2>0. I/O 和 CPU 工作是什么</h2>
+  <p>I/O 是 Input/Output，即输入/输出。网络请求、磁盘和数据库通常要等待外部设备或服务；CPU-bound 工作则主要消耗处理器执行计算，例如大型矩阵计算或压缩。</p>
+  <p>ResearchFlow 大部分长时间花在等待 LLM、搜索和 Embedding 的网络响应，因此适合异步 I/O。余弦扫描规模很小时 CPU 开销较低；若变成百万向量计算，async 不会自动解决性能问题。</p>
+
+  <h2>0.1 并发和并行</h2>
+  <table><thead><tr><th>概念</th><th>含义</th><th>比喻</th></tr></thead><tbody>
+    <tr><td>Concurrency 并发</td><td>多个任务在同一时间段内交替推进</td><td>一个厨师等烤箱时去切菜</td></tr>
+    <tr><td>Parallelism 并行</td><td>多个任务在同一时刻真正执行</td><td>多个厨师同时工作</td></tr>
+  </tbody></table>
+  <p>单线程事件循环能实现并发 I/O，不一定实现 CPU 并行。多线程、多进程和异步是不同工具。</p>
 
   <h2>1. 同步等待和异步等待</h2>
   <pre><code>同步：发出请求 ───────── 等待 ───────── 得到结果
@@ -26,6 +37,21 @@
   </tbody></table>
   <p><code>await</code> 不是创建线程，也不等于“所有代码并行”。如果在协程里执行很长的纯 CPU 循环且从不让出执行权，事件循环仍会被卡住。</p>
 
+  <h2>2.1 async def 调用后为什么还没执行</h2>
+  <pre><code>async def fetch():
+    return "done"
+
+coroutine = fetch()       # 只创建协程对象
+result = await coroutine  # 当前任务等待它完成
+task = asyncio.create_task(fetch())  # 安排它独立推进</code></pre>
+  <p>漏写 await 可能得到“coroutine was never awaited”警告。把所有调用都改成 create_task 也不对：需要返回值和顺序依赖时通常应该 await。</p>
+
+  <h2>2.2 await 时事件循环做什么</h2>
+  <p>当底层异步 I/O 尚未就绪，当前 Task 暂停，事件循环运行其他已就绪 Task；网络通知结果到达后，原 Task 从 await 之后恢复。切换发生在明确可等待点，比操作系统抢占线程更协作式。</p>
+
+  <h2>2.3 阻塞代码为什么危险</h2>
+  <p><code>time.sleep()</code>、同步网络请求或大量 CPU 循环会占住事件循环线程。项目使用 <code>await asyncio.sleep()</code> 做 SSE 等待，并用 <code>asyncio.to_thread</code> 包装文件读写和 PDF 解析，使这些同步操作不直接堵住主事件循环。</p>
+
   <h2>3. 创建研究为什么立即返回</h2>
   <p><a href="../../../apps/api/src/researchflow/application/research_runs.py"><code>ResearchRunApplication.create_run</code></a> 先把 <code>queued</code> 记录写入数据库，再用 <code>asyncio.create_task</code> 启动工作流，最后把运行记录返回给路由。浏览器很快得到任务 ID，随后通过 SSE 观察后台进展。</p>
   <pre><code>POST /research-runs
@@ -38,6 +64,12 @@
   <p>每个真实研究都会消耗模型额度、搜索请求和内存。应用用任务表统计进程内活跃运行，并设置同时运行数与每日运行数上限。锁保护“检查上限 + 创建任务”这一段，避免两个请求同时通过检查造成超额。</p>
   <p>这些限制适合单进程在线 Demo。若部署多个后端实例，内存任务表和锁无法跨进程协调，需要队列、共享数据库锁或专门任务系统。</p>
 
+  <h2>4.1 Lock 和 Semaphore 有什么区别</h2>
+  <p>Lock（锁）让同一时刻只有一个任务进入临界区，适合保护“检查配额并创建”的组合操作。Semaphore（信号量）允许最多 N 个任务进入，常用于控制外部请求并发。当前应用以活跃 Task 计数和 Lock 保证创建上限。</p>
+
+  <h2>4.2 Race Condition 是什么</h2>
+  <p>Race Condition（竞态条件）表示结果依赖多个任务不可控的执行顺序。如果两个创建请求都先看到“当前只有 1 个运行”，然后都创建，就可能突破上限。把检查与创建放在同一锁内，使它们对其他创建请求表现为一个整体。</p>
+
   <h2>5. 取消为什么没有想象中简单</h2>
   <p><code>task.cancel()</code> 会请求任务在下一个可取消点抛出 <code>CancelledError</code>，不是立刻杀死代码。若恰好正在保存一个完成节点，半途取消可能让“事件已写但状态未写”之类的不一致出现。</p>
   <p>项目用 <code>asyncio.shield</code> 保护单次工作流更新的持久化：外部取消到达后，先等这次保存完整结束，再把取消继续向上传递。数据库 Session 的回滚和关闭也受到相同保护。</p>
@@ -45,7 +77,23 @@
   <h2>6. 进程退出会怎样</h2>
   <p>后台 Task 只存在于当前 Python 进程，重启后不能恢复执行。应用启动时会扫描未结束运行并标记为中断失败；用户可以重试。这是“可解释失败”，不是持久任务队列。生产级长任务可进一步使用持久队列和 worker。</p>
 
-  <h2>7. 常见误区</h2>
+  <h2>7. Exception、CancelledError 和 finally</h2>
+  <p>普通业务异常表示操作失败；取消通过 <code>CancelledError</code> 在 await 点传播。资源释放应放在 <code>finally</code> 或异步上下文管理器中，确保成功、失败和取消都能关闭 HTTP Client、Session 或文件。</p>
+  <p>取消通常应在完成必要清理后继续向上传播，不能悄悄吞掉，否则调用方会误以为任务正常完成。</p>
+
+  <h2>8. gather、TaskGroup 和顺序 await</h2>
+  <ul>
+    <li>顺序 await：后一步依赖前一步，或要严格控制外部额度；</li>
+    <li><code>gather</code>：同时等待多个已知异步操作，需要设计部分失败行为；</li>
+    <li><code>TaskGroup</code>：结构化并发，让一组子任务的生命周期属于同一代码块。</li>
+  </ul>
+  <p>前端会并行读取多个独立 REST 快照；后端研究问题当前顺序搜索。并行化不是语法替换，还会改变限流、成本和错误传播。</p>
+
+  <h2>9. 什么时候需要真正的任务队列</h2>
+  <p>当任务必须跨进程恢复、需要多个 worker、需要延迟/优先级调度或运行时间很长时，可使用持久任务队列。队列会保存待执行消息，worker 独立消费；同时必须设计幂等、重试、死信和状态同步。</p>
+  <p>当前 Demo 选择进程内 Task，是因为单实例、低并发、运行时间有限且失败后允许显式重试。</p>
+
+  <h2>10. 常见误区</h2>
   <ul>
     <li><strong>“async 比同步永远快”：</strong>它主要提高 I/O 等待时的吞吐，不减少外部服务自身延迟。</li>
     <li><strong>“调用 async 函数就开始执行”：</strong>还要 await 或创建 Task。</li>

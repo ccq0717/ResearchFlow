@@ -8,10 +8,25 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0008 · 约 25 分钟</p>
+  <p class="eyebrow">Lesson 0008 · 约 55 分钟</p>
   <h1>Fake、Mock、集成测试与真实评测分别证明什么</h1>
   <p class="lead">AI 应用不能只靠“运行一次看起来不错”。这节课用 ResearchFlow 的测试分层解释怎样把代码正确性、协议兼容性和结果质量分开验证。</p>
   <div class="callout"><strong>先记结论：</strong>自动化测试追求稳定、快速和可重复；真实服务评测确认外部兼容性与效果。二者互补，不能互相替代。</div>
+
+  <h2>0. 测试、验证和评测的区别</h2>
+  <ul>
+    <li><strong>Testing（测试）</strong>检查给定输入下软件行为是否符合预期；</li>
+    <li><strong>Verification（验证）</strong>关注“我们是否按规格正确构建了系统”；</li>
+    <li><strong>Evaluation（评测）</strong>衡量质量、效果或取舍，例如检索排名和报告有用性；</li>
+    <li><strong>Monitoring（监控）</strong>观察部署后真实运行是否持续健康。</li>
+  </ul>
+  <p>一个 API 测试通过，不代表研究报告质量高；一次报告看起来好，也不代表取消、重启和错误分支正确。</p>
+
+  <h2>0.1 测试用例由什么组成</h2>
+  <pre><code>Arrange：准备输入、依赖和初始状态
+Act：执行被测行为
+Assert：检查输出、状态或副作用</code></pre>
+  <p>测试不是“运行一下没报错”。没有明确预期的脚本只能说明当时没有观察到异常。</p>
 
   <h2>1. 为什么 AI 应用更需要分层验证</h2>
   <p>ResearchFlow 同时依赖数据库、后台任务、SSE、LLM、搜索和 Embedding。一次完整真实任务成功，不能定位其中某一层是否稳定；真实模型输出还会变化，外部网络和额度也会让测试偶发失败。</p>
@@ -32,6 +47,24 @@
     <li>模型、维度或检索指令策略改变后会要求重新处理；</li>
     <li>本地命中能够进入 Source—Evidence—Claim 链路。</li>
   </ul>
+
+  <h2>2.1 Stub、Fake、Mock 和 Spy</h2>
+  <table><thead><tr><th>测试替身</th><th>主要作用</th></tr></thead><tbody>
+    <tr><td>Stub</td><td>为调用提供预设返回值</td></tr>
+    <tr><td>Fake</td><td>有可工作的简化实现，例如内存或确定性模型</td></tr>
+    <tr><td>Mock</td><td>验证是否以预期方式调用，或模拟协议响应</td></tr>
+    <tr><td>Spy</td><td>记录真实或替代对象的调用，供之后断言</td></tr>
+  </tbody></table>
+  <p>术语在不同测试库中会有差异，关键是说明替身替代了什么、还能证明什么、不能证明什么。</p>
+
+  <h2>2.2 Unit、Integration 和 E2E</h2>
+  <p>E2E 全称是 <strong>End-to-End</strong>，中文是“端到端”。“端”不是某个函数，而是用户路径的两端：例如从浏览器点击开始，一直经过后端和数据库，再回到页面结果。</p>
+  <table><thead><tr><th>层级</th><th>范围</th><th>优缺点</th></tr></thead><tbody>
+    <tr><td>Unit 单元测试</td><td>函数或小模块</td><td>快、定位准；跨层问题覆盖少</td></tr>
+    <tr><td>Integration 集成测试</td><td>多个真实模块协作</td><td>覆盖边界；失败定位成本更高</td></tr>
+    <tr><td>E2E 端到端测试</td><td>从浏览器到后端和数据库</td><td>贴近用户；最慢且环境复杂</td></tr>
+  </tbody></table>
+  <p>健康测试组合通常有大量快速小测试、适量集成测试和少量关键 E2E，而不是所有行为都从浏览器测。</p>
 
   <h2>3. HTTP Mock 为什么仍然必要</h2>
   <p>Fake 不会真的组装 HTTP 请求，所以适配器还需要 HTTP Mock。<a href="../../../apps/api/tests/test_embedding.py"><code>test_embedding.py</code></a> 检查 Gemini 请求是否使用正确端点、Header、批量结构、模型版本对应的任务指令和输出维度，也检查 OpenAI-compatible 响应是否按 index 恢复顺序。</p>
@@ -63,6 +96,15 @@ rank = 3 → reciprocal rank = 1/3</code></pre>
     <tr><td>引用覆盖率 100%</td><td>结构化 Claim 都有完整关联</td><td>每条结论在语义上绝对正确</td></tr>
     <tr><td>真实任务完成</td><td>当前配置的外部链路可用</td><td>服务永远稳定或没有费用风险</td></tr>
   </tbody></table>
+
+  <h2>7.1 Deterministic 和 Non-deterministic</h2>
+  <p>确定性程序在相同输入与环境下产生相同结果，LLM 和网络服务则包含非确定因素。自动回归断言应尽量基于稳定结构和不变量，例如状态终结、引用 ID 有效，而不是要求真实模型逐字输出固定报告。</p>
+
+  <h2>7.2 测试覆盖率不是质量分数</h2>
+  <p>代码覆盖率只表示测试执行到哪些语句或分支，不表示断言充分，也不表示需求正确。ResearchFlow 更关注关键风险路径：任务生命周期、数据库一致性、外部协议、SSE 恢复和报告渲染。</p>
+
+  <h2>7.3 Regression 是什么</h2>
+  <p>Regression（回归）指原本正常的能力因修改而再次出错。每次发现缺陷后增加对应测试，可以把一次经验变成长期保护。此前 GitHub Actions 中发现的 E2E 启动问题，就应由稳定的黄金路径防止再次出现。</p>
 
   <h2>8. 当前验证策略</h2>
   <pre><code>每次代码改动

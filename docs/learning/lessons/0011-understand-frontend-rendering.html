@@ -8,10 +8,29 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0011 · 约 15 分钟</p>
+  <p class="eyebrow">Lesson 0011 · 约 55 分钟</p>
   <h1>前端怎样把持续变化的研究运行变成可读页面</h1>
   <p class="lead">这一课把 React 状态、REST 快照、SSE 增量事件和 Markdown 报告串起来，解释刷新恢复与实时更新为什么可以同时成立。</p>
   <div class="callout"><strong>先记结论：</strong>SQLite 中的数据是真相来源，REST 负责取得完整快照，SSE 只推送此后发生的变化；Markdown 渲染器负责展示，不负责判断研究结论是否正确。</div>
+
+  <h2>0. HTML、CSS 和 JavaScript 各做什么</h2>
+  <table><thead><tr><th>技术</th><th>全称/含义</th><th>职责</th></tr></thead><tbody>
+    <tr><td>HTML</td><td>HyperText Markup Language，超文本标记语言</td><td>标题、段落、表格等页面结构</td></tr>
+    <tr><td>CSS</td><td>Cascading Style Sheets，层叠样式表</td><td>颜色、尺寸、间距和响应式布局</td></tr>
+    <tr><td>JavaScript</td><td>浏览器编程语言</td><td>事件、状态、请求和动态行为</td></tr>
+  </tbody></table>
+  <p>React 最终仍然创建 HTML 对应的 DOM 元素并应用 CSS，不是替代 Web 基础。</p>
+
+  <h2>0.1 DOM 是什么</h2>
+  <p>DOM 全称是 <strong>Document Object Model</strong>，中文是“文档对象模型”。浏览器把 HTML 解析成一棵可操作的节点树。React 根据组件输出计算哪些 DOM 节点需要更新。</p>
+  <pre><code>document
+└─ main
+   ├─ h1 研究结果
+   └─ section
+      └─ p 报告内容</code></pre>
+
+  <h2>0.2 JSX、TSX 和组件</h2>
+  <p>JSX 允许在 JavaScript 中写接近 HTML 的界面语法；TSX 是包含 TypeScript 类型的 JSX 文件。它会在构建阶段转换成 JavaScript 调用。组件名大写，接收 props 并返回界面描述。</p>
 
   <h2>1. Dashboard 和研究页各自负责什么</h2>
   <p><a href="../../../apps/web/src/app/page.tsx"><code>app/page.tsx</code></a> 保存输入框、文档选择和历史列表等短暂界面状态。创建接口返回运行 ID 后，路由跳转到 <code>/research/[runId]</code>。</p>
@@ -28,6 +47,15 @@
   </table>
   <p>研究页先并行读取运行、计划和材料，再读取事件历史；若任务尚未结束，才从最后一个事件序号之后建立 EventSource。这样不会把“连接成功”误认为“数据已经完整”。</p>
 
+  <h2>2.1 useState 为什么触发重新渲染</h2>
+  <p><code>useState</code> 为组件保存值和更新函数。调用更新函数后，React 再次执行组件，使用新值计算界面。不要直接修改旧数组或对象；项目用 <code>setEvents(current =&gt; merge(...))</code> 基于最新状态产生新数组。</p>
+
+  <h2>2.2 useEffect 的建立与清理</h2>
+  <p>Effect 用于让组件和网络连接等外部系统同步。研究 ID 改变时建立新的加载与 SSE 流；返回的 cleanup 会把 cancelled 标记设为 true 并关闭旧 EventSource，避免组件离开后继续更新状态。</p>
+
+  <h2>2.3 Loading、Error、Empty 和 Success</h2>
+  <p>网络页面至少要处理加载中、失败、空数据和成功四类状态。若只写成功界面，后端未启动时就会出现空白或不可理解异常。ResearchFlow 为无法读取运行、操作失败和加载中提供独立展示。</p>
+
   <h2>3. 为什么不能只使用 SSE</h2>
   <p>SSE 适合服务器单向推送进度，但新打开的页面没有此前事件，也不应该依赖一条长期连接恢复整份报告。REST 读取稳定快照，SSE 降低等待期间的刷新成本，两者承担不同职责。</p>
   <p>收到终态事件后，前端重新读取运行、计划、材料和度量，而不是仅凭事件消息拼出最终页面。这保证展示结果与后端已经提交的状态一致。</p>
@@ -41,11 +69,37 @@
 → rehype-katex + KaTeX CSS 生成可读公式</code></pre>
   <p><a href="../../../apps/web/src/app/research/%5BrunId%5D/research-report.tsx"><code>research-report.tsx</code></a> 还为标题、列表、表格、代码块和外部链接定义统一样式。规范化只修正常见的模型输出差异，例如 <code>\(...\)</code>、<code>\[...\]</code> 和紧邻中文的加粗标记，不改写报告含义，也跳过代码围栏。</p>
 
+  <h2>4.1 Markdown、GFM 和 AST</h2>
+  <ul>
+    <li><strong>Markdown</strong>是用纯文本符号表达标题、列表、强调和链接的标记语言；</li>
+    <li><strong>GFM</strong>是 GitHub Flavored Markdown，增加表格、删除线和任务列表等扩展；</li>
+    <li><strong>AST</strong>是 Abstract Syntax Tree，抽象语法树，表示解析后的结构而不是原始字符。</li>
+  </ul>
+  <pre><code>"**证据**" → strong 节点 → React &lt;strong&gt; → 浏览器加粗</code></pre>
+  <p>若星号与中文标点或空格组合不符合解析器规则，可能仍被当普通字符。项目先规范化已知模型格式差异，再交给标准解析插件。</p>
+
+  <h2>4.2 LaTeX 和 KaTeX</h2>
+  <p>LaTeX 是排版系统，数学公式有专门语法；KaTeX 是在 Web 页面快速渲染一部分 LaTeX 数学语法的库。<code>remark-math</code> 负责识别数学节点，<code>rehype-katex</code> 把节点转换成 KaTeX HTML。</p>
+  <pre><code>行内：$E = mc^2$
+块级：$$\operatorname{MRR}=\frac{1}{N}\sum_{i=1}^{N}\frac{1}{rank_i}$$</code></pre>
+  <p>公式生成失败可能是分隔符、转义或 KaTeX 不支持的命令问题，不是 Markdown 所有文本都天然能成为公式。</p>
+
   <h2>5. 为什么不直接插入模型生成的 HTML</h2>
   <p>研究报告来自外部模型和网页材料，应当视为不可信文本。项目让 Markdown 解析器创建受控 React 元素，没有启用原始 HTML 解析；外部链接统一在新页面打开并设置 <code>noopener</code> 与 <code>noreferrer</code>。这减少脚本注入和页面结构被任意改写的风险。</p>
   <p>这不等于整个应用自动安全：API 鉴权、上传限制、CORS、Secret 和供应商数据政策仍由后端与部署配置负责。</p>
 
-  <h2>6. 怎样验证这一层</h2>
+  <h2>5.1 SSR、CSR 和 Hydration</h2>
+  <ul>
+    <li><strong>SSR</strong>（Server-Side Rendering）在服务器生成初始 HTML；</li>
+    <li><strong>CSR</strong>（Client-Side Rendering）在浏览器运行 JavaScript 更新界面；</li>
+    <li><strong>Hydration</strong>让浏览器端 React 接管服务器生成的 HTML并附加交互。</li>
+  </ul>
+  <p>ResearchFlow 的核心交互页面是 Client Component，需要浏览器 state、点击事件和 EventSource。Next.js 仍负责路由、开发和生产构建。</p>
+
+  <h2>6. 可访问性和响应式设计</h2>
+  <p>语义化标题、按钮文本、表格结构和键盘可操作性有助于屏幕阅读器与自动化测试。响应式布局通过 CSS 在窄屏改为单列，避免固定宽度让内容溢出。视觉好看不能替代可访问的语义。</p>
+
+  <h2>7. 怎样验证这一层</h2>
   <p>组件测试检查中文加粗、GFM 表格、行内公式和块级公式是否产生预期 HTML；浏览器 E2E 从创建任务开始，检查报告、度量、刷新恢复和历史管理。前者快速定位渲染规则，后者证明真实页面路径能够协作。</p>
 
   <div class="callout success"><strong>面试表达：</strong>前端采用“REST 快照 + SSE 增量”的状态同步方式，以 SQLite 持久状态为真相来源；报告通过受控 Markdown AST 管线渲染 GFM 与 KaTeX，没有直接执行模型生成的 HTML。</div>

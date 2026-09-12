@@ -1,81 +1,171 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>第 1 课：理解 SSE · ResearchFlow</title>
-<link rel="stylesheet" href="../assets/course.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 1 课：从零理解 SSE · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
 </head>
-<body><main>
-<p class="eyebrow">Lesson 0001 · 约 15 分钟</p>
-<h1>SSE 如何把后端进度实时送到网页</h1>
-<p class="lead">学完这一课，你应该能解释 ResearchFlow 为什么需要 SSE、一条 SSE 事件长什么样，以及前后端分别做了什么。</p>
-<div class="callout"><strong>先记住一句话：</strong>SSE 是浏览器发起一次 HTTP 连接后，后端不立即结束响应，而是沿着这条连接持续发送事件。</div>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0001 · 约 45 分钟</p>
+  <h1>从零理解 SSE：服务器怎样持续通知浏览器</h1>
+  <p class="lead">从全称、中文含义和应用场景开始，逐步理解 HTTP 流、事件格式、浏览器 EventSource、断线重连，以及 ResearchFlow 的真实前后端实现。</p>
+  <div class="answer"><strong>简短回答：</strong>SSE 的全称是 <strong>Server-Sent Events</strong>，中文通常译为“服务器发送事件”或“服务端推送事件”。浏览器先建立一条普通 HTTP 连接，服务器保持响应不结束，并以规定的文本格式不断向浏览器发送事件。它适合进度、通知、日志和状态变化等“服务器持续向客户端单向更新”的场景。</div>
 
-<h2>1. 从一个具体问题开始</h2>
-<p>用户创建研究任务后，后端可能需要几十秒甚至几分钟完成规划、检索、分析和写作。如果前端只发送一个普通请求并一直等待，用户会看到一个没有变化的页面，不知道程序是在工作、卡住了，还是已经失败。</p>
-<p>我们希望后端每完成一点工作，就告诉前端“正在检索资料”“分析完成 60%”“报告生成完毕”。这是从后端到前端的连续、单向更新，正适合 SSE。</p>
-<div class="flow"><span>浏览器发起连接</span><b>→</b><span>FastAPI 保持响应</span><b>→</b><span>持续发送事件</span></div>
+  <h2>1. 为什么会需要 SSE</h2>
+  <p>最常见的网页请求是“一问一答”：浏览器发出请求，服务器准备好完整响应，返回后这次通信结束。例如读取文章、提交表单和创建研究任务都适合这种方式。</p>
+  <p>但有些结果不是一次产生的。ResearchFlow 创建研究后，后端还要规划问题、搜索网页、检索本地资料、提取证据和撰写报告，可能运行数分钟。用户需要在等待期间看到不断变化的状态：</p>
+  <ul>
+    <li>研究已经进入哪个阶段；</li>
+    <li>当前完成百分比；</li>
+    <li>找到了多少来源和证据；</li>
+    <li>任务最终成功、失败还是被取消。</li>
+  </ul>
+  <p>这些信息由服务器产生，而且服务器产生时间不确定。SSE 正是为“服务器持续通知浏览器”提供的 Web 标准。</p>
 
-<h2>2. 它与普通 HTTP 有什么不同</h2>
-<table><thead><tr><th>普通 REST 请求</th><th>SSE 连接</th></tr></thead><tbody>
-<tr><td>前端请求一次，后端返回一个完整结果</td><td>前端请求一次，后端分多次发送事件</td></tr>
-<tr><td>响应返回后连接结束</td><td>任务运行期间连接保持打开</td></tr>
-<tr><td>适合创建任务、读取报告</td><td>适合进度、日志和通知</td></tr>
-</tbody></table>
-<p>因此 ResearchFlow 同时使用两种方式：先通过 REST 创建任务，再通过 SSE 订阅该任务的进度。</p>
+  <h2>2. SSE 用在哪些领域</h2>
+  <table><thead><tr><th>领域</th><th>典型信息</th><th>为什么适合 SSE</th></tr></thead><tbody>
+    <tr><td>AI 与数据处理</td><td>Agent 步骤、模型流式文本、批处理进度</td><td>计算耗时，更新主要由后端产生</td></tr>
+    <tr><td>监控与运维</td><td>构建日志、服务状态、告警</td><td>服务器不断产生新的只读事件</td></tr>
+    <tr><td>内容与通知</td><td>新闻更新、系统通知、订单状态</td><td>客户端主要接收，不需要高频反向发送</td></tr>
+    <tr><td>金融与仪表盘</td><td>行情摘要、指标变化</td><td>可持续推送文本事件；极高频场景可能改用其他协议</td></tr>
+  </tbody></table>
+  <p>SSE 不是专门为 AI 发明的。它属于浏览器 Web 通信技术；ResearchFlow 只是把它用于研究工作流进度。</p>
 
-<h2>3. 一条 SSE 消息长什么样</h2>
-<pre><code>id: 12
+  <h2>3. 先理解“保持 HTTP 响应打开”</h2>
+  <p>SSE 没有绕开 HTTP。浏览器仍然发出一个 HTTP GET 请求，服务器仍然返回状态码和响应 Header。不同之处是服务器不会立即结束响应体，而是隔一段时间追加一些字节：</p>
+  <pre><code>普通响应：请求 → [完整 JSON] → 连接完成
+
+SSE 响应：请求 → [事件 1] … [事件 2] … [事件 3] … → 服务器结束连接</code></pre>
+  <p>这里的“实时”通常是事件产生后很快到达，不等于硬实时系统。网络延迟、代理缓冲、服务器轮询间隔和浏览器调度都会影响到达时间。</p>
+
+  <h2>4. SSE 的正式响应类型</h2>
+  <p>服务器必须把媒体类型设置为：</p>
+  <pre><code>Content-Type: text/event-stream
+Cache-Control: no-cache</code></pre>
+  <p><code>text/event-stream</code> 告诉浏览器：响应体不是一份普通文本文件，而是按照 SSE 语法持续出现的事件流。编码为 UTF-8。缓存通常要关闭，否则中间层可能保存或延迟事件。</p>
+
+  <h2>5. 一条事件到底长什么样</h2>
+  <pre><code>id: 12
 event: research.event
-data: {"type":"stage.completed","stage":"retrieving","message":"检索资料完成"}
+data: {"type":"research.sources.completed","progress":56}
 
 </code></pre>
-<ul>
-<li><code>id</code>：事件序号。断线重连后可以从下一条继续。</li>
-<li><code>event</code>：事件类型。前端可以针对不同类型注册处理函数。</li>
-<li><code>data</code>：实际数据。SSE 传的是文本，ResearchFlow 把 JSON 放在这里。</li>
-<li>最后的空行：表示这一条事件结束；没有它，浏览器可能继续等待。</li>
-</ul>
-<p>服务端响应类型必须是 <code>text/event-stream</code>，事件流使用 UTF-8。完整规则来自 <a href="https://html.spec.whatwg.org/dev/server-sent-events.html">WHATWG HTML 标准</a>。</p>
+  <p>每一行由“字段名、冒号、字段值”组成，最后必须有一个空行，表示本条事件结束。</p>
+  <table><thead><tr><th>字段</th><th>作用</th><th>ResearchFlow 怎样使用</th></tr></thead><tbody>
+    <tr><td><code>data</code></td><td>事件正文；可以出现多行</td><td>放一个 JSON 字符串，携带业务类型、阶段、进度和消息</td></tr>
+    <tr><td><code>event</code></td><td>给事件命名，客户端可按名称监听</td><td>持久化事件统一叫 <code>research.event</code></td></tr>
+    <tr><td><code>id</code></td><td>记录客户端最后收到的事件标识</td><td>使用运行内递增的 sequence</td></tr>
+    <tr><td><code>retry</code></td><td>建议断线后等待多少毫秒再连接</td><td>当前没有显式发送，使用浏览器策略</td></tr>
+    <tr><td><code>:</code> 开头</td><td>注释，客户端不会触发业务事件</td><td><code>: heartbeat</code> 用于保持链路活跃</td></tr>
+  </tbody></table>
+  <p><code>data</code> 本质上只是文本。浏览器不会自动知道里面是 JSON；前端收到后还要调用 <code>JSON.parse</code>。同理，SSE 本身不知道什么是“研究完成”，业务含义由应用定义。</p>
 
-<h2>4. ResearchFlow 后端做了什么</h2>
-<p>后端入口在 <a href="../../../apps/api/src/researchflow/api/routes.py"><code>apps/api/src/researchflow/api/routes.py</code></a>。阅读时先只找下面四件事：</p>
-<ol>
-<li>路由 <code>/api/research-runs/{run_id}/events</code> 接受浏览器连接。</li>
-<li>异步生成器 <code>generate()</code> 从数据库读取尚未发送的事件。</li>
-<li><code>yield</code> 每执行一次，就向响应流交出一段文本。</li>
-<li><code>StreamingResponse</code> 使用 <code>text/event-stream</code> 返回持续响应。</li>
-</ol>
-<pre><code>return StreamingResponse(
-    generate(),
-    media_type="text/event-stream",
-)</code></pre>
-<p>当暂时没有新事件时，后端会发送 <code>: heartbeat</code>。冒号开头是 SSE 注释，浏览器不会把它当业务事件，但它能让连接保持活跃。</p>
+  <h2>6. 浏览器如何解析事件流</h2>
+  <p>浏览器按行读取响应，收集同一事件中的字段。遇到空行时，它创建一个 MessageEvent，并根据 <code>event</code> 字段分派给对应监听器。如果没有 <code>event</code> 字段，默认触发 <code>message</code> 事件。</p>
+  <pre><code>const source = new EventSource("/api/research-runs/123/events");
 
-<h2>5. ResearchFlow 前端做了什么</h2>
-<p>前端页面在 <a href="../../../apps/web/src/app/research/%5BrunId%5D/page.tsx"><code>apps/web/src/app/research/[runId]/page.tsx</code></a>，核心是浏览器原生的 <code>EventSource</code>：</p>
-<pre><code>const source = new EventSource(".../events");
+source.addEventListener("research.event", (raw) =&gt; {
+  const event = JSON.parse(raw.data);
+  console.log(event.progress);
+});
 
-source.addEventListener("research.event", handleEvent);
-source.onerror = () => setConnection("连接中断");
-
-// 页面离开或任务结束时释放连接
+source.onerror = () =&gt; console.log("连接暂时中断");
 source.close();</code></pre>
-<p>线路上的事件名统一是 <code>research.event</code>，具体业务类型（例如 <code>stage.completed</code> 或 <code>research.evidence.completed</code>）位于 <code>data.type</code>。前端解析 JSON 后更新 React 状态；React 再根据新状态重新显示进度条和研究事件。浏览器端标准用法可参考 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events">MDN SSE 指南</a>。</p>
+  <p><code>EventSource</code> 是浏览器原生接口，不需要额外安装客户端库。只要没有调用 <code>close()</code>，异常断开后它通常会尝试重新连接。</p>
 
-<h2>6. 为什么不直接使用 WebSocket</h2>
-<p>WebSocket 支持前端和后端随时双向发消息，但 ResearchFlow 当前只需要后端推送任务进度。SSE 基于普通 HTTP，浏览器自带 <code>EventSource</code> 和自动重连语义，模型更简单。技术不是越强越好，而是要和问题匹配。</p>
-<p>如果未来加入多人协作编辑或高频双向控制，WebSocket 才可能更合适。可对照 <a href="../reference/web-communication-cheatsheet.html">Web 通信方式速查表</a>。</p>
+  <h2>7. EventSource 的限制</h2>
+  <ul>
+    <li>原生 EventSource 面向 GET 请求，不能像 <code>fetch</code> 一样自由设置请求体；</li>
+    <li>不能随意添加 Authorization 等自定义 Header，常见身份方案是同源 Cookie；</li>
+    <li>主要传输 UTF-8 文本，不适合直接推送大型二进制文件；</li>
+    <li>连接数量、代理超时和服务器资源都需要控制；</li>
+    <li>它是单向通道，客户端操作仍要通过普通 HTTP API 发送。</li>
+  </ul>
+  <p>ResearchFlow 的 Demo 会话使用 HttpOnly Cookie，前端建立 EventSource 时设置 <code>withCredentials: true</code>，因此不需要把访问码或 API Key 拼进 URL。</p>
 
-<h2>7. 断线意味着任务失败吗</h2>
-<p>不意味着。SSE 连接只是“看进度的窗口”，研究任务本身运行在后端。关闭网页可能会让前端看不到新消息，但不应该自动把研究任务判定为失败。</p>
-<p>ResearchFlow 为事件保存递增序号。浏览器重连时可以使用 <code>Last-Event-ID</code> 告诉后端最后收到哪一条，后端再补发后续事件。这也是为什么事件需要持久化，而不能只存在内存中。</p>
+  <h2>8. SSE、轮询和 WebSocket 怎么选</h2>
+  <table><thead><tr><th>方式</th><th>通信方向</th><th>特点</th><th>适合</th></tr></thead><tbody>
+    <tr><td>轮询 Polling</td><td>客户端反复请求</td><td>最容易理解，但无变化时也产生请求</td><td>更新不频繁、实现极简</td></tr>
+    <tr><td>长轮询</td><td>客户端请求，服务器等到变化再返回</td><td>每次变化后重新请求</td><td>兼容旧环境</td></tr>
+    <tr><td>SSE</td><td>服务器 → 客户端</td><td>基于 HTTP、文本事件、自动重连</td><td>进度、通知、日志、文本流</td></tr>
+    <tr><td>WebSocket</td><td>双向</td><td>建立独立的全双工消息通道</td><td>聊天室、协同编辑、实时游戏</td></tr>
+  </tbody></table>
+  <p>ResearchFlow 的用户操作——创建、取消、重试——频率低且方向明确，用 REST；服务器进度是连续单向更新，用 SSE。没有高频双向通信，所以 WebSocket 会增加不必要的连接协议和状态管理。</p>
 
-<h2>8. 三个容易混淆的结论</h2>
-<div class="card"><ul>
-<li>创建操作只需要一次明确响应，因此使用普通 REST；研究进度是后端在一段时间内产生的多次单向更新，因此使用 SSE。</li>
-<li>SSE 用空行标记一条事件的边界；缺少空行时，浏览器可能认为事件尚未结束而不触发处理函数。</li>
-<li>SSE 连接只是进度展示通道，工作流运行状态属于后端，两者生命周期不应绑定。</li>
-</ul></div>
-<p class="footer"><a href="0000-understand-full-stack-basics.html">上一课：前后端基础地图</a> · <a href="../index.html">返回学习区</a> · 继续阅读：<a href="../../architecture/sse-events.md">SSE 事件契约</a> · <a href="../reference/web-communication-cheatsheet.html">通信方式速查表</a></p>
-</main></body></html>
+  <h2>9. ResearchFlow 后端怎样产生 SSE</h2>
+  <p>入口位于 <a href="../../../apps/api/src/researchflow/api/routes.py"><code>apps/api/src/researchflow/api/routes.py</code></a>。逻辑可以拆成五步：</p>
+  <ol>
+    <li>读取运行记录；不存在就返回 404，而不是建立一条无意义的流；</li>
+    <li>确定起始 sequence：取 <code>Last-Event-ID</code> 与查询参数 <code>after</code> 的较大值；</li>
+    <li>先发送一个不持久化的 <code>stream.ready</code>，表示流已经建立；</li>
+    <li>循环查询 SQLite 中 sequence 更大的事件，格式化后逐条 <code>yield</code>；</li>
+    <li>运行进入终态且补齐终结事件后，结束响应。</li>
+  </ol>
+  <pre><code>async def generate():
+    sequence = max(last_event_id or 0, after)
+    yield format_stream_ready(...)
+    while not await request.is_disconnected():
+        events = await application.events_after(run_id, sequence)
+        for event in events:
+            sequence = event.sequence
+            yield format_event(event)
+        if run_is_terminal:
+            return
+        await asyncio.sleep(0.2)</code></pre>
+  <p>当前实现每 0.2 秒查看一次数据库事件。这里是后端内部的短间隔查询，不是浏览器不断发 HTTP 请求。连续 15 次没有新事件时发送 heartbeat，大约相当于 3 秒一次。</p>
+
+  <h2>10. 为什么要设置 X-Accel-Buffering</h2>
+  <pre><code>X-Accel-Buffering: no</code></pre>
+  <p>某些反向代理会先积累一批响应数据再一次性交给浏览器，这叫缓冲。普通网页这样做可能提高效率，但 SSE 会表现为“进度半天不动，突然一次跳很多”。该 Header 请求 Nginx 等兼容中间层不要缓冲事件流。真正部署时仍需检查平台是否尊重它以及连接超时时间。</p>
+
+  <h2>11. ResearchFlow 前端怎样消费事件</h2>
+  <p><a href="../../../apps/web/src/app/research/%5BrunId%5D/page.tsx"><code>research/[runId]/page.tsx</code></a> 不是一打开就只等 SSE，而是：</p>
+  <ol>
+    <li>先通过 REST 读取运行、计划、材料和历史事件；</li>
+    <li>取得历史最后一个 sequence；</li>
+    <li>以 <code>?after={sequence}</code> 建立 EventSource；</li>
+    <li>收到计划或材料事件时，重新读取相应 REST 快照；</li>
+    <li>收到完成、失败或取消事件时，读取最终快照和度量并关闭连接；</li>
+    <li>组件卸载时关闭连接，避免页面离开后仍占用资源。</li>
+  </ol>
+  <p>线路上的 <code>event</code> 统一为 <code>research.event</code>，真正的领域类型放在 <code>data.type</code>，例如 <code>research.evidence.completed</code>。这样传输协议保持稳定，业务事件仍可扩展。</p>
+
+  <h2>12. 断线重连和事件去重</h2>
+  <p>网络断开不等于研究失败，因为工作流运行在后端。事件已经按 sequence 保存在 SQLite。页面重新进入时先读取完整历史；自动重连时浏览器也可发送 <code>Last-Event-ID</code>。后端从已收到序号之后补发。</p>
+  <p>补发可能和前端已有事件重叠，所以 <a href="../../../apps/web/src/lib/event-stream.ts"><code>event-stream.ts</code></a> 用 sequence 作为键合并，再按 sequence 排序。可靠事件系统通常要能容忍重复，而不是假设网络永远恰好只送一次。</p>
+
+  <h2>13. 为什么事件不直接携带整份报告</h2>
+  <p>SSE 事件只携带阶段、计数、进度和错误码等摘要。计划、材料和报告仍通过 REST 读取。这样可以：</p>
+  <ul>
+    <li>避免重连时重复传输大量正文；</li>
+    <li>让 SQLite 中已提交的快照成为权威数据；</li>
+    <li>让事件契约保持小而稳定；</li>
+    <li>避免前端仅靠零散事件拼接出一个可能不完整的最终对象。</li>
+  </ul>
+
+  <h2>14. 常见故障怎样判断</h2>
+  <table><thead><tr><th>现象</th><th>可能原因</th><th>优先检查</th></tr></thead><tbody>
+    <tr><td>接口成功但页面没有更新</td><td>事件名或 JSON 解析不一致</td><td>Network 中事件内容、前端监听名称</td></tr>
+    <tr><td>进度成批出现</td><td>代理或压缩层缓冲</td><td>Content-Type、X-Accel-Buffering、平台配置</td></tr>
+    <tr><td>不断重连并收到 401</td><td>Cookie、CORS 或凭证配置错误</td><td>Origin、withCredentials、Cookie 属性</td></tr>
+    <tr><td>刷新后丢失旧进度</td><td>只在内存广播，事件未持久化</td><td>事件表和历史 REST 接口</td></tr>
+    <tr><td>任务结束但连接不关闭</td><td>终态识别或终结事件顺序错误</td><td>运行状态、终结事件和前端 close</td></tr>
+  </tbody></table>
+
+  <h2>15. SSE 能保证什么，不能保证什么</h2>
+  <ul>
+    <li>SSE 标准定义浏览器怎样解释事件流和重连，不自动保证业务事件绝不丢失；</li>
+    <li><code>id</code> 与持久化补发能提高恢复能力，仍需要应用正确实现；</li>
+    <li>heartbeat 只能帮助维持或检测连接，不代表业务任务健康；</li>
+    <li>连接成功只说明进度通道可用，不说明 LLM、搜索或报告质量正常；</li>
+    <li>HTTPS、认证、限流和代理配置属于完整部署的一部分，不由 SSE 自动提供。</li>
+  </ul>
+
+  <div class="callout success"><strong>面试表达：</strong>SSE 即 Server-Sent Events，是基于 HTTP 的服务器到浏览器单向文本事件流。ResearchFlow 用 REST 创建和读取权威快照，用 SSE 推送增量进度；事件按 sequence 持久化并支持 after/Last-Event-ID 补发，前端按序号去重，终态后重新读取最终快照并关闭连接。</div>
+
+  <p class="footer"><a href="0000-understand-full-stack-basics.html">上一课：前后端基础地图</a> · <a href="0002-follow-a-research-request.html">下一课：跟随一次完整请求</a> · <a href="../index.html">返回学习区</a> · <a href="../../architecture/sse-events.md">SSE 事件契约</a> · <a href="../reference/web-communication-cheatsheet.html">通信方式速查表</a></p>
+</main>
+</body>
+</html>

@@ -8,10 +8,21 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0017 · 约 35 分钟</p>
+  <p class="eyebrow">Lesson 0017 · 约 60 分钟</p>
   <h1>怎样让 LLM 成为可靠的程序组件</h1>
   <p class="lead">Prompt 工程不是寻找一句“神奇咒语”，而是定义任务边界、输入数据、输出契约和失败处理。</p>
   <div class="answer"><strong>简短回答：</strong>ResearchFlow 把 LLM 拆成规划、证据提取和报告写作三个窄任务；每次请求给出系统规则和业务数据，并要求 JSON Schema 结构化输出，再由 Pydantic 二次校验。模型负责语义判断，代码负责 ID 关联、状态和确定性检查。</div>
+
+  <h2>0. Prompt、Context 和 Instruction</h2>
+  <p>Prompt 常泛指发送给模型的输入；Instruction 是其中要求模型做什么的指令；Context 是完成任务所需的背景、材料和历史。Context Engineering 更强调选择、组织和控制模型可见信息，而不只是润色一句提示词。</p>
+  <pre><code>Prompt
+├─ System instruction：稳定角色与边界
+├─ User request：本次目标
+├─ Retrieved context：网页、本地片段、证据
+└─ Output schema：程序期望的结构</code></pre>
+
+  <h2>0.1 Prompt Engineering 用在哪些地方</h2>
+  <p>常见用途包括分类、抽取、摘要、生成、工具选择和多步骤 Agent。任务不同，成功标准也不同。证据抽取需要忠实和可定位，创意写作则可能更重多样性，不能用同一个 Prompt 模板解决所有问题。</p>
 
   <h2>1. Prompt 是程序接口的一部分</h2>
   <p>普通聊天只要求“回答看起来合理”；程序调用还要求字段齐全、类型稳定、ID 可关联、错误可处理。因此一个完整模型调用至少包含：</p>
@@ -35,6 +46,17 @@
   <p>System 消息放稳定的角色、限制和输出要求；User 消息放本次研究目标与材料。来源正文即使包含“忽略之前指令”之类文字，也只是外部数据，不应被当作系统命令。</p>
   <div class="callout warning"><strong>提示注入风险：</strong>只在 Prompt 里写“不要听网页命令”不能提供绝对安全。更稳妥的设计还包括最小工具权限、严格输出校验、限制外部内容影响的动作，以及对高风险操作进行确定性授权。本项目的模型没有任意执行系统命令的工具。</div>
 
+  <h2>3.1 常见消息角色</h2>
+  <table><thead><tr><th>角色</th><th>通常用途</th></tr></thead><tbody>
+    <tr><td>system</td><td>应用级规则、身份、边界和高优先级要求</td></tr>
+    <tr><td>user</td><td>用户请求以及应用组织后的本次数据</td></tr>
+    <tr><td>assistant</td><td>模型此前输出；多轮对话时成为后续上下文</td></tr>
+    <tr><td>tool</td><td>工具调用返回结果；当前自定义客户端未使用通用 tool loop</td></tr>
+  </tbody></table>
+
+  <h2>3.2 Zero-shot、Few-shot 和示例</h2>
+  <p>Zero-shot 只提供说明，不给完整示例；Few-shot 在 Prompt 中放少量输入输出示例，帮助模型理解边界。示例会占用 Token，也可能让模型机械模仿。当前项目主要依赖明确说明和 JSON Schema，没有堆叠大量示例。</p>
+
   <h2>4. 结构化输出解决什么</h2>
   <pre><code>模型响应
   → API 按 JSON Schema 约束格式
@@ -43,9 +65,22 @@
   → 转换为领域对象</code></pre>
   <p><a href="../../../apps/api/src/researchflow/integrations/llm/openai_compatible.py"><code>OpenAICompatibleLLMClient</code></a> 使用 Chat Completions 的 JSON Schema 兼容格式。Schema 能减少解析不稳定，却不能证明内容事实正确；所以证据原文、ID 白名单和引用审计仍然需要。</p>
 
+  <h2>4.1 JSON Schema 约束哪些内容</h2>
+  <p>Schema 可以约束对象字段、字符串、数组长度、必填项和是否允许额外字段。Pydantic 根据 Python 模型生成 Schema，又在响应回来后重新验证。</p>
+  <p>Schema 不擅长表达“这个结论是否真的被网页支持”之类语义条件，因此代码还检查 ID 和原文，质量层还需评测。</p>
+
   <h2>5. Token 与上下文窗口</h2>
   <p>模型先把文本切成 Token。输入 Token 包含系统规则、用户目标、问题、来源正文和已有证据；输出 Token 是模型生成的 JSON 或报告。上下文窗口限制一次请求能够处理的输入与输出总量，不等同于模型“永久记忆”。</p>
   <p>ResearchFlow 最大开销通常来自证据提取和报告写作，因为它们携带网页/本地片段及证据。减少无关来源、合理 Top-K、控制原文长度，往往比单纯缩短一行 Prompt 更有效。</p>
+
+  <h2>5.1 Attention 和“长上下文”直觉</h2>
+  <p>Transformer 模型通过 Attention 让不同 Token 相互关联。上下文更长意味着模型有机会看到更多材料，但不保证每段都被同等利用；噪声、位置和相似内容会影响结果。RAG 的价值之一就是先筛选上下文。</p>
+
+  <h2>5.2 Temperature 是什么</h2>
+  <p>Temperature 通常控制生成分布的随机程度：较低更集中，较高更多样。不同兼容 Provider 的支持和含义可能不同。当前客户端没有显式发送 temperature，使用供应商默认值；不能因此宣称输出完全确定。</p>
+
+  <h2>5.3 Hallucination 是什么</h2>
+  <p>Hallucination（幻觉）指模型生成看似合理但缺乏依据或错误的内容。RAG、严格 Prompt 和 Schema 能降低某些风险，却不能根除。ResearchFlow 通过原文校验、Claim—Evidence 关系和引用审计增加可核验性。</p>
 
   <h2>6. Token 统计与费用估算</h2>
   <p>项目读取供应商响应中的输入、输出和总 Token，累计到运行度量；若配置每百万输入/输出 Token 单价，则按用量估算费用。不同供应商可能另有缓存创建、缓存读取、推理 Token 或阶梯折扣，当前估算只覆盖配置的普通输入与输出价格，因此应标为近似值。</p>
@@ -69,6 +104,15 @@
     <li><strong>“模型会记住上一次调用”：</strong>当前每次 HTTP 请求都显式提供所需上下文。</li>
     <li><strong>“让模型输出思维链更可靠”：</strong>系统需要可验证的证据和结果，不依赖保存模型私有推理过程。</li>
   </ul>
+  <h2>10. 怎样迭代一个 Prompt</h2>
+  <ol>
+    <li>先定义可观察成功标准和失败案例；</li>
+    <li>把任务、数据和输出格式分开；</li>
+    <li>删除冲突、重复和无法验证的要求；</li>
+    <li>用固定评测集运行，而不是只看一个示例；</li>
+    <li>分析是检索、上下文、Schema 还是生成问题；</li>
+    <li>记录模型和 Prompt 版本，避免无依据地凭感觉修改。</li>
+  </ol>
   <div class="callout success"><strong>面试表达：</strong>项目把 LLM 设计为三个有 Schema 的窄接口，结合 Pydantic 与业务白名单二次校验；模型承担语义规划、证据理解和写作，确定性代码掌握状态、关联与审计。</div>
 
   <p class="footer"><a href="0004-understand-llm-adapters.html">上一层基础：LLM 适配器</a> · <a href="../index.html">返回学习区</a> · <a href="../resources.html">本课资料依据</a></p>

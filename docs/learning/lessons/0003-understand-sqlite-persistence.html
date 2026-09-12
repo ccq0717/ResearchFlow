@@ -8,13 +8,30 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0003 · 约 15 分钟</p>
+  <p class="eyebrow">Lesson 0003 · 约 50 分钟</p>
   <h1>SQLite、SQLAlchemy 和 aiosqlite 分别做什么</h1>
   <p class="lead">学完这一课，你应该能解释为什么 ResearchFlow 不需要启动数据库服务，以及一个研究任务怎样从 Python 对象变成磁盘中的记录。</p>
 
   <div class="callout">
     <strong>最重要的结论：</strong>我没有为项目安装独立 SQLite 服务。SQLite 是嵌入应用进程的数据库引擎，ResearchFlow 后端直接读写一个数据库文件。
   </div>
+
+  <h2>0. 数据库、DBMS 和 SQL 分别是什么</h2>
+  <ul>
+    <li><strong>Database（数据库）</strong>是按结构组织的数据集合；</li>
+    <li><strong>DBMS（Database Management System，数据库管理系统）</strong>是管理这些数据的软件；</li>
+    <li><strong>SQL（Structured Query Language，结构化查询语言）</strong>是操作关系数据库的语言；</li>
+    <li><strong>SQLite</strong>是一个嵌入式关系数据库引擎。</li>
+  </ul>
+  <p>数据库文件不是普通 JSON 文件。SQLite 引擎负责页面格式、索引、锁和事务；应用应通过 SQLite 接口读写，不应手工编辑 <code>.db</code> 字节。</p>
+
+  <h2>0.1 表、行、列和关系</h2>
+  <p>关系数据库把一类实体放进表。列描述属性，行代表一条记录。不同表通过键建立关系：</p>
+  <pre><code>research_runs
+  id (Primary Key)  ←──── research_events.run_id (Foreign Key)
+  goal                     sequence
+  status                   type</code></pre>
+  <p><strong>Primary Key（主键）</strong>唯一识别一行；<strong>Foreign Key（外键）</strong>引用另一表的主键；<strong>Index（索引）</strong>用额外空间加快特定查询，但会增加写入成本。</p>
 
   <h2>1. SQLite 与 PostgreSQL 的直观区别</h2>
   <table>
@@ -79,22 +96,54 @@
   <p>没有 ORM 时，代码需要手写大量 SQL，并手动把查询结果转换成 Python 对象。当前项目用 <code>ResearchRunRow</code> 和 <code>ResearchEventRow</code> 描述表结构，再通过异步 Session 执行查询与提交。SQLAlchemy 的异步接口由官方 <a href="https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html">Asyncio 文档</a>定义。</p>
   <p>ORM 不等于数据库，也不会替数据库保存数据。它只是应用代码与数据库之间的翻译和管理层。</p>
 
-  <h2>7. 两种 commit 不要混淆</h2>
+  <h2>7. ORM 全称是什么，为什么不直接写 SQL</h2>
+  <p>ORM 是 <strong>Object-Relational Mapping</strong>，中文是“对象关系映射”。面向对象代码操作对象，关系数据库操作表；ORM 负责在两种表示之间转换。</p>
+  <table><thead><tr><th>直接 SQL</th><th>ORM</th></tr></thead><tbody>
+    <tr><td>查询细节明确，复杂 SQL 表达力强</td><td>常见增删改查更统一，类型和映射集中</td></tr>
+    <tr><td>需要手工映射查询结果</td><td>需要理解 Session、加载策略和生成的 SQL</td></tr>
+    <tr><td>不是“低级”方案</td><td>也不会自动消除性能问题</td></tr>
+  </tbody></table>
+  <p>ResearchFlow 使用 SQLAlchemy 不是因为 SQL 无用，而是希望集中管理表映射、异步 Session 和事务。排查性能时仍需要理解实际 SQL。</p>
+
+  <h2>8. Transaction 为什么重要</h2>
+  <p>Transaction（事务）把一组修改视为一个整体：要么全部成功，要么失败时回滚。例如研究进入 completed 和写入终结事件必须共同提交，否则前端可能看到“已经结束却没有结束事件”。</p>
+  <p>事务常用 ACID 概括：</p>
+  <ul>
+    <li><strong>Atomicity 原子性：</strong>一组操作不留下半成品；</li>
+    <li><strong>Consistency 一致性：</strong>提交前后都满足约束；</li>
+    <li><strong>Isolation 隔离性：</strong>并发事务互相影响受到控制；</li>
+    <li><strong>Durability 持久性：</strong>提交成功后数据能在崩溃后保留。</li>
+  </ul>
+  <p>ACID 是目标性质，具体保证取决于数据库、事务范围、同步设置和应用是否正确使用。</p>
+
+  <h2>9. Session 是数据库连接吗</h2>
+  <p>SQLAlchemy Session 表示一次工作的对象与事务上下文，不应简单理解为一条永久网络连接。它通过 Engine 的连接管理执行 SQL，跟踪对象变化，并在 commit、rollback 和 close 时完成相应处理。</p>
+  <p>项目为每次 Repository 操作创建异步 Session；异常时回滚，最后关闭。Session 不跨请求长期共享，避免多个异步任务同时修改同一个会话状态。</p>
+
+  <h2>10. 两种 commit 不要混淆</h2>
   <ul>
     <li><code>await session.commit()</code>：提交数据库事务，让本次数据修改生效；</li>
     <li><code>git commit</code>：记录源代码和文档版本。</li>
   </ul>
   <p>它们只有英文单词相同，处理的是完全不同的系统。</p>
 
-  <h2>8. 用只读命令观察数据库</h2>
+  <h2>11. 用只读命令观察数据库</h2>
   <p>停止后端不是只读查询的硬性要求，但初学阶段先停止后端更容易排除并发干扰。在仓库根目录执行：</p>
   <pre><code>.\.venv\Scripts\python.exe -c 'import sqlite3; db=sqlite3.connect("file:var/researchflow.db?mode=ro", uri=True); print(db.execute("SELECT name FROM sqlite_master WHERE type=? ORDER BY name", ("table",)).fetchall()); db.close()'</code></pre>
   <p>它使用 Python 自带的 <code>sqlite3</code> 接口以只读模式打开文件并列出表，不需要安装 SQLite CLI。详细备份和重置步骤见 <a href="../../guides/development-and-operations.md">开发与运维手册</a>。</p>
 
-  <h2>9. 为什么 MVP 先用 SQLite</h2>
-  <p>它占用资源少、没有独立服务、备份就是复制文件，非常适合 Windows 本地演示。代价是高并发、多实例部署和复杂运维能力有限。未来正式部署时可以迁移到 PostgreSQL；Repository 边界会降低业务层受到的影响，但数据库模型、迁移和部署配置仍需修改。</p>
+  <h2>12. SQLite 的并发边界</h2>
+  <p>SQLite 可以有多个读取者，但写入最终需要协调，作品集的单后端实例和较低并发适合这一模型。多个应用实例共享同一个普通磁盘文件会带来文件系统一致性、写锁和任务协调问题，不能只靠“数据库文件放在共享盘”解决。</p>
+  <p>这不表示 SQLite 不能用于任何生产环境，而是当前 ResearchFlow 的长任务、进程内 Task 和本地上传文件共同决定了单实例边界。</p>
 
-  <h2>10. 三个持久化结论</h2>
+  <h2>13. Schema 和 Migration 是什么</h2>
+  <p>Schema 是表、列、键和约束的结构。项目首次启动可用 <code>create_all</code> 创建表；已有用户数据后，改变结构还要通过 Migration（迁移）有顺序地升级。<code>schema_migrations</code> 记录已执行版本。</p>
+  <p>直接删除数据库重新创建只适合可丢弃的开发数据。正式数据升级需要备份、向前迁移和回滚策略。</p>
+
+  <h2>14. 为什么 MVP 先用 SQLite</h2>
+  <p>MVP 全称是 <strong>Minimum Viable Product</strong>，中文是“最小可行产品”，指用足以验证核心价值的功能形成可运行版本，而不是粗糙或无需维护的产品。SQLite 占用资源少、没有独立服务、备份就是复制文件，非常适合 Windows 本地演示。代价是高并发、多实例部署和复杂运维能力有限。未来正式部署时可以迁移到 PostgreSQL；Repository 边界会降低业务层受到的影响，但数据库模型、迁移和部署配置仍需修改。</p>
+
+  <h2>15. 三个持久化结论</h2>
   <div class="card"><ul>
     <li>SQLite 嵌入后端进程，后端直接读写数据库文件，因此不需要单独启动数据库服务。</li>
     <li>aiosqlite 提供异步桥接；SQLAlchemy 管理映射、查询、Session 和事务。</li>

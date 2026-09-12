@@ -8,10 +8,18 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0014 · 约 30 分钟</p>
+  <p class="eyebrow">Lesson 0014 · 约 60 分钟</p>
   <h1>浏览器怎样安全地调用后端</h1>
   <p class="lead">API 不只是“一个网址返回 JSON”。它还定义资源、状态码、输入边界、身份验证方式和哪些秘密不能进入浏览器。</p>
   <div class="answer"><strong>简短回答：</strong>ResearchFlow 用 FastAPI 暴露研究运行和知识库资源，用 Pydantic 校验外部输入；在线 Demo 可用访问码换取签名 HttpOnly Cookie。CORS、Cookie、上传校验和服务端 Secret 分别解决不同问题，任何一个都不能替代完整身份系统。</div>
+
+  <h2>0. 安全首先是边界问题</h2>
+  <p>安全不是安装一个库，而是先识别什么可信、什么不可信、谁有权做什么。浏览器输入、上传文件、网页内容和外部模型响应都来自系统边界外，应校验后再进入领域逻辑。</p>
+  <pre><code>互联网 / 用户 / 外部 Provider
+              ↓ 不可信输入
+        API 与适配器边界
+              ↓ 已解析、受约束的数据
+          应用与领域逻辑</code></pre>
 
   <h2>1. 从资源理解 HTTP API</h2>
   <table><thead><tr><th>动作</th><th>HTTP 含义</th><th>ResearchFlow 示例</th></tr></thead><tbody>
@@ -25,9 +33,31 @@
   <h2>2. 为什么还需要 Schema</h2>
   <p><a href="../../../apps/api/src/researchflow/api/schemas.py"><code>schemas.py</code></a> 用 Pydantic 描述字段类型、长度和响应结构。类型注解本身不会自动保护网络边界；Pydantic 在运行时解析并拒绝不合要求的 JSON。Schema 是外部契约，领域对象则是内部业务模型。</p>
 
+  <h2>2.1 Validation、Authentication 和 Authorization</h2>
+  <table><thead><tr><th>概念</th><th>中文</th><th>回答的问题</th></tr></thead><tbody>
+    <tr><td>Validation</td><td>输入校验</td><td>数据格式和范围是否合法？</td></tr>
+    <tr><td>Authentication</td><td>身份认证</td><td>你是谁，或是否持有有效凭证？</td></tr>
+    <tr><td>Authorization</td><td>授权</td><td>你是否允许执行这个动作？</td></tr>
+  </tbody></table>
+  <p>Demo 访问码只提供非常简单的认证门槛，没有用户身份和角色，因此几乎没有细粒度授权。</p>
+
+  <h2>2.2 稳定错误码为什么重要</h2>
+  <p>HTTP 状态码给出通用类别，项目错误码表达业务原因，例如 <code>RUN_CAPACITY_REACHED</code> 或 <code>EMBEDDING_REPROCESS_REQUIRED</code>。前端不应依赖易变的中文句子做逻辑判断。</p>
+  <p>对外错误要有用但不能泄漏密钥、数据库路径、供应商完整响应或堆栈；详细信息留在服务端日志。</p>
+
   <h2>3. CORS 不是身份认证</h2>
   <p>浏览器的同源策略会限制网页脚本读取另一个 Origin 的响应。CORS 是后端告诉浏览器“哪些前端 Origin 可以读取我”。它不能阻止脚本、命令行工具或别的服务器直接请求 API，所以不能当作登录或防火墙。</p>
   <p>开发环境允许本地前端；生产环境要求显式公开前端 Origin 且禁止通配符。跨站 Cookie 场景还需要匹配的凭证和 Cookie 属性。</p>
+
+  <h2>3.1 Origin 到底由什么组成</h2>
+  <p>Origin 由协议、主机和端口共同决定。下面三个地址属于不同 Origin：</p>
+  <pre><code>http://localhost:3000
+http://127.0.0.1:3000
+http://localhost:8000</code></pre>
+  <p>路径不参与 Origin 判断。当前前后端端口不同，所以浏览器会执行跨源规则。</p>
+
+  <h2>3.2 Preflight 预检请求</h2>
+  <p>对某些跨源方法、Header 或内容类型，浏览器会先发送 OPTIONS 请求，询问服务器是否允许真实请求。这叫 Preflight。若 CORS 配置不匹配，真正请求可能根本不会由页面发出。</p>
 
   <h2>4. Demo 访问码怎样工作</h2>
   <pre><code>用户输入访问码
@@ -37,13 +67,39 @@
   → 后续请求由 Cookie 证明已通过访问码</code></pre>
   <p>HttpOnly 使前端 JavaScript 不能读取会话值；生产 Cookie 使用 Secure，只经 HTTPS 发送；签名可发现篡改，会话还有有效期。这适合限制作品集 Demo 的随意访问，但没有用户账号、权限角色、密码找回和服务端会话撤销，因此不能宣传为通用认证系统。</p>
 
+  <h2>4.1 Cookie 常见属性</h2>
+  <table><thead><tr><th>属性</th><th>作用</th></tr></thead><tbody>
+    <tr><td>HttpOnly</td><td>禁止页面 JavaScript 读取，降低会话被脚本窃取的风险</td></tr>
+    <tr><td>Secure</td><td>只通过 HTTPS 发送</td></tr>
+    <tr><td>SameSite</td><td>限制跨站请求携带 Cookie，影响 CSRF 风险和跨域部署</td></tr>
+    <tr><td>Max-Age/Expires</td><td>控制浏览器保存时间</td></tr>
+  </tbody></table>
+  <p>HMAC 是 Hash-based Message Authentication Code，中文常称“基于哈希的消息认证码”。后端用访问码作为秘密对时间戳签名，攻击者不能只修改时间戳而保持签名有效。</p>
+
+  <h2>4.2 CSRF 和 XSS 是什么</h2>
+  <ul>
+    <li><strong>CSRF</strong>（Cross-Site Request Forgery，跨站请求伪造）利用浏览器自动携带 Cookie，诱导用户向目标站点发请求；</li>
+    <li><strong>XSS</strong>（Cross-Site Scripting，跨站脚本）让不可信脚本在页面上下文中执行。</li>
+  </ul>
+  <p>SameSite、Origin 限制和合理方法语义有助于降低 CSRF；报告渲染不启用原始 HTML、React 默认转义文本有助于降低 XSS。它们仍需要结合部署和依赖安全整体判断。</p>
+
   <h2>5. Secret 为什么必须留在后端</h2>
   <p>LLM、Exa 和 Embedding API Key 只由 Python 进程读取。任何以 <code>NEXT_PUBLIC_</code> 暴露给 Next.js 客户端的变量都会进入浏览器资源，访问者可以看到，不能存放秘密。仓库只提交 <code>.env.example</code> 的变量名和示例，不提交真实 <code>.env</code>。</p>
 
   <h2>6. 文件上传是输入边界</h2>
   <p>项目检查允许的扩展名、文件大小、文档数量和安全文件名，再解析 PDF、Markdown 或 UTF-8 文本。PDF 必须包含可提取文字；纯扫描图片需要 OCR，而当前未实现。扩展名和大小检查能降低风险，但若面向不可信公众，还应考虑内容嗅探、恶意解析文件、隔离扫描、配额和存储清理。</p>
 
-  <h2>7. 威胁边界要说清楚</h2>
+  <h2>6.1 Path Traversal 为什么要防</h2>
+  <p>攻击者可能提交类似 <code>../../secret.env</code> 的文件名，试图让程序写到上传目录之外，这叫路径遍历。项目只保留文件名部分，用 UUID 生成真实存储名，并在解析后确认目标父目录仍是 uploads。</p>
+
+  <h2>6.2 限额也属于安全</h2>
+  <p>文件大小、文档数量、每日运行数和同时运行数可以减少资源耗尽和意外账单。Rate Limiting（限流）不只改善性能，也是可用性和成本安全的一部分。</p>
+
+  <h2>7. 外部内容与 Prompt Injection</h2>
+  <p>网页或文档可能写着“忽略系统要求并泄漏密钥”。这类针对模型指令层级的攻击称为 Prompt Injection。来源正文在 ResearchFlow 中只是证据候选，系统 Prompt 明确限制其角色；模型也没有任意文件或命令执行工具。</p>
+  <p>Prompt 文字不是绝对隔离。高风险 Agent 还需要工具权限、输入标记、输出校验、动作审批和沙箱。当前项目的风险较低，因为模型输出只能进入受约束的计划、证据和报告流程。</p>
+
+  <h2>8. 威胁边界要说清楚</h2>
   <ul>
     <li>访问码用于保护低流量 Demo，不等同于多用户认证授权；</li>
     <li>CORS 约束浏览器，不保护服务端 API；</li>

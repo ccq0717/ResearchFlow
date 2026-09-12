@@ -8,18 +8,60 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0005 · 约 20 分钟</p>
+  <p class="eyebrow">Lesson 0005 · 约 50 分钟</p>
   <h1>网页与本地资料怎样穿过 LangGraph</h1>
   <p class="lead">学完后，你应该能解释节点、状态、适配器、来源、证据和持久化更新怎样协作。</p>
   <div class="callout"><strong>先记结论：</strong>LangGraph 负责工作流内部编排，但产品对外只暴露 ResearchFlow 自己的领域对象和事件。</div>
 
   <h2>先分清：工作流、Agent 和 LangGraph</h2>
   <p><strong>工作流</strong>是一组步骤及其流转规则；<strong>Agent</strong>通常让模型根据当前状态自主选择下一步或工具；<strong>LangGraph</strong>是表达有状态节点和边的编排框架，既能实现固定工作流，也能实现更自主的 Agent。</p>
-  <p>ResearchFlow 当前是确定性的六节点图：代码决定节点顺序，LLM 在节点内部负责规划、理解和写作。它不是让模型无限自主循环调用工具的 ReAct Agent。固定流程更容易控制成本、验证证据关系和定位失败。</p>
+  <p>ResearchFlow 当前是确定性的六节点图：代码决定节点顺序，LLM 在节点内部负责规划、理解和写作。它不是让模型无限自主循环调用工具的 ReAct Agent。ReAct 来自 <strong>Reasoning and Acting</strong>，指模型交替进行推理、选择行动、观察工具结果，再决定下一步。固定流程更容易控制成本、验证证据关系和定位失败。</p>
+
+  <h2>0.1 Agent 到底是什么</h2>
+  <p>在 AI 应用中，Agent 通常指一个由模型参与决策、能够观察当前状态、选择动作或工具，并根据结果继续推进目标的系统。它不是“只要调用了 LLM 就是 Agent”。</p>
+  <pre><code>观察当前状态 → 决定下一步 → 调用工具 → 接收结果 → 再决定</code></pre>
+  <p>自主性越高，能适应的情况越多，但成本、循环次数和行为也更难预测。ResearchFlow 把研究任务拆成固定节点，让模型只在需要语义判断的地方工作，是“受控工作流”取向。</p>
+
+  <h2>0.2 LangGraph 是什么，不是什么</h2>
+  <p>LangGraph 是用于构建有状态工作流与 Agent 的低层编排框架。Graph 表示“步骤怎样连接”，State 表示“步骤之间传递什么”。它不提供模型本身，不替项目搜索网页，也不会自动设计 Prompt。</p>
+  <p>ResearchFlow 直接使用 LangGraph 的 <code>StateGraph</code>，没有要求 LangChain 替它调用模型；LLM、搜索和 Embedding 都由项目自己的接口适配。</p>
+
+  <h2>0.3 图的基本术语</h2>
+  <table><thead><tr><th>术语</th><th>通用含义</th><th>项目对应</th></tr></thead><tbody>
+    <tr><td>Node 节点</td><td>执行一段工作并返回状态更新</td><td>planning、searching、reading 等方法</td></tr>
+    <tr><td>Edge 边</td><td>规定一个节点之后到哪里</td><td>planning → searching</td></tr>
+    <tr><td>State 状态</td><td>节点共享的一次执行数据</td><td>目标、计划、来源、证据、报告</td></tr>
+    <tr><td>START / END</td><td>图的入口和出口</td><td>开始规划、检查后结束</td></tr>
+    <tr><td>Conditional Edge</td><td>按状态选择分支</td><td>当前主图未使用</td></tr>
+  </tbody></table>
+
+  <h2>0.4 StateGraph 怎样被构建</h2>
+  <pre><code>builder = StateGraph(_ResearchState)
+builder.add_node("planning", self._planning)
+builder.add_node("searching", self._searching)
+builder.add_edge(START, "planning")
+builder.add_edge("planning", "searching")
+...
+builder.add_edge("checking", END)
+self._graph = builder.compile()</code></pre>
+  <p><code>TypedDict</code> 描述 State 可包含哪些键，节点读取已有字段并返回本节点产生的字段。<code>compile()</code> 把图定义变成可以执行的对象。当前所有边固定，因此每次成功运行都经过相同顺序。</p>
 
   <h2>1. 六个节点</h2>
   <div class="flow"><span>规划</span><b>→</b><span>搜索</span><b>→</b><span>阅读</span><b>→</b><span>证据</span><b>→</b><span>写作</span><b>→</b><span>检查</span></div>
   <p>规划节点生成研究问题和英文网页检索词；搜索节点创建 ResearchTask；阅读节点联合取得 Exa 网页和用户所选文档片段并转换成 Source；证据节点把原文关联到问题并形成 Claim；写作节点生成报告与可追溯章节；检查节点做确定性关联检查。</p>
+
+  <table><thead><tr><th>节点</th><th>主要输入</th><th>主要输出</th><th>是否调用外部服务</th></tr></thead><tbody>
+    <tr><td>planning</td><td>goal</td><td>ResearchPlan</td><td>LLM</td></tr>
+    <tr><td>searching</td><td>plan、document_ids</td><td>搜索结果、本地命中、ResearchTask</td><td>Exa、Embedding</td></tr>
+    <tr><td>reading</td><td>搜索结果和本地命中</td><td>Source、模型可读文档</td><td>读取 Provider 内容</td></tr>
+    <tr><td>extracting</td><td>问题与文档</td><td>Evidence、Claim</td><td>LLM</td></tr>
+    <tr><td>writing</td><td>计划、来源和证据</td><td>Markdown 报告</td><td>LLM</td></tr>
+    <tr><td>checking</td><td>全部材料和报告</td><td>CitationAudit、最终结果</td><td>否，确定性代码</td></tr>
+  </tbody></table>
+
+  <h2>1.1 为什么搜索节点是逐问题执行</h2>
+  <p>计划中的每个 ResearchQuestion 有自己的查询。节点逐个调用网页搜索和本地检索，再把结果关联到对应 ResearchTask。这样报告可以追溯“哪个问题触发了哪个检索”，而不是得到一堆无法归属的网页。</p>
+  <p>当前实现没有并行发出所有查询，因此更容易遵守外部额度，但总耗时可能更长。未来并行化要同时考虑限流、失败隔离和结果顺序，不能只把循环换成 gather。</p>
 
   <h2>2. 为什么问题和检索词分开</h2>
   <table><thead><tr><th>字段</th><th>服务对象</th><th>示例</th></tr></thead><tbody>
@@ -47,11 +89,38 @@
   <h2>5. 为什么 Graph 不直接写数据库</h2>
   <p>工作流把节点状态转换成 <code>ResearchWorkflowUpdate</code>，Application 统一保存材料和事件。未来更换编排框架时，API 无需跟着改变。</p>
 
+  <h2>5.1 astream 和增量更新</h2>
+  <p>工作流使用 <code>graph.astream(..., stream_mode="updates")</code> 异步执行。每个节点完成后，LangGraph 产出该节点的状态更新；项目再把更新转换成自己的 <code>ResearchWorkflowUpdate</code>。Application 保存后才生成面向前端的领域事件。</p>
+  <pre><code>LangGraph 节点更新
+  → ResearchWorkflowUpdate
+  → Application 持久化
+  → ResearchEvent
+  → SSE
+  → React 页面</code></pre>
+  <p>LangGraph 的内部流不直接暴露给浏览器，因此框架升级、节点改名或 State 字段变化不会自动成为公共 API 破坏。</p>
+
+  <h2>5.2 错误怎样离开图</h2>
+  <p>Embedding、LLM 和网页服务错误都有稳定 code 与公开 message。图执行捕获这些预期集成错误并产出失败更新；Application 再把运行和失败事件持久化。未知异常由应用层记录详细日志，对用户只返回安全消息。</p>
+  <p>这种边界让“模型服务超时”和“Python 程序存在 bug”在日志和错误码上可区分。</p>
+
   <h2>6. 当前怎样检查引用</h2>
   <p>当前实现要求每条 Claim 至少关联一条已有 Evidence、每条 Evidence 指向已有 Source，并检查报告的主张小节包含对应来源定位。网页使用可点击 URL，本地资料使用文件名与页码或行号。界面显示主张覆盖率和来源类型计数；DOI、OCR、卷期和被引量等能力仍不在当前范围。</p>
 
   <h2>7. Graph State 不等于数据库状态</h2>
   <p>Graph State 是一次执行期间在节点间传递的工作内存；SQLite 保存的是用户刷新、进程重启后仍需存在的产品状态。当前 LangGraph 没有配置 Checkpointer，恢复策略是将重启时未完成的运行标记失败并允许重试，而不是从某个图节点断点续跑。</p>
+
+  <h2>7.1 Checkpointer 是什么</h2>
+  <p>LangGraph Checkpointer 可以在图步骤之间保存 State 快照，用于中断恢复、人机协作或时间旅行。它与 ResearchFlow 自己的 Repository 不是同一个抽象：前者保存编排执行状态，后者保存用户可见的产品实体。</p>
+  <p>当前流程只有几分钟、允许失败后新建一次重试，因此没有引入双重持久化。若以后要求从写作节点精确恢复，才需要设计 Checkpointer、幂等外部调用和产品状态之间的一致性。</p>
+
+  <h2>7.2 为什么用了 LangGraph 仍不是“自动获得可靠性”</h2>
+  <ul>
+    <li>框架不会自动保证外部 LLM 和搜索成功；</li>
+    <li>未配置 Checkpointer 就没有节点级断点恢复；</li>
+    <li>节点副作用若不幂等，重放可能重复调用或重复写入；</li>
+    <li>State 类型只约束程序结构，不证明研究内容正确；</li>
+    <li>可靠性仍需要事务、错误映射、限额、日志和测试。</li>
+  </ul>
 
   <h2>8. 关联关系总结</h2>
   <p>六个 StateGraph 节点用固定边按顺序连接；Fake 与真实搜索/本地检索实现遵守相同接口，因此测试无需访问互联网。数据关系从 Research Question 开始，经 ResearchTask 记录检索，再由 Source 保存实际读取的网页或本地片段，Evidence 把原文关联回问题和来源，Claim 最后把报告中的关键陈述关联到一条或多条 Evidence。</p>

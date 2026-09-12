@@ -8,22 +8,57 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0010 · 约 20 分钟</p>
+  <p class="eyebrow">Lesson 0010 · 约 55 分钟</p>
   <h1>本地能运行，为什么还不等于可以上线</h1>
   <p class="lead">在线 Demo 需要把构建、网络、数据、Secret、费用和恢复方式一起固定下来。Docker 只解决其中的运行环境一致性。</p>
   <div class="callout"><strong>先记结论：</strong>容器可以替换，数据卷和 Secret 不能写进镜像；当前架构必须保持单个 API 写入实例。</div>
 
+  <h2>0. 部署是什么意思</h2>
+  <p>Deployment（部署）是把一个经过构建的应用版本放到目标环境并让它持续提供服务。它不只是“把代码复制到服务器”，还包括运行时、依赖、配置、域名、HTTPS、数据、日志、更新与回滚。</p>
+  <table><thead><tr><th>环境</th><th>用途</th></tr></thead><tbody>
+    <tr><td>Development 开发</td><td>热更新、调试，允许本地配置</td></tr>
+    <tr><td>Test/CI 测试</td><td>可重复的自动化检查，通常使用 Fake</td></tr>
+    <tr><td>Production 生产</td><td>面向真实访问，重视安全、持久化和恢复</td></tr>
+  </tbody></table>
+
+  <h2>0.1 Docker 是什么</h2>
+  <p>Docker 是构建、分发和运行容器的工具生态。<strong>Image（镜像）</strong>是只读应用模板，<strong>Container（容器）</strong>是镜像的一次运行实例，<strong>Dockerfile</strong>描述怎样构建镜像。</p>
+  <pre><code>源代码 + 锁文件 + Dockerfile
+          ↓ docker build
+        Image 镜像
+          ↓ docker run
+      Container 容器</code></pre>
+  <p>容器共享宿主机内核，不是完整虚拟机；Linux 容器在 Windows 上通常由 Docker Desktop 提供 Linux 虚拟化环境。</p>
+
+  <h2>0.2 Docker Compose 是什么</h2>
+  <p>Compose 用一个 YAML 文件描述多个容器、端口、环境变量、网络和数据卷。ResearchFlow 的 <code>compose.yaml</code> 同时描述 Web 与 API。它是可选启动方式，不安装 Compose 也能直接运行本地 Python 和 Node 进程。</p>
+
   <h2>1. 两个容器分别负责什么</h2>
   <p>Web 镜像构建并运行 Next.js，API 镜像用锁文件安装 Python 依赖并运行 FastAPI。Compose 把它们组合起来，浏览器访问 Web 和 API，API 再访问外部 LLM、Exa 与 Embedding 服务。</p>
 
+  <h2>1.1 Build Time 和 Run Time</h2>
+  <p>Build Time（构建时）生成前端包和镜像；Run Time（运行时）启动容器并读取环境配置。前端的 <code>NEXT_PUBLIC_*</code> 可能在构建时进入浏览器包，后端 Secret 应只在运行时注入。</p>
+
+  <h2>1.2 端口映射与容器网络</h2>
+  <p>容器内部端口与宿主机公开端口可以不同。Compose 中服务可通过内部服务名互相访问，而用户浏览器使用宿主机地址或域名。<code>localhost</code> 在某个容器内指该容器自己，不自动指向宿主机或另一个容器。</p>
+
   <h2>2. 为什么 SQLite 和 uploads 必须放在同一持久卷</h2>
   <p>数据库保存文档元数据、片段和引用，上传目录保存原文件。只恢复其中一个会产生“记录存在但文件丢失”或“文件存在但数据库不知道”的不一致，因此两者作为一个数据集备份和恢复。</p>
+
+  <h2>2.1 容器文件系统为什么不能当永久数据</h2>
+  <p>容器通常设计为可删除和替换。若数据只写在容器可写层，重新创建容器时可能丢失。Volume（数据卷）把生命周期独立于容器。镜像保存程序，卷保存运行数据，Secret 保存敏感配置。</p>
 
   <h2>3. Secret 与公开前端变量的边界</h2>
   <p>LLM、Exa 和 Embedding Key 只进入 API 服务的 Secret。<code>NEXT_PUBLIC_*</code> 会被写入浏览器包，只能放公开 API 地址。镜像、Git、日志和截图都不应包含密钥。</p>
 
   <h2>4. HTTPS 和访问保护在哪里做</h2>
   <p>首个作品集版本由平台提供 HTTPS，由应用的共享访问码保护全部研究和知识库 API，避免提前建设账号系统。后端签发有时限的 HttpOnly Cookie，访问码不会进入前端包。</p>
+
+  <h2>4.1 Reverse Proxy 是什么</h2>
+  <p>Reverse Proxy（反向代理）位于公网与应用之间，常负责 TLS/HTTPS 终止、域名、压缩和转发。TLS 全称是 <strong>Transport Layer Security</strong>，中文是“传输层安全协议”；HTTPS 就是使用 TLS 保护的 HTTP，可加密传输并验证服务器身份。SSE 还要求代理不要长时间缓冲响应。Railway 等平台会代管部分基础设施，本地直接运行时则没有公网入口。</p>
+
+  <h2>4.2 Health Check 是什么</h2>
+  <p>健康检查由平台定期请求一个轻量端点，判断进程是否可接收请求。Liveness 关注进程是否活着，Readiness 关注是否准备好承载流量。一个健康端点成功不代表外部 LLM 一定可用，也不应每次都发昂贵模型请求。</p>
 
   <h2>5. 为什么不能直接增加多个 API 实例</h2>
   <p>当前后台任务在进程内，SQLite 也只有一个本地文件。多个实例可能看不到彼此的 Task，并对同一数据库产生写入竞争。只有需要正式多用户和横向扩展时，才迁移到 PostgreSQL、独立 Worker 和队列。</p>
@@ -40,8 +75,8 @@
   <table>
     <thead><tr><th>概念</th><th>解决的问题</th><th>ResearchFlow 当前状态</th></tr></thead>
     <tbody>
-      <tr><td>CI，持续集成</td><td>每次代码合并前自动检查能否测试、静态分析和构建</td><td>已实现；GitHub Actions 在 push 和 pull request 时检查后端、前端与浏览器 E2E</td></tr>
-      <tr><td>CD，持续交付或持续部署</td><td>把通过 CI 的版本打包，并以可审核或自动方式发布到运行环境</td><td>未自动化；当前只提供 Docker 与可选在线部署步骤</td></tr>
+      <tr><td>CI（Continuous Integration，持续集成）</td><td>每次代码合并前自动检查能否测试、静态分析和构建</td><td>已实现；GitHub Actions 在 push 和 pull request 时检查后端、前端与浏览器 E2E</td></tr>
+      <tr><td>CD（Continuous Delivery / Deployment，持续交付或持续部署）</td><td>把通过 CI 的版本打包，并以可审核或自动方式发布到运行环境</td><td>未自动化；当前只提供 Docker 与可选在线部署步骤</td></tr>
     </tbody>
   </table>
   <pre><code>提交代码 → CI 测试与构建 → 人工确认
@@ -50,6 +85,14 @@
 
   <h2>8. 上线验收看什么</h2>
   <p>验收必须从真实浏览器完成创建、SSE、来源、证据、报告和刷新恢复；同时检查重启后数据、访问保护、Secret、日志、每日限额和备份恢复。只有这些都实际验证后，HTTPS 链接才适合放进作品集。</p>
+
+  <h2>9. 本地展示和在线 Demo 怎样选择</h2>
+  <table><thead><tr><th>方式</th><th>优势</th><th>代价</th></tr></thead><tbody>
+    <tr><td>本地共享屏幕</td><td>免费、数据和密钥不离开设备、控制稳定</td><td>面试官不能随时打开链接</td></tr>
+    <tr><td>按需临时部署</td><td>面试前开启，减少长期资源消耗</td><td>要提前验证休眠、持久卷和额度</td></tr>
+    <tr><td>持续在线</td><td>链接随时可访问</td><td>持续费用、安全、滥用和运维责任</td></tr>
+  </tbody></table>
+  <p>作品集项目不必为了显得“生产化”而长期付费在线。能解释部署方案、展示 Docker 和上线清单，再用本地真实运行演示，也是一种合理选择。</p>
 
   <div class="callout success"><strong>面试表达：</strong>项目明确区分镜像、运行配置和持久数据；单实例是基于 SQLite 与进程内任务的主动约束，并通过健康检查、限额、版本门禁和备份恢复控制作品集 Demo 风险。</div>
   <p class="footer"><a href="0009-understand-run-reliability.html">上一课：后台任务与可靠性</a> · <a href="0018-understand-git-and-ci-cd.html">深入：Git 与 CI/CD</a> · <a href="0011-understand-frontend-rendering.html">下一课：前端状态与报告渲染</a> · <a href="../index.html">返回学习区</a> · <a href="../../guides/online-demo-deployment.md">部署指南</a></p>

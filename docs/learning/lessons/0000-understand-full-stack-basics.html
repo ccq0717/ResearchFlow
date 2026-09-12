@@ -3,66 +3,182 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>第 0 课：前后端基础地图 · ResearchFlow</title>
+  <title>第 0 课：从零建立前后端地图 · ResearchFlow</title>
   <link rel="stylesheet" href="../assets/course.css">
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0000 · 约 15 分钟</p>
-  <h1>先看懂浏览器、React、FastAPI 和 HTTP</h1>
-  <p class="lead">这一课只补齐阅读 ResearchFlow 所需的前后端基础：各层负责什么、数据怎样跨过网络，以及代码应该从哪里开始看。</p>
+  <p class="eyebrow">Lesson 0000 · 约 60 分钟</p>
+  <h1>从浏览器、网络到前后端：先建立完整地图</h1>
+  <p class="lead">如果你只学过单机程序，这一课会从“网页为什么需要服务器”开始，解释 URL、端口、HTTP、JSON、React、Next.js、Python 和 FastAPI 在 ResearchFlow 中分别是什么。</p>
+  <div class="answer"><strong>简短回答：</strong>ResearchFlow 是一个 Web 应用。浏览器运行 TypeScript/React 前端，通过 HTTP 请求 Python/FastAPI 后端；后端保存数据、调用外部 AI 服务并执行研究流程。前端和后端是两个独立进程，即使它们都运行在你的电脑上，也要通过网络协议通信。</div>
 
-  <div class="callout"><strong>先记结论：</strong>浏览器不能直接调用 Python 或读 SQLite。React 负责页面，FastAPI 负责业务入口，两者通过 HTTP 交换 JSON。</div>
+  <h2>1. 从单机程序到 Web 应用</h2>
+  <p>普通命令行程序往往在一个进程里读取输入、计算并打印结果。Web 应用把“与用户交互”和“执行业务”拆开：</p>
+  <pre><code>用户
+  ↓ 点击、输入
+浏览器中的前端
+  ↓ HTTP
+服务器上的后端
+  ↓
+数据库与外部服务</code></pre>
+  <p>这样做的好处是用户只需要浏览器，不需要直接操作 Python、数据库和密钥；后端也可以同时服务多个浏览器。即使本地开发时前后端都在一台电脑上，这个职责划分仍然存在。</p>
 
-  <h2>1. 四层各做一件事</h2>
-  <table>
-    <thead><tr><th>层</th><th>当前技术</th><th>职责</th></tr></thead>
-    <tbody>
-      <tr><td>浏览器</td><td>Chrome / Edge</td><td>运行前端代码、显示界面、发起网络请求</td></tr>
-      <tr><td>前端</td><td>Next.js + React</td><td>收集输入、维护页面状态、调用 API、渲染结果</td></tr>
-      <tr><td>后端</td><td>FastAPI + Python</td><td>校验请求、组织研究流程、保护密钥与数据</td></tr>
-      <tr><td>持久化</td><td>SQLAlchemy + SQLite</td><td>让任务、来源和报告在重启后仍然存在</td></tr>
-    </tbody>
-  </table>
+  <h2>2. Client 和 Server 是什么</h2>
+  <p><strong>Client（客户端）</strong>主动发起请求，<strong>Server（服务器）</strong>监听地址并响应请求。这描述的是一次通信中的角色，不一定代表两台物理机器。</p>
+  <ul>
+    <li>浏览器请求 ResearchFlow API 时，浏览器是客户端，FastAPI 是服务器；</li>
+    <li>FastAPI 请求 Exa 或 LLM 时，FastAPI 又成为客户端，外部平台是服务器；</li>
+    <li>“后端”是应用职责，“服务器”是通信角色，两者经常重合但不是同义词。</li>
+  </ul>
 
-  <h2>2. HTTP 请求和响应是什么</h2>
-  <p>一次 HTTP 请求至少包含方法、地址、Header 和可选正文。后端返回状态码、Header 和正文。ResearchFlow 的创建请求可以简化成：</p>
-  <pre><code>POST /api/research-runs
+  <h2>3. 进程、主机和端口</h2>
+  <p><strong>进程</strong>是正在运行的程序实例。ResearchFlow 本地开发通常至少有两个进程：Next.js 前端和 FastAPI 后端。操作系统用端口把到达同一台主机的网络流量交给正确进程。</p>
+  <table><thead><tr><th>地址部分</th><th>例子</th><th>含义</th></tr></thead><tbody>
+    <tr><td>协议 Scheme</td><td><code>http</code></td><td>通信规则；线上通常是加密的 HTTPS</td></tr>
+    <tr><td>主机 Host</td><td><code>127.0.0.1</code></td><td>本机回环地址，只指向当前设备</td></tr>
+    <tr><td>端口 Port</td><td><code>3000</code></td><td>接收请求的具体进程入口</td></tr>
+    <tr><td>路径 Path</td><td><code>/research/abc</code></td><td>该服务器中的页面或资源</td></tr>
+  </tbody></table>
+  <p><code>http://127.0.0.1:3000</code> 和 <code>http://127.0.0.1:8000</code> 是同一台电脑上的两个不同 Origin。前者通常是前端，后者是后端 API。端口不是目录，也不是某种编程语言。</p>
+
+  <h2>4. localhost、127.0.0.1 和线上域名</h2>
+  <p><code>localhost</code> 是通常解析到本机回环地址的主机名，<code>127.0.0.1</code> 是 IPv4 回环地址。别人电脑上的 localhost 指向他自己的电脑，因此不能把本地链接直接发给面试官远程访问。</p>
+  <p>线上部署后，域名通过 DNS 解析到公网服务，HTTPS 负责加密传输并验证服务身份。应用代码可以跨 Windows 和 Linux 运行；地址、进程启动方式和存储挂载由部署环境决定。</p>
+
+  <h2>5. URL、路由和页面不是一回事</h2>
+  <p><strong>URL（Uniform Resource Locator，统一资源定位符）</strong>描述资源的位置。路由规则决定某个路径由哪段代码处理：</p>
+  <ul>
+    <li><code>/</code> 由 Next.js 首页组件渲染；</li>
+    <li><code>/research/{runId}</code> 由动态研究页面渲染；</li>
+    <li><code>/api/research-runs</code> 由 FastAPI 返回 JSON，不是给人直接阅读的网页。</li>
+  </ul>
+  <p>页面路由和 API 路由都使用 URL，但返回内容和服务对象不同。</p>
+
+  <h2>6. HTTP 是什么</h2>
+  <p>HTTP 的全称是 <strong>Hypertext Transfer Protocol</strong>，中文是“超文本传输协议”。它规定客户端怎样描述请求、服务器怎样返回响应。HTTP 不只传 HTML，也能传 JSON、图片、PDF 和 SSE 事件流。</p>
+  <pre><code>请求 Request
+POST /api/research-runs HTTP/1.1
 Content-Type: application/json
 
-{"goal": "调研 AI 代码生成评测方法", "document_ids": []}</code></pre>
-  <p><code>POST</code> 表示创建，路径表示资源入口，JSON 是跨语言的数据格式。成功时后端返回 <code>201 Created</code> 和任务对象；输入无效、未授权或服务繁忙时返回对应的 4xx 状态。</p>
+{"goal":"调研 AI 代码生成评测方法","document_ids":[]}
 
-  <h2>3. REST 在项目里意味着什么</h2>
-  <p>REST 不是某个库，而是一种围绕资源设计 HTTP 接口的方式。ResearchFlow 用 <code>/api/research-runs</code> 表示研究运行集合，用 <code>/api/research-runs/{run_id}</code> 表示其中一项，再用 HTTP 方法表达创建、读取、修改和删除。耗时进度不是一次响应，因此另用 SSE 持续推送。</p>
+响应 Response
+HTTP/1.1 201 Created
+Content-Type: application/json
 
-  <h2>4. React 组件、状态与副作用</h2>
-  <p>React 组件是返回界面的函数。<code>props</code> 是父组件传入的数据，<code>state</code> 是组件需要记住并触发重新渲染的数据，<code>useEffect</code> 用于连接 API、SSE 等页面外部系统。</p>
-  <pre><code>const [runs, setRuns] = useState&lt;ResearchRun[]&gt;([]);
+{"id":"...","status":"queued", ...}</code></pre>
 
-useEffect(() =&gt; {
-  void listResearchRuns().then(setRuns);
-}, []);</code></pre>
-  <p>这段代码表示：页面先以空列表渲染，组件挂载后读取历史任务，响应回来后更新状态并重新渲染。当前 Dashboard 位于 <a href="../../../apps/web/src/app/page.tsx"><code>apps/web/src/app/page.tsx</code></a>，所有后端调用集中在 <a href="../../../apps/web/src/lib/api.ts"><code>src/lib/api.ts</code></a>，避免组件重复拼接 URL 和请求选项。</p>
+  <h2>7. HTTP 请求由什么组成</h2>
+  <ul>
+    <li><strong>Method：</strong>想做什么，例如 GET 读取、POST 创建、PATCH 修改、DELETE 删除；</li>
+    <li><strong>Path：</strong>操作哪个资源；</li>
+    <li><strong>Header：</strong>内容类型、认证、缓存等元信息；</li>
+    <li><strong>Body：</strong>可选正文，例如创建研究时的 JSON；</li>
+    <li><strong>Query Parameter：</strong>路径后的筛选或位置参数，例如 <code>?after=12</code>。</li>
+  </ul>
+  <p>HTTP 方法表达意图，但服务器代码仍决定真实行为。仅仅把一个删除操作写成 GET 不会让它安全，合理接口还要遵守语义和权限边界。</p>
 
-  <h2>5. Next.js 在这里做什么</h2>
-  <p>Next.js 提供项目结构、开发服务器、构建和按文件生成路由。<code>app/page.tsx</code> 对应首页，<code>app/research/[runId]/page.tsx</code> 中的方括号表示动态任务 ID。当前交互页面使用 Client Component，因此可以响应点击、保存 state 和建立 SSE 连接。</p>
+  <h2>8. 状态码怎么读</h2>
+  <table><thead><tr><th>范围</th><th>含义</th><th>项目示例</th></tr></thead><tbody>
+    <tr><td>2xx</td><td>请求成功处理</td><td>200 读取成功，201 创建成功，204 删除成功且无正文</td></tr>
+    <tr><td>4xx</td><td>请求或客户端状态有问题</td><td>401 未解锁 Demo，404 运行不存在，422 输入校验失败</td></tr>
+    <tr><td>5xx</td><td>服务器未能完成请求</td><td>未预期异常或上游服务故障映射</td></tr>
+  </tbody></table>
+  <p>状态码是机器可读的粗分类；ResearchFlow 的错误正文还包含稳定错误码和用户可读消息，以便前端给出更具体反馈。</p>
 
-  <h2>6. FastAPI、Pydantic 与异步函数</h2>
-  <p>FastAPI 把 Python 函数暴露为 HTTP 路由；Pydantic 根据类型检查 JSON，并把合法输入转换成 Python 对象。<code>async def</code> 允许服务器在等待数据库或外部 API 时处理其他工作，而不是占住线程空等。</p>
+  <h2>9. JSON 是什么</h2>
+  <p>JSON 全称是 <strong>JavaScript Object Notation</strong>，中文常称“JavaScript 对象表示法”。它是一种语言无关的文本数据格式。浏览器把 TypeScript 对象序列化成 JSON 文本，Python 后端再解析成自己的对象。</p>
+  <pre><code>{
+  "goal": "调研 RAG 评测方法",
+  "document_ids": [],
+  "archived": false
+}</code></pre>
+  <p>JSON 支持对象、数组、字符串、数字、布尔值和 null，不支持 Python 的 tuple、datetime 或自定义类。跨网络前必须转换成双方约定的字段。</p>
+
+  <h2>10. API 和 REST 是什么</h2>
+  <p>API 是 <strong>Application Programming Interface</strong>，中文是“应用程序编程接口”。它是软件之间约定好的调用边界。Web API 通常用 HTTP 暴露能力。</p>
+  <p>REST 是一种围绕资源组织 HTTP 接口的架构风格。ResearchFlow 用 <code>/research-runs</code> 表示研究运行集合，用 <code>/research-runs/{id}</code> 表示某一项，再用不同 HTTP 方法表达动作。REST 不是框架，也不是“所有返回 JSON 的接口”。</p>
+
+  <h2>11. 前端、后端和全栈分别是什么</h2>
+  <table><thead><tr><th>部分</th><th>关注点</th><th>当前技术</th></tr></thead><tbody>
+    <tr><td>Frontend 前端</td><td>用户看到什么、怎样交互、页面状态如何变化</td><td>TypeScript、React、Next.js</td></tr>
+    <tr><td>Backend 后端</td><td>业务规则、数据、权限、长任务和外部服务</td><td>Python、FastAPI、LangGraph、SQLite</td></tr>
+    <tr><td>Full Stack 全栈</td><td>理解并连接以上两端及其部署</td><td>不是一门单独语言</td></tr>
+  </tbody></table>
+  <p>“全栈”不表示一个人精通所有底层细节，而是能理解一项功能怎样跨越页面、协议、后端和数据层。</p>
+
+  <h2>12. JavaScript 和 TypeScript 的关系</h2>
+  <p>JavaScript 是浏览器原生执行的编程语言。TypeScript 在 JavaScript 上增加静态类型检查，开发时更容易发现字段和函数调用错误。浏览器最终执行构建工具生成的 JavaScript，而不是直接理解所有 TypeScript 类型。</p>
+  <pre><code>type ResearchRun = {
+  id: string;
+  status: "queued" | "running" | "completed" | "failed";
+};</code></pre>
+  <p>类型能帮助开发者，却不能验证不可信网络响应。真正运行时的数据仍要由 API 契约和必要校验保证。</p>
+
+  <h2>13. React 是什么</h2>
+  <p>React 是构建用户界面的 JavaScript 库。它把页面拆成组件，并根据数据状态声明页面应该长什么样。当 state 改变时，React 重新计算需要更新的界面。</p>
+  <table><thead><tr><th>概念</th><th>初学者理解</th><th>项目示例</th></tr></thead><tbody>
+    <tr><td>Component</td><td>可复用的界面函数</td><td>研究报告、材料面板、错误面板</td></tr>
+    <tr><td>Props</td><td>父组件传给子组件的输入</td><td>把 reportMarkdown 交给报告组件</td></tr>
+    <tr><td>State</td><td>组件记住且会影响显示的数据</td><td>运行、事件、连接状态、弹窗</td></tr>
+    <tr><td>Effect</td><td>组件与网络等外部系统同步</td><td>读取 REST、建立并关闭 SSE</td></tr>
+  </tbody></table>
+  <p>React 不直接操作数据库，也不负责调用 LLM。它通过后端 API 获得可以展示的数据。</p>
+
+  <h2>14. Next.js 和 React 的关系</h2>
+  <p>React 主要解决组件和界面更新；Next.js 是建立在 React 上的 Web 框架，提供目录路由、开发服务器、生产构建和服务端/客户端组件边界。</p>
+  <ul>
+    <li><code>app/page.tsx</code> 对应首页；</li>
+    <li><code>app/research/[runId]/page.tsx</code> 中方括号表示动态路径参数；</li>
+    <li><code>"use client"</code> 表示组件需要浏览器事件、state 或 Effect；</li>
+    <li>构建阶段会检查类型、打包资源并优化生产输出。</li>
+  </ul>
+  <p>只写 TypeScript 不能自动获得页面路由和 React 渲染；Next.js 因此值得在技术栈中单独列出。</p>
+
+  <h2>15. Python、FastAPI 和 Pydantic 的关系</h2>
+  <p>Python 是后端编程语言；FastAPI 是用 Python 构建 Web API 的框架；Pydantic 根据类型声明解析和验证运行时数据。</p>
   <pre><code>@router.post("/research-runs", status_code=201)
-async def create_research_run(body: CreateResearchRunRequest, request: Request):
-    run = await _application(request).create_run(body.goal, body.document_ids)
-    return ResearchRunResponse.from_domain(run)</code></pre>
-  <p>实际路由位于 <a href="../../../apps/api/src/researchflow/api/routes.py"><code>api/routes.py</code></a>，请求与响应模型位于 <a href="../../../apps/api/src/researchflow/api/schemas.py"><code>api/schemas.py</code></a>。路由只处理 HTTP 转换，业务编排交给 Application，数据库操作交给 Repository。</p>
+async def create_research_run(
+    body: CreateResearchRunRequest,
+    request: Request,
+):
+    return await application.create_run(body.goal, body.document_ids)</code></pre>
+  <p>FastAPI 根据装饰器注册路径，读取 HTTP 请求，把 JSON 交给 Pydantic Schema 验证，再调用 Python 函数。函数把业务交给 Application，而不是在路由里直接写 SQL 或拼 Prompt。</p>
 
-  <h2>7. 一次操作的完整方向</h2>
-  <div class="card">
-    <p><strong>用户点击 → React 事件处理 → API 客户端发送 JSON → FastAPI 校验 → Application 执行业务 → Repository 写入 SQLite → JSON 响应 → React 更新 state</strong></p>
-    <p>先记住这条主线，再学习 SSE、LangGraph 或 RAG，就不会把“页面状态”“运行状态”和“数据库记录”混成一件事。</p>
-  </div>
+  <h2>16. 为什么浏览器不能直接调用数据库和 AI 服务</h2>
+  <ul>
+    <li>浏览器代码会下载到用户设备，放在里面的 API Key 会泄露；</li>
+    <li>让用户直接写数据库很难统一执行权限和业务约束；</li>
+    <li>不同模型和搜索服务的请求格式会污染前端；</li>
+    <li>后台任务在页面关闭后仍需继续，不能绑定浏览器生命周期；</li>
+    <li>后端是集中实施配额、日志、错误映射和持久化的边界。</li>
+  </ul>
 
-  <p class="footer">下一课：<a href="0001-understand-sse.html">SSE 如何推送研究进度</a> · <a href="../index.html">返回学习区</a> · 速查：<a href="../reference/current-full-stack-map.html">当前全栈实现地图</a></p>
+  <h2>17. ResearchFlow 的四层地图</h2>
+  <table><thead><tr><th>层</th><th>入口</th><th>职责</th></tr></thead><tbody>
+    <tr><td>浏览器/前端</td><td><a href="../../../apps/web/src/app/page.tsx"><code>apps/web/src/app/page.tsx</code></a></td><td>输入、导航、状态、报告展示</td></tr>
+    <tr><td>HTTP API</td><td><a href="../../../apps/api/src/researchflow/api/routes.py"><code>api/routes.py</code></a></td><td>请求校验、响应、SSE</td></tr>
+    <tr><td>应用与工作流</td><td><a href="../../../apps/api/src/researchflow/application/research_runs.py"><code>research_runs.py</code></a></td><td>生命周期、编排、外部服务协调</td></tr>
+    <tr><td>持久化</td><td><a href="../../../apps/api/src/researchflow/persistence/repository.py"><code>repository.py</code></a></td><td>把运行、材料、事件和报告写入 SQLite</td></tr>
+  </tbody></table>
+
+  <h2>18. 一次创建请求的完整方向</h2>
+  <div class="flow"><span>点击按钮</span><b>→</b><span>TypeScript 调 API</span><b>→</b><span>FastAPI 校验</span><b>→</b><span>Application 创建</span><b>→</b><span>SQLite 保存</span></div>
+  <p>后端返回运行 ID 后，浏览器跳转到研究页；研究页用 REST 读取当前快照，再用 SSE 接收后续进度。整个项目后面的知识都可以放回这条主线中理解。</p>
+
+  <h2>19. 初学者最常混淆的说法</h2>
+  <ul>
+    <li><strong>“打开前端就等于后端启动了”：</strong>不是，两个开发服务器是独立进程。</li>
+    <li><strong>“localhost 是一个公共网站”：</strong>不是，它只指当前设备。</li>
+    <li><strong>“React 是编程语言”：</strong>React 是 JavaScript/TypeScript 生态中的界面库。</li>
+    <li><strong>“Next.js 可以被 TypeScript 完全涵盖”：</strong>语言描述语法，框架还提供路由、构建和运行模型。</li>
+    <li><strong>“FastAPI 就是 Python”：</strong>Python 是语言，FastAPI 是其中的 Web 框架。</li>
+    <li><strong>“API 成功就是业务成功”：</strong>创建返回 201 只表示运行已入队，最终研究仍可能失败。</li>
+  </ul>
+
+  <div class="callout success"><strong>面试表达：</strong>ResearchFlow 是前后端分离的 Web 应用。Next.js/React 前端在浏览器运行，通过 HTTP/JSON 调用 FastAPI；后端掌握业务、密钥、持久化和长任务。创建接口快速返回运行 ID，研究页再通过 REST 快照与 SSE 增量展示执行过程。</div>
+  <p class="footer"><a href="0001-understand-sse.html">下一课：从零理解 SSE</a> · <a href="../index.html">返回学习区</a> · <a href="../reference/current-full-stack-map.html">当前全栈实现地图</a> · <a href="../resources.html">资料依据</a></p>
 </main>
 </body>
 </html>

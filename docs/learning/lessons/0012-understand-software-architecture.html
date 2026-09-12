@@ -8,10 +8,29 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0012 · 约 30 分钟</p>
+  <p class="eyebrow">Lesson 0012 · 约 50 分钟</p>
   <h1>代码为什么要分层，接口为什么重要</h1>
   <p class="lead">这一课不背架构名词，而是回答一个实际问题：一条研究请求经过很多部件时，怎样避免所有代码互相依赖。</p>
   <div class="answer"><strong>简短回答：</strong>架构是在约束“职责放在哪里、依赖指向哪里、哪些细节可以替换”。ResearchFlow 采用单体分层结构：一个后端进程内完成业务，但用领域对象和接口隔开 API、工作流、外部服务与数据库。</div>
+
+  <h2>0. 软件架构到底是什么</h2>
+  <p>软件架构是系统中重要组成部分、它们的职责和关系，以及长期约束这些关系的原则。它关注的是高成本、跨模块的决定，例如数据由谁保存、外部供应商怎样隔离、长任务由谁管理。</p>
+  <p>架构图不是架构本身，使用热门框架也不代表架构良好。真正需要观察的是：修改一个需求时要改多少地方，失败能否被隔离，模块是否能独立理解和测试。</p>
+
+  <h2>0.1 高内聚与低耦合</h2>
+  <ul>
+    <li><strong>Cohesion（内聚）</strong>：一个模块里的代码是否围绕同一职责；</li>
+    <li><strong>Coupling（耦合）</strong>：一个模块对其他模块细节知道多少。</li>
+  </ul>
+  <p>KnowledgeLibrary 把上传校验、文件保存、解析、分块和向量生成组织成一项完整知识库能力，属于较高内聚；如果每个页面都知道 Exa 的请求 JSON，就是不必要的高耦合。</p>
+
+  <h2>0.2 单体、模块化单体和微服务</h2>
+  <table><thead><tr><th>形式</th><th>特点</th><th>当前项目</th></tr></thead><tbody>
+    <tr><td>混乱单体</td><td>一个进程且内部职责纠缠</td><td>不是目标</td></tr>
+    <tr><td>模块化单体</td><td>一个部署单元，内部边界清晰</td><td>后端采用</td></tr>
+    <tr><td>微服务</td><td>多个独立部署服务，通过网络协作</td><td>没有采用</td></tr>
+  </tbody></table>
+  <p>微服务会引入服务发现、网络失败、分布式事务和独立部署。作品集 Demo 没有团队和扩展规模需要，模块化单体更合理。</p>
 
   <h2>1. 先区分模块、层和服务</h2>
   <ul>
@@ -45,7 +64,22 @@
                          └─ SimulatedResearchWorkflow（测试/演示）</code></pre>
   <p>这叫依赖倒置：高层业务不直接绑死底层实现。它并不意味着每个类都要加接口；只有确实存在变化、外部 I/O 或测试替身的边界才值得抽象。</p>
 
+  <h2>4.1 Python Protocol 怎样表达接口</h2>
+  <p>Python 的 <code>Protocol</code> 可以声明“对象只要具有这些方法就满足接口”，不要求实现类继承共同基类。这称为结构化类型：</p>
+  <pre><code>class SearchProvider(Protocol):
+    async def search(self, query: str, *, limit: int) -&gt; tuple[SearchResult, ...]: ...</code></pre>
+  <p>ExaSearchProvider 和 FakeSearchProvider 只需提供兼容方法。类型检查帮助发现签名错误，运行时装配由 <code>app_factory.py</code> 完成。</p>
+
+  <h2>4.2 Adapter、Repository 和 Facade</h2>
+  <table><thead><tr><th>模式</th><th>目的</th><th>项目例子</th></tr></thead><tbody>
+    <tr><td>Adapter 适配器</td><td>把外部接口翻译成内部接口</td><td>Exa、Gemini、OpenAI-compatible 客户端</td></tr>
+    <tr><td>Repository 仓储</td><td>用领域语言封装数据访问</td><td>SqliteResearchRepository</td></tr>
+    <tr><td>Facade 外观</td><td>用一个较简单入口隐藏一组复杂协作</td><td>KnowledgeLibrary</td></tr>
+  </tbody></table>
+  <p>设计模式是描述解决方案的词汇，不必为了“用了模式”而增加无价值类。</p>
+
   <h2>5. DTO、领域对象和数据库行不是一回事</h2>
+  <p>DTO 全称是 <strong>Data Transfer Object</strong>，中文常译为“数据传输对象”。它只负责在模块或系统边界传递一组明确字段，不应顺便执行数据库查询或业务流程。</p>
   <ul>
     <li>API Schema 决定外部 JSON 长什么样；</li>
     <li>Domain Model 表达业务状态及约束；</li>
@@ -58,6 +92,29 @@
 
   <h2>7. 从装配入口读懂全局</h2>
   <p><a href="../../../apps/api/src/researchflow/app_factory.py"><code>app_factory.py</code></a> 是组合根：它读取配置，创建数据库、适配器、工作流和应用服务，再把它们交给 FastAPI。理解一个分层项目时，先看组合根，再沿接口向内追，比从任意工具函数开始更容易建立全局图。</p>
+
+  <h2>8. Composition Root 为什么集中装配</h2>
+  <p>Composition Root 中文常称“组合根”，是选择具体实现并组装对象的少数位置。simulation 与 research 模式、Gemini 与 OpenAI-compatible Embedding 都在这里根据配置选择。</p>
+  <p>如果业务代码到处自己创建 HTTP 客户端和 Repository，测试很难换成 Fake，资源生命周期也难统一关闭。集中装配让依赖关系可见。</p>
+
+  <h2>9. 怎样判断是否值得抽象</h2>
+  <ol>
+    <li>这个细节是否来自外部系统或可能替换？</li>
+    <li>调用方真正需要的最小能力是什么？</li>
+    <li>抽象是否隐藏了复杂度，而不是只转发同名方法？</li>
+    <li>能否让测试使用更简单的替代实现？</li>
+    <li>新增接口后，理解一次业务流程是否反而更困难？</li>
+  </ol>
+  <p>ResearchFlow 为外部 I/O 和工作流设 seam，但没有给每个纯函数都建立类层级。</p>
+
+  <h2>10. 当前架构的主动限制</h2>
+  <ul>
+    <li>单进程后台 Task，不支持多实例分布式调度；</li>
+    <li>SQLite 与本地文件，适合单实例持久化；</li>
+    <li>LangGraph 无 Checkpointer，不做节点级恢复；</li>
+    <li>Demo 访问码不是多用户权限系统；</li>
+    <li>接口降低替换影响，但无法消除供应商能力差异。</li>
+  </ul>
   <div class="callout success"><strong>面试表达：</strong>项目采用模块化单体而不是微服务；通过 Application、Domain、Workflow、Integration 和 Persistence 分离职责，并在 LLM、搜索、Embedding 与工作流边界使用接口和适配器，使真实实现与 Fake 可以替换。</div>
 
   <p class="footer"><a href="0003-understand-sqlite-persistence.html">相关课程：SQLite 持久化</a> · <a href="../index.html">返回学习区</a> · <a href="../../architecture/llm-integration.md">查看正式架构文档</a></p>

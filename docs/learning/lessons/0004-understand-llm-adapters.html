@@ -8,13 +8,25 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0004 · 约 18 分钟</p>
+  <p class="eyebrow">Lesson 0004 · 约 50 分钟</p>
   <h1>真实 LLM 是怎样接入后端的</h1>
   <p class="lead">学完这一课，你应该能解释模型 API、接口、适配器、Fake、结构化输出和环境变量分别解决什么问题。</p>
 
   <div class="callout">
     <strong>先记结论：</strong>LLM 不是直接“装进网页”。浏览器把研究目标交给后端，后端通过 HTTP 调用模型服务，再把经过校验的研究计划保存到数据库。
   </div>
+
+  <h2>0. LLM 的全称、中文和基本用途</h2>
+  <p>LLM 全称是 <strong>Large Language Model</strong>，中文是“大语言模型”。它通过大量文本训练，学习根据已有 Token 预测后续 Token 的概率分布。聊天、摘要、分类、信息抽取和代码生成，都是在这一基础能力上设计输入和输出。</p>
+  <p>模型不是数据库，也不是搜索引擎：训练参数中的知识可能过时，输出可能不稳定或编造。ResearchFlow 因此显式调用网页搜索和本地检索，把可核验材料放进上下文。</p>
+
+  <h2>0.1 训练和推理不要混淆</h2>
+  <table><thead><tr><th>阶段</th><th>发生什么</th><th>ResearchFlow 是否做</th></tr></thead><tbody>
+    <tr><td>Training 训练</td><td>调整大量模型参数，需要庞大数据和算力</td><td>否</td></tr>
+    <tr><td>Fine-tuning 微调</td><td>用特定数据继续调整部分或全部参数</td><td>否</td></tr>
+    <tr><td>Inference 推理</td><td>给定 Prompt，使用已训练模型生成输出</td><td>是</td></tr>
+    <tr><td>RAG</td><td>推理前检索外部材料并加入上下文，不改变模型参数</td><td>是</td></tr>
+  </tbody></table>
 
   <h2>1. 当前有两种工作流模式</h2>
   <table>
@@ -32,6 +44,25 @@
                     ├─ FakeLLMClient
                     └─ OpenAICompatibleLLMClient</code></pre>
   <p>适配器是接口的具体实现。Fake 返回固定但合理的数据；远程适配器发送真实 HTTP 请求。两者返回相同的 <code>LLMPlanResult</code>，因此工作流不需要写两套业务逻辑。</p>
+
+  <h2>2.1 OpenAI-compatible 是什么意思</h2>
+  <p>OpenAI-compatible 表示某个服务模仿一组常见 OpenAI API 路径和 JSON 形状，例如 <code>/chat/completions</code>、messages 和 usage。它不是供应商名称，也不保证所有扩展能力完全相同。</p>
+  <p>ResearchFlow 依赖 Chat Completions、JSON Schema 结构化输出和 usage 字段。更换兼容 Provider 时仍要验证模型是否支持这些具体能力、错误格式是否相近，以及 Token 统计含义是否一致。</p>
+
+  <h2>2.2 一次模型 HTTP 请求有什么</h2>
+  <pre><code>POST {base_url}/chat/completions
+Authorization: Bearer {api_key}
+Content-Type: application/json
+
+{
+  "model": "模型名",
+  "messages": [
+    {"role": "system", "content": "任务规则"},
+    {"role": "user", "content": "本次目标和资料"}
+  ],
+  "response_format": {"type": "json_schema", ...}
+}</code></pre>
+  <p>HTTP 200 只是供应商接受并处理了请求。适配器还要解析 <code>choices[0].message.content</code>、校验 JSON，并读取 usage。任一层不符合约定都应转为稳定应用错误。</p>
 
   <h2>3. 为什么测试使用 Fake</h2>
   <ul>
@@ -86,13 +117,28 @@
   <p>耗时帮助判断用户等待发生在哪里；Token 是很多模型服务计费和上下文容量的基础单位。<code>research</code> 模式调用模型生成研究计划、提取 Evidence/Claim、撰写报告；网页搜索、正文读取、流程编排和引用结构审计不是模型生成。</p>
   <p>运行页按输入、输出 Token 和配置的每百万 Token 单价估算 LLM 费用，不包含 Exa、Embedding 或部署平台费用，也不处理缓存 Token 等供应商特殊折扣。</p>
 
-  <h2>8. 失败时会发生什么</h2>
+  <h2>8. Token 是字还是字符吗</h2>
+  <p>Token 是模型分词器处理文本的基本单位，可能是一个汉字、词的一部分、标点或空格组合，并不固定等于一个字符或一个英文单词。不同模型的分词方式也可能不同。</p>
+  <p><strong>Context Window（上下文窗口）</strong>限制单次请求可以处理的输入与输出总量。网页正文越多，输入 Token、延迟和费用通常越高，所以检索 Top-K、内容截断和结构化阶段拆分都是成本控制手段。</p>
+
+  <h2>9. 为什么相同 Prompt 可能得到不同答案</h2>
+  <p>生成过程依据概率选择 Token，服务实现和模型版本也可能变化。即使请求没有显式设置 temperature，也不能把远程模型当作绝对确定函数。结构化输出减少格式波动，证据审计限制可接受结果，但不会把语义生成变成传统确定性计算。</p>
+  <p>因此自动测试使用 Fake 固定输出；真实模型用代表性任务做验收，并记录模型名、Token、耗时和运行时间。</p>
+
+  <h2>10. 失败时会发生什么</h2>
   <p>超时、连接失败、HTTP 错误和格式错误会转换成稳定错误代码。前端得到的是安全、可理解的消息，而不是可能包含内部地址、响应正文或密钥的异常堆栈。Research Run 会进入 <code>failed</code> 终态。</p>
 
-  <h2>9. 真实研究模式的能力边界</h2>
+  <h2>11. 三次 LLM 调用分别承担什么</h2>
+  <table><thead><tr><th>阶段</th><th>需要语义能力的原因</th><th>不交给模型的部分</th></tr></thead><tbody>
+    <tr><td>规划</td><td>把开放目标拆成问题、检索词和交付物</td><td>运行 ID、状态和持久化</td></tr>
+    <tr><td>证据提取</td><td>理解原文与问题之间的语义支持</td><td>来源 ID 白名单和原文是否真的出现</td></tr>
+    <tr><td>报告写作</td><td>综合证据形成结构化自然语言报告</td><td>Claim—Evidence 关系与引用覆盖检查</td></tr>
+  </tbody></table>
+
+  <h2>12. 真实研究模式的能力边界</h2>
   <p><code>research</code> 模式把模型计划送入网页与本地资料检索，再让模型基于实际 Source 提取证据和写作。引用检查能验证关系完整，但不能自动保证来源质量、语义充分性或事实绝对正确。</p>
 
-  <h2>10. 三个适配器边界</h2>
+  <h2>13. 三个适配器边界</h2>
   <div class="card"><ul>
     <li>稳定接口隔离了模型厂商细节，更换兼容服务时不需要修改业务流程。</li>
     <li>Fake LLM 能确定性验证应用、工作流、持久化和 API 契约，但不能证明真实供应商在线或完全兼容。</li>

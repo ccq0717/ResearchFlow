@@ -8,10 +8,26 @@
 </head>
 <body>
 <main>
-  <p class="eyebrow">Lesson 0009 · 约 20 分钟</p>
+  <p class="eyebrow">Lesson 0009 · 约 45 分钟</p>
   <h1>后台任务失败后，系统怎样保持状态可信</h1>
   <p class="lead">ResearchFlow 的研究可能运行数分钟。可靠性不是保证永不失败，而是让取消、失败、重启和重试都有明确且可恢复的结果。</p>
   <div class="callout"><strong>先记结论：</strong>SQLite 中的 Research Run 是权威状态；内存任务只负责当前执行，事件负责解释状态怎样变化。</div>
+
+  <h2>0. 可靠性不等于永不失败</h2>
+  <p>Reliability（可靠性）关注系统在规定条件和时间内正确提供功能的能力。外部 API、网络、进程和硬盘都可能失败，可靠设计的目标是减少失败、限制影响、保留可信状态并提供恢复路径。</p>
+  <table><thead><tr><th>性质</th><th>关注点</th><th>项目例子</th></tr></thead><tbody>
+    <tr><td>Availability 可用性</td><td>现在能否提供服务</td><td>健康检查、外部服务错误</td></tr>
+    <tr><td>Durability 持久性</td><td>已提交数据是否保留</td><td>SQLite、备份</td></tr>
+    <tr><td>Consistency 一致性</td><td>相关状态是否互相符合</td><td>终态与终结事件同事务</td></tr>
+    <tr><td>Recoverability 可恢复性</td><td>故障后怎样回到已知状态</td><td>中断标记、重试、恢复备份</td></tr>
+  </tbody></table>
+
+  <h2>0.1 状态机是什么</h2>
+  <p>状态机用有限状态和允许的转移描述对象生命周期。Research Run 从 queued 进入 running，最后只能进入 completed、failed 或 cancelled 等终态。终态不应再次回到 running。</p>
+  <pre><code>queued → running → completed
+              ├→ failed
+              └→ cancelled</code></pre>
+  <p>显式状态机能拒绝“取消已完成任务”或“重复结束”等非法操作。</p>
 
   <h2>1. 创建接口为什么立即返回</h2>
   <p>FastAPI 先保存 <code>queued</code> 运行和 <code>run.queued</code> 事件，再创建后台 asyncio Task。浏览器马上得到 ID，随后用普通查询和 SSE 观察进度，不需要让一个 POST 请求等待整份报告。</p>
@@ -34,8 +50,28 @@
     <tr><td>断点续跑</td><td>当前没有实现，也不会假装已经实现</td></tr>
   </tbody></table>
 
+  <h2>5.1 Retry 和 Resume 不一样</h2>
+  <p><strong>Retry（重试）</strong>重新执行一次操作；<strong>Resume（续跑）</strong>从已保存的中间点继续。当前项目是带谱系的新运行重试，不是 LangGraph 节点续跑。重试外部调用还要考虑幂等性和重复费用。</p>
+
+  <h2>5.2 Idempotency 是什么</h2>
+  <p>Idempotency（幂等性）表示同一操作重复执行，对最终状态的影响与执行一次相同。GET 通常应幂等；创建研究的 POST 不是天然幂等，重复提交会创建不同运行。Repository 使用确定的主键和事务避免同一事件重复插入，但完整研究重试有意创建新 ID。</p>
+
   <h2>6. 限额和日志解决什么</h2>
   <p>并发上限保护单实例 SQLite 和外部服务；每日运行上限限制公开 Demo 的费用。JSON 日志只记录请求 ID、路径、状态和耗时，不记录目标正文、文档、密钥或供应商原始响应。</p>
+
+  <h2>6.1 Timeout、Retry 和 Backoff</h2>
+  <ul>
+    <li><strong>Timeout</strong>限制一次等待最长时间，防止资源永久挂住；</li>
+    <li><strong>Retry</strong>适合暂时性错误，不适合认证失败等永久错误；</li>
+    <li><strong>Backoff</strong>让多次重试之间逐渐等待，避免故障时继续冲击上游。</li>
+  </ul>
+  <p>Exa 适配器对限流和 5xx 做有限尝试；LLM 超时会让本次研究失败，由用户决定是否创建一次新运行，避免不透明地重复昂贵生成。</p>
+
+  <h2>6.2 Observability 是什么</h2>
+  <p>Observability（可观测性）是通过系统输出理解内部状态的能力。日志、指标和追踪是常见支柱。ResearchFlow 记录结构化请求日志与运行度量，保留阶段事件；当前没有集中日志平台和分布式 Trace。</p>
+
+  <h2>6.3 Backup 和 High Availability 不一样</h2>
+  <p>备份帮助数据损坏或误操作后恢复，不会让故障期间服务持续在线；高可用需要冗余实例和故障切换。当前单实例 Demo 做备份恢复，不宣称高可用。</p>
 
   <h2>7. 怎样证明可靠性</h2>
   <p>生命周期测试覆盖完成、取消、重启中断、一次重试和配额；浏览器 E2E 覆盖创建、报告、度量和刷新恢复。备份恢复演练还会运行 SQLite 完整性检查。不同测试分别证明状态机、用户路径和数据可恢复性。</p>
