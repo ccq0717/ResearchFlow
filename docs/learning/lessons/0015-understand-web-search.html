@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 15 课：通用网页搜索与来源质量 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0015 · 约 30 分钟</p>
+  <h1>搜索到网页，不等于获得可靠证据</h1>
+  <p class="lead">这一课解释查询怎样生成、搜索结果怎样进入研究流程，以及为什么搜索排名和证据可信度是两个问题。</p>
+  <div class="answer"><strong>简短回答：</strong>ResearchFlow 通过可替换的 <code>SearchProvider</code> 调用 Exa 做通用网页搜索，再读取结果正文。LLM 负责生成检索词和理解材料，确定性代码保留 URL、来源关系并检查引用。系统可以搜论文页面、官方文档和企业博客，但当前没有学术数据库专有元数据能力。</div>
+
+  <h2>1. 搜索、抓取和阅读的区别</h2>
+  <table><thead><tr><th>阶段</th><th>解决的问题</th><th>产物</th></tr></thead><tbody>
+    <tr><td>搜索 Search</td><td>互联网上哪些页面可能相关</td><td>标题、URL、摘要或高亮</td></tr>
+    <tr><td>读取 Read</td><td>页面正文具体说了什么</td><td>可交给模型的文本</td></tr>
+    <tr><td>证据提取</td><td>正文中的哪段直接支持研究问题</td><td>原文、解释和主张</td></tr>
+  </tbody></table>
+  <p>搜索引擎的标题本身只是寻找候选页面的线索。当前 Exa 请求同时返回与查询相关的 highlights，网页读取器把这些已提取片段作为可读内容；它没有再抓取任意网页的完整 HTML。片段进入 Source 后仍要经过证据提取，不能把搜索排名本身当成事实证明。</p>
+
+  <h2>2. 研究问题为什么还要变成检索词</h2>
+  <p>用户问题通常适合人类交流，却不一定适合检索。例如“我该怎样公平评估 AI 编程工具？”包含模糊代词和多个意图。规划阶段为每个研究问题生成一条简洁英文 <code>search_query</code>，以覆盖论文、官方资料、技术博客等公开来源。</p>
+  <p>好的查询需要保留核心实体、比较维度和专业术语；过长会缩小召回范围，过短会带来大量噪声。当前由 LLM 一次生成，没有实现多轮查询改写或自动扩展同义词。</p>
+
+  <h2>3. 召回和排序</h2>
+  <ul>
+    <li><strong>召回</strong>关注相关页面有没有进入候选集合；</li>
+    <li><strong>排序</strong>关注更有用的页面是否排在前面；</li>
+    <li><strong>Top-K</strong>是在成本与覆盖面之间选择只读取前 K 个结果。</li>
+  </ul>
+  <p>K 太小可能漏掉关键观点，K 太大会增加读取延迟、模型输入 Token 和噪声。外部搜索服务决定第一轮候选排序，ResearchFlow 当前没有再使用独立 reranker。</p>
+
+  <h2>4. 为什么使用通用 Provider 接口</h2>
+  <pre><code>Workflow → SearchProvider.search(query, limit)
+                         ▲
+                         ├─ ExaSearchProvider
+                         └─ FakeSearchProvider</code></pre>
+  <p><a href="../../../apps/api/src/researchflow/integrations/web/exa.py"><code>ExaSearchProvider</code></a> 负责认证、请求格式、超时和供应商响应解析；<a href="../../../apps/api/src/researchflow/integrations/web/result_reader.py"><code>SearchResultPageReader</code></a> 读取 Provider 已提取的内容。工作流只认识统一对象。未来换成付费质量更高的服务，主要新增或替换适配器，而不是重写领域对象。</p>
+
+  <h2>5. 通用搜索能否替代学术 Provider</h2>
+  <p>对当前“科研与技术预研”Demo，通用搜索能同时覆盖论文落地页、标准、官方文档和企业博客，范围更符合产品目标。因此项目没有强制接入只搜索某个学术站点的 Provider。</p>
+  <p>但通用搜索不等于专业学术检索。若以后要求稳定的 DOI、作者、期刊、引用次数、开放获取状态或按论文类型过滤，Crossref、OpenAlex 等专门数据源仍有价值。是否增加它们取决于产品需求，而不是“有网页搜索就永远不需要”。</p>
+
+  <h2>6. 怎样判断来源质量</h2>
+  <table><thead><tr><th>维度</th><th>要问什么</th></tr></thead><tbody>
+    <tr><td>相关性</td><td>材料是否直接回答当前研究问题？</td></tr>
+    <tr><td>权威性</td><td>是规范/论文/官方说明，还是无来源转述？</td></tr>
+    <tr><td>时效性</td><td>结论会不会因版本、价格或政策变化而过时？</td></tr>
+    <tr><td>独立性</td><td>多个来源是否只是互相转载同一说法？</td></tr>
+    <tr><td>可核验性</td><td>是否保留 URL、标题和原文定位？</td></tr>
+  </tbody></table>
+  <p>搜索排名只说明服务认为页面与查询相关，不自动证明正确。ResearchFlow 保存来源和原文、让 Claim 关联 Evidence，并展示引用覆盖；更高级的权威性打分、URL 规范化去重和来源多样性约束仍是可演进项。</p>
+
+  <h2>7. 常见误区</h2>
+  <ul>
+    <li><strong>“搜到了就是事实”：</strong>网页可能错误、过时或互相抄袭。</li>
+    <li><strong>“结果越多报告越好”：</strong>噪声会提高成本并稀释关键证据。</li>
+    <li><strong>“LLM 自己会联网”：</strong>模型只有在应用显式调用搜索并把结果放入上下文时才能使用这些网页。</li>
+    <li><strong>“Provider 接口保证完全无成本迁移”：</strong>接口隔离业务，但不同服务的搜索语义、限额和内容字段仍需适配和回归测试。</li>
+  </ul>
+  <div class="callout success"><strong>面试表达：</strong>项目选择 Exa 通用网页搜索覆盖论文、官方文档和企业博客，并用 SearchProvider 隔离供应商；搜索只负责候选召回，后续正文读取、证据提取和引用审计共同约束报告质量。</div>
+
+  <p class="footer"><a href="0005-understand-langgraph-web-research.html">相关课程：研究工作流</a> · <a href="../index.html">返回学习区</a> · <a href="../resources.html">本课资料依据</a></p>
+</main>
+</body>
+</html>

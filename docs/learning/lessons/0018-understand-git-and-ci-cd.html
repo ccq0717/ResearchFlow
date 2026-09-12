@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 18 课：Git、CI 与 CD · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0018 · 约 35 分钟</p>
+  <h1>提交代码之后，自动化检查做了什么</h1>
+  <p class="lead">Git 负责版本历史，CI 负责自动验证，CD 负责把通过验证的版本交付或部署。三者有关联，但不是同一件事。</p>
+  <div class="answer"><strong>简短回答：</strong>ResearchFlow 在 push 和 pull request 时由 GitHub Actions 分别检查后端、前端和浏览器端到端流程。当前只实现 CI，没有自动部署；因此绿色勾表示这些检查通过，不表示已经上线，也不证明没有任何缺陷。</div>
+
+  <h2>1. Git 的四个位置</h2>
+  <pre><code>工作区 --git add--&gt; 暂存区 --git commit--&gt; 本地仓库 --git push--&gt; 远程仓库</code></pre>
+  <ul>
+    <li><strong>工作区</strong>是你正在编辑的文件；</li>
+    <li><strong>暂存区</strong>选择下一次提交具体包含哪些改动；</li>
+    <li><strong>Commit</strong>是带父节点、作者、时间和说明的版本快照；</li>
+    <li><strong>远程仓库</strong>用于协作和触发 GitHub 自动化。</li>
+  </ul>
+  <p>Commit 不等于 push。合理的提交应表达一个完成的小阶段，既不必每改一行就提交，也不要把多个无关阶段挤进一个巨大提交。</p>
+
+  <h2>2. Branch 和 Pull Request</h2>
+  <p>分支是指向某个 Commit 的可移动名字，使新功能能与稳定主线并行。Pull Request 是托管平台上的审阅和合并流程，不是 Git 本身的数据对象。CI 常在 PR 上运行，帮助审阅者先看到自动检查结果。</p>
+
+  <h2>3. CI 工作流的组成</h2>
+  <table><thead><tr><th>概念</th><th>在 GitHub Actions 中</th></tr></thead><tbody>
+    <tr><td>Workflow</td><td><code>.github/workflows/ci.yml</code> 定义的一套自动化</td></tr>
+    <tr><td>Trigger</td><td>当前为 push 和 pull_request</td></tr>
+    <tr><td>Job</td><td>可并行运行的一组步骤，拥有自己的 Runner</td></tr>
+    <tr><td>Step</td><td>检出代码、安装运行时、安装依赖、执行命令</td></tr>
+    <tr><td>Runner</td><td>GitHub 提供的临时 Windows 或 Ubuntu 环境</td></tr>
+  </tbody></table>
+
+  <h2>4. 当前三个 Job 检查什么</h2>
+  <table><thead><tr><th>Job</th><th>平台</th><th>检查</th></tr></thead><tbody>
+    <tr><td>Backend</td><td>Windows / Python 3.12</td><td>pytest、Ruff 规则和格式</td></tr>
+    <tr><td>Frontend</td><td>Ubuntu / Node 24</td><td>组件测试、ESLint、Next.js 生产构建</td></tr>
+    <tr><td>Browser E2E</td><td>Windows / Chromium</td><td>启动前后端，从页面创建研究、查看结果并刷新恢复</td></tr>
+  </tbody></table>
+  <p>Windows 后端和 E2E 覆盖主要本地使用路径，Ubuntu 前端也验证跨平台构建。三项并行能更快反馈，任一失败都会让整个工作流失败。</p>
+
+  <h2>5. 为什么使用锁文件安装</h2>
+  <p><code>uv sync --locked</code> 和 <code>npm ci</code> 按仓库锁文件安装确定版本，避免开发机与 CI 因依赖自动升级产生不同结果。缓存只加快下载，不应改变最终解析出的依赖集合。</p>
+
+  <h2>6. 为什么 CI 不调用真实 LLM</h2>
+  <p>自动测试使用 Simulation 或 Fake，结果确定、速度快、不需要 Secret，也不会每次 push 都产生外部费用。真实 LLM、Exa 和 Embedding 验收用于发布前人工验证，因为外部服务会受网络、额度、模型更新和随机性影响。</p>
+  <p>这不是说 Fake 能证明真实连接正常，而是把两类测试分工：CI 防止代码回归，真实验收确认供应商配置和端到端质量。</p>
+
+  <h2>7. CI、Continuous Delivery 和 Continuous Deployment</h2>
+  <table><thead><tr><th>术语</th><th>含义</th><th>当前项目</th></tr></thead><tbody>
+    <tr><td>CI 持续集成</td><td>频繁合并并自动构建、测试、检查</td><td>已实现</td></tr>
+    <tr><td>Continuous Delivery 持续交付</td><td>通过检查后形成可部署版本，通常由人批准发布</td><td>未自动化</td></tr>
+    <tr><td>Continuous Deployment 持续部署</td><td>通过检查后自动部署到生产</td><td>未实现</td></tr>
+  </tbody></table>
+  <p>因此把当前 GitHub Actions 简称为 CI/CD 并不精确。正式上线时可以增加镜像构建、部署环境 Secret、数据库迁移、健康检查、人工审批和回滚，但本地作品集无需为了术语完整而强行自动部署。</p>
+
+  <h2>8. 绿色 CI 的边界</h2>
+  <ul>
+    <li>只证明当前定义的检查在指定环境通过；</li>
+    <li>没有测试到的路径仍可能有缺陷；</li>
+    <li>Fake 不能替代真实供应商验收；</li>
+    <li>安全、可用性和报告质量还需要配置审查、真实示例与人工判断。</li>
+  </ul>
+  <div class="callout success"><strong>面试表达：</strong>项目用三个 GitHub Actions Job 覆盖 Python 测试与静态检查、TypeScript 测试与生产构建，以及 Windows Chromium 端到端主路径；外部 AI 服务使用 Fake 保持 CI 稳定，发布前另做真实验收。当前是 CI，不冒充已经实现自动 CD。</div>
+
+  <p class="footer"><a href="0008-understand-testing-and-evaluation.html">相关课程：测试与评测</a> · <a href="0010-understand-deployment.html">下一课：部署</a> · <a href="../index.html">返回学习区</a> · <a href="../../guides/development-and-operations.md">查看正式 CI 说明</a></p>
+</main>
+</body>
+</html>

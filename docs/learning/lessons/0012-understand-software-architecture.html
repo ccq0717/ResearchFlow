@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 12 课：软件架构与分层 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0012 · 约 30 分钟</p>
+  <h1>代码为什么要分层，接口为什么重要</h1>
+  <p class="lead">这一课不背架构名词，而是回答一个实际问题：一条研究请求经过很多部件时，怎样避免所有代码互相依赖。</p>
+  <div class="answer"><strong>简短回答：</strong>架构是在约束“职责放在哪里、依赖指向哪里、哪些细节可以替换”。ResearchFlow 采用单体分层结构：一个后端进程内完成业务，但用领域对象和接口隔开 API、工作流、外部服务与数据库。</div>
+
+  <h2>1. 先区分模块、层和服务</h2>
+  <ul>
+    <li><strong>模块</strong>是代码组织单位，例如一个 Python 文件或包；</li>
+    <li><strong>层</strong>按职责和依赖方向组织模块，例如 API 层只能通过应用层发起研究；</li>
+    <li><strong>服务</strong>通常指可独立运行和部署的进程。</li>
+  </ul>
+  <p>ResearchFlow 有多个模块和层，但后端仍是一个服务，并不是微服务。作品集规模下，单体更容易启动、测试和部署；清晰的内部边界已经能解决主要复杂度。</p>
+
+  <h2>2. 当前后端的五层</h2>
+  <table><thead><tr><th>层</th><th>负责什么</th><th>不应该负责什么</th></tr></thead><tbody>
+    <tr><td>API</td><td>HTTP 路由、请求校验、响应与错误映射</td><td>研究编排和 SQL</td></tr>
+    <tr><td>Application</td><td>一次用例的生命周期、并发限制、持久化协调</td><td>供应商请求格式</td></tr>
+    <tr><td>Domain</td><td>ResearchRun、Evidence、Claim 等业务概念和状态</td><td>FastAPI、LangGraph、SQLite</td></tr>
+    <tr><td>Workflow</td><td>规划、搜索、阅读、证据、写作、检查的顺序</td><td>直接处理 HTTP 或写数据库</td></tr>
+    <tr><td>Integration / Persistence</td><td>调用 LLM、Exa、Embedding，读写 SQLite</td><td>决定产品业务流程</td></tr>
+  </tbody></table>
+  <pre><code>浏览器 → API → Application → Workflow
+                    ↓            ↓
+                 SQLite      LLM / Exa / Embedding</code></pre>
+
+  <h2>3. 依赖方向为什么重要</h2>
+  <p>领域层描述“研究任务、来源和证据是什么”，不导入 FastAPI 或 Exa SDK。外层可以依赖内层的稳定概念，内层不应该反过来依赖易变的技术细节。这样更换网页搜索商时，不必重写研究任务和数据库模型。</p>
+  <div class="callout warning"><strong>常见误区：</strong>文件夹分得很多不等于架构清晰。真正的边界要看调用方向和数据类型；如果一个路由同时拼 Prompt、发请求、算向量并写 SQL，它仍然是紧耦合代码。</div>
+
+  <h2>4. 接口与适配器</h2>
+  <p><code>ResearchWorkflow</code>、<code>LLMClient</code>、<code>SearchProvider</code> 和 <code>EmbeddingClient</code> 描述调用方真正需要的能力。Exa、Gemini 和测试 Fake 是接口背后的适配器。应用层依赖能力，而不是依赖某家供应商。</p>
+  <pre><code>Application ──需要──&gt; ResearchWorkflow
+                         ▲
+                         ├─ LangGraphResearchWorkflow（真实）
+                         └─ SimulatedResearchWorkflow（测试/演示）</code></pre>
+  <p>这叫依赖倒置：高层业务不直接绑死底层实现。它并不意味着每个类都要加接口；只有确实存在变化、外部 I/O 或测试替身的边界才值得抽象。</p>
+
+  <h2>5. DTO、领域对象和数据库行不是一回事</h2>
+  <ul>
+    <li>API Schema 决定外部 JSON 长什么样；</li>
+    <li>Domain Model 表达业务状态及约束；</li>
+    <li>数据库 Row 表达怎样落到表和字段。</li>
+  </ul>
+  <p>三者看起来可能相似，但变化原因不同。API 为兼容客户端而变化，领域模型随业务变化，表结构随存储策略变化。显式转换会多一点代码，却避免框架类型渗透整个系统。</p>
+
+  <h2>6. 为什么工作流不直接写数据库</h2>
+  <p>LangGraph 节点产出 <code>ResearchWorkflowUpdate</code>；Application 再统一保存状态、材料和事件。这样工作流专注研究逻辑，数据库事务、取消保护和产品生命周期集中在应用层。未来换编排器时，HTTP API 与存储模型不用跟着重写。</p>
+
+  <h2>7. 从装配入口读懂全局</h2>
+  <p><a href="../../../apps/api/src/researchflow/app_factory.py"><code>app_factory.py</code></a> 是组合根：它读取配置，创建数据库、适配器、工作流和应用服务，再把它们交给 FastAPI。理解一个分层项目时，先看组合根，再沿接口向内追，比从任意工具函数开始更容易建立全局图。</p>
+  <div class="callout success"><strong>面试表达：</strong>项目采用模块化单体而不是微服务；通过 Application、Domain、Workflow、Integration 和 Persistence 分离职责，并在 LLM、搜索、Embedding 与工作流边界使用接口和适配器，使真实实现与 Fake 可以替换。</div>
+
+  <p class="footer"><a href="0003-understand-sqlite-persistence.html">相关课程：SQLite 持久化</a> · <a href="../index.html">返回学习区</a> · <a href="../../architecture/llm-integration.md">查看正式架构文档</a></p>
+</main>
+</body>
+</html>

@@ -13,6 +13,10 @@
   <p class="lead">学完后，你应该能解释节点、状态、适配器、来源、证据和持久化更新怎样协作。</p>
   <div class="callout"><strong>先记结论：</strong>LangGraph 负责工作流内部编排，但产品对外只暴露 ResearchFlow 自己的领域对象和事件。</div>
 
+  <h2>先分清：工作流、Agent 和 LangGraph</h2>
+  <p><strong>工作流</strong>是一组步骤及其流转规则；<strong>Agent</strong>通常让模型根据当前状态自主选择下一步或工具；<strong>LangGraph</strong>是表达有状态节点和边的编排框架，既能实现固定工作流，也能实现更自主的 Agent。</p>
+  <p>ResearchFlow 当前是确定性的六节点图：代码决定节点顺序，LLM 在节点内部负责规划、理解和写作。它不是让模型无限自主循环调用工具的 ReAct Agent。固定流程更容易控制成本、验证证据关系和定位失败。</p>
+
   <h2>1. 六个节点</h2>
   <div class="flow"><span>规划</span><b>→</b><span>搜索</span><b>→</b><span>阅读</span><b>→</b><span>证据</span><b>→</b><span>写作</span><b>→</b><span>检查</span></div>
   <p>规划节点生成研究问题和英文网页检索词；搜索节点创建 ResearchTask；阅读节点联合取得 Exa 网页和用户所选文档片段并转换成 Source；证据节点把原文关联到问题并形成 Claim；写作节点生成报告与可追溯章节；检查节点做确定性关联检查。</p>
@@ -46,9 +50,13 @@
   <h2>6. 当前怎样检查引用</h2>
   <p>当前实现要求每条 Claim 至少关联一条已有 Evidence、每条 Evidence 指向已有 Source，并检查报告的主张小节包含对应来源定位。网页使用可点击 URL，本地资料使用文件名与页码或行号。界面显示主张覆盖率和来源类型计数；DOI、OCR、卷期和被引量等能力仍不在当前范围。</p>
 
-  <h2>7. 关联关系总结</h2>
+  <h2>7. Graph State 不等于数据库状态</h2>
+  <p>Graph State 是一次执行期间在节点间传递的工作内存；SQLite 保存的是用户刷新、进程重启后仍需存在的产品状态。当前 LangGraph 没有配置 Checkpointer，恢复策略是将重启时未完成的运行标记失败并允许重试，而不是从某个图节点断点续跑。</p>
+
+  <h2>8. 关联关系总结</h2>
   <p>六个 StateGraph 节点用固定边按顺序连接；Fake 与真实搜索/本地检索实现遵守相同接口，因此测试无需访问互联网。数据关系从 Research Question 开始，经 ResearchTask 记录检索，再由 Source 保存实际读取的网页或本地片段，Evidence 把原文关联回问题和来源，Claim 最后把报告中的关键陈述关联到一条或多条 Evidence。</p>
-  <p><a href="../README.md">返回学习区</a></p>
+  <div class="callout success"><strong>面试表达：</strong>项目用 LangGraph 表达固定、有状态、可观察的研究流程，而不是把全部控制权交给开放式 Agent；框架状态与 SQLite 产品状态分离，工作流通过领域更新向应用层报告结果。</div>
+  <p class="footer"><a href="0015-understand-web-search.html">深入：网页搜索</a> · <a href="../index.html">返回学习区</a></p>
 </main>
 </body>
 </html>

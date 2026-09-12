@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 17 课：Prompt、结构化输出与 Token · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0017 · 约 35 分钟</p>
+  <h1>怎样让 LLM 成为可靠的程序组件</h1>
+  <p class="lead">Prompt 工程不是寻找一句“神奇咒语”，而是定义任务边界、输入数据、输出契约和失败处理。</p>
+  <div class="answer"><strong>简短回答：</strong>ResearchFlow 把 LLM 拆成规划、证据提取和报告写作三个窄任务；每次请求给出系统规则和业务数据，并要求 JSON Schema 结构化输出，再由 Pydantic 二次校验。模型负责语义判断，代码负责 ID 关联、状态和确定性检查。</div>
+
+  <h2>1. Prompt 是程序接口的一部分</h2>
+  <p>普通聊天只要求“回答看起来合理”；程序调用还要求字段齐全、类型稳定、ID 可关联、错误可处理。因此一个完整模型调用至少包含：</p>
+  <ul>
+    <li><strong>角色与任务：</strong>这次只规划、只提取证据，还是写报告；</li>
+    <li><strong>边界：</strong>能否使用外部知识，遇到证据不足怎么办；</li>
+    <li><strong>数据：</strong>用户目标、研究问题、来源正文；</li>
+    <li><strong>输出契约：</strong>字段、长度、数量和格式；</li>
+    <li><strong>校验与失败：</strong>不符合契约时怎样转成应用错误。</li>
+  </ul>
+
+  <h2>2. 为什么拆成三个模型任务</h2>
+  <table><thead><tr><th>调用</th><th>输入</th><th>模型负责</th></tr></thead><tbody>
+    <tr><td>研究规划</td><td>用户目标</td><td>问题、理由、英文检索词、交付物</td></tr>
+    <tr><td>证据提取</td><td>问题与来源正文</td><td>原文、受支持主张、解释和关联 ID</td></tr>
+    <tr><td>报告写作</td><td>计划、来源与已提取证据</td><td>有引用的中文 Markdown 报告</td></tr>
+  </tbody></table>
+  <p>单次“搜索完直接写长报告”很难定位错误。分阶段后，可以区分计划不合理、检索没命中、证据抽取错误和写作问题，每步也有更窄的输出契约。</p>
+
+  <h2>3. System 与 User 消息</h2>
+  <p>System 消息放稳定的角色、限制和输出要求；User 消息放本次研究目标与材料。来源正文即使包含“忽略之前指令”之类文字，也只是外部数据，不应被当作系统命令。</p>
+  <div class="callout warning"><strong>提示注入风险：</strong>只在 Prompt 里写“不要听网页命令”不能提供绝对安全。更稳妥的设计还包括最小工具权限、严格输出校验、限制外部内容影响的动作，以及对高风险操作进行确定性授权。本项目的模型没有任意执行系统命令的工具。</div>
+
+  <h2>4. 结构化输出解决什么</h2>
+  <pre><code>模型响应
+  → API 按 JSON Schema 约束格式
+  → Pydantic 校验类型、长度、数量、额外字段
+  → 代码检查 source_id / question_id 是否真实存在
+  → 转换为领域对象</code></pre>
+  <p><a href="../../../apps/api/src/researchflow/integrations/llm/openai_compatible.py"><code>OpenAICompatibleLLMClient</code></a> 使用 Chat Completions 的 JSON Schema 兼容格式。Schema 能减少解析不稳定，却不能证明内容事实正确；所以证据原文、ID 白名单和引用审计仍然需要。</p>
+
+  <h2>5. Token 与上下文窗口</h2>
+  <p>模型先把文本切成 Token。输入 Token 包含系统规则、用户目标、问题、来源正文和已有证据；输出 Token 是模型生成的 JSON 或报告。上下文窗口限制一次请求能够处理的输入与输出总量，不等同于模型“永久记忆”。</p>
+  <p>ResearchFlow 最大开销通常来自证据提取和报告写作，因为它们携带网页/本地片段及证据。减少无关来源、合理 Top-K、控制原文长度，往往比单纯缩短一行 Prompt 更有效。</p>
+
+  <h2>6. Token 统计与费用估算</h2>
+  <p>项目读取供应商响应中的输入、输出和总 Token，累计到运行度量；若配置每百万输入/输出 Token 单价，则按用量估算费用。不同供应商可能另有缓存创建、缓存读取、推理 Token 或阶梯折扣，当前估算只覆盖配置的普通输入与输出价格，因此应标为近似值。</p>
+
+  <h2>7. 为什么不能只相信模型的 ID</h2>
+  <p>即使 Schema 要求 <code>source_id</code> 是字符串，模型仍可能写出不存在的值。适配器会根据本次输入建立允许的来源和问题 ID 集合，只保留可关联项；全部无效时返回稳定错误。语法正确和业务正确是两层验证。</p>
+
+  <h2>8. 超时、连接与格式错误</h2>
+  <table><thead><tr><th>错误</th><th>含义</th></tr></thead><tbody>
+    <tr><td><code>LLM_TIMEOUT</code></td><td>服务在配置时间内未完成，不一定是代码错误</td></tr>
+    <tr><td><code>LLM_CONNECTION_ERROR</code></td><td>域名、网络、Base URL 或连接层失败</td></tr>
+    <tr><td><code>LLM_HTTP_ERROR</code></td><td>供应商返回 4xx/5xx，如密钥、额度或模型名问题</td></tr>
+    <tr><td><code>LLM_INVALID_RESPONSE</code></td><td>JSON、Schema 或业务关联不符合契约</td></tr>
+  </tbody></table>
+  <p>把错误分类后，前端可以给出可理解提示，测试也能验证行为。简单地 catch 所有异常并写“模型失败”会让排错非常困难。</p>
+
+  <h2>9. 常见误区</h2>
+  <ul>
+    <li><strong>“Prompt 越长越好”：</strong>冗余规则会增加成本和冲突，关键是任务边界清晰。</li>
+    <li><strong>“JSON 正确就代表事实正确”：</strong>结构验证只保证形状。</li>
+    <li><strong>“模型会记住上一次调用”：</strong>当前每次 HTTP 请求都显式提供所需上下文。</li>
+    <li><strong>“让模型输出思维链更可靠”：</strong>系统需要可验证的证据和结果，不依赖保存模型私有推理过程。</li>
+  </ul>
+  <div class="callout success"><strong>面试表达：</strong>项目把 LLM 设计为三个有 Schema 的窄接口，结合 Pydantic 与业务白名单二次校验；模型承担语义规划、证据理解和写作，确定性代码掌握状态、关联与审计。</div>
+
+  <p class="footer"><a href="0004-understand-llm-adapters.html">上一层基础：LLM 适配器</a> · <a href="../index.html">返回学习区</a> · <a href="../resources.html">本课资料依据</a></p>
+</main>
+</body>
+</html>

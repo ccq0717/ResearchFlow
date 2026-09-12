@@ -107,8 +107,10 @@ docs/
 │   ├── assets/          课程共享样式
 │   ├── lessons/         按顺序阅读的项目课程网页
 │   ├── reference/       全栈地图与通信速查页
-│   ├── README.md        课程入口和覆盖范围
-│   └── RESOURCES.md     课程使用的规范、官方文档和论文
+│   ├── index.html       网页课程入口、分组与推荐路线
+│   ├── README.md        从仓库进入网页课程的简短说明
+│   ├── resources.html   课程使用的规范、官方文档和论文
+│   └── RESOURCES.md     从仓库进入网页资料页的简短说明
 ├── product/             当前产品定位与作品集展示材料
 └── README.md            文档总索引
 ```

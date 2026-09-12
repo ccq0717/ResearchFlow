@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ResearchFlow 从零学习地图</title>
+  <link rel="stylesheet" href="assets/course.css">
+</head>
+<body>
+<main>
+  <section class="hero">
+    <p class="eyebrow">ResearchFlow Learning</p>
+    <h1>从零读懂一个 AI 深度研究项目</h1>
+    <p class="lead">从浏览器的一次点击开始，逐步理解 FastAPI、SQLite、异步任务、LangGraph、搜索、RAG、证据链、测试和部署。</p>
+  </section>
+
+  <h2>怎样使用这套课程</h2>
+  <div class="answer"><strong>推荐方法：</strong>先读简要结论，再看详细解析；每课至少打开一次链接的真实代码。架构文档回答“项目规定是什么”，课程回答“为什么这样设计、面试时怎样解释”。</div>
+  <ol>
+    <li>完全初学者按四个阶段顺序阅读，不要求一次记住所有名词。</li>
+    <li>已经熟悉某一层时，可以直接进入专题课，但先看第 0 课和第 2 课建立全局路径。</li>
+    <li>标为“当前未实现”的技术用于理解取舍，不代表项目已经拥有该能力。</li>
+  </ol>
+
+  <h2>阶段一：建立全栈地图</h2>
+  <p><span class="tag">浏览器</span><span class="tag">HTTP</span><span class="tag">React</span><span class="tag">FastAPI</span><span class="tag">SSE</span></p>
+  <div class="course-grid">
+    <a class="course-card" href="lessons/0000-understand-full-stack-basics.html"><strong>第 0 课 · 前后端基础</strong><span>浏览器、React、Next.js、FastAPI 和 HTTP 各做什么。</span></a>
+    <a class="course-card" href="lessons/0002-follow-a-research-request.html"><strong>第 2 课 · 跟随一次请求</strong><span>从点击按钮到 SQLite，再回到研究页面。</span></a>
+    <a class="course-card" href="lessons/0001-understand-sse.html"><strong>第 1 课 · SSE 实时进度</strong><span>普通请求、事件流、重连与持久事件。</span></a>
+    <a class="course-card" href="lessons/0011-understand-frontend-rendering.html"><strong>第 11 课 · 前端状态与报告</strong><span>REST 快照、SSE 增量、Markdown 与公式渲染。</span></a>
+  </div>
+
+  <h2>阶段二：理解后端与软件架构</h2>
+  <p><span class="tag">分层</span><span class="tag">领域模型</span><span class="tag">asyncio</span><span class="tag">API 安全</span><span class="tag">持久化</span></p>
+  <div class="course-grid">
+    <a class="course-card" href="lessons/0012-understand-software-architecture.html"><strong>第 12 课 · 软件架构</strong><span>路由、应用层、领域、Repository 和适配器为什么分开。</span></a>
+    <a class="course-card" href="lessons/0003-understand-sqlite-persistence.html"><strong>第 3 课 · SQLite 持久化</strong><span>SQLite、SQLAlchemy、aiosqlite、事务和数据表。</span></a>
+    <a class="course-card" href="lessons/0013-understand-python-async.html"><strong>第 13 课 · Python 异步</strong><span>协程、Task、事件循环、并发、取消与 shield。</span></a>
+    <a class="course-card" href="lessons/0014-understand-api-and-security.html"><strong>第 14 课 · API 与安全边界</strong><span>REST、状态码、Schema、CORS、Cookie、上传和 Secret。</span></a>
+    <a class="course-card" href="lessons/0009-understand-run-reliability.html"><strong>第 9 课 · 运行可靠性</strong><span>后台任务、终态事务、重启、重试、限额与日志。</span></a>
+  </div>
+
+  <h2>阶段三：理解 LLM、Agent 与 RAG</h2>
+  <p><span class="tag">LLM</span><span class="tag">Agent</span><span class="tag">LangGraph</span><span class="tag">Search</span><span class="tag">Embedding</span><span class="tag">Citation</span></p>
+  <div class="course-grid">
+    <a class="course-card" href="lessons/0004-understand-llm-adapters.html"><strong>第 4 课 · LLM 接入</strong><span>模型 API、适配器、Fake、结构化输出与 Token。</span></a>
+    <a class="course-card" href="lessons/0017-understand-prompt-engineering.html"><strong>第 17 课 · Prompt 工程</strong><span>指令、上下文、JSON Schema、校验和失败处理。</span></a>
+    <a class="course-card" href="lessons/0005-understand-langgraph-web-research.html"><strong>第 5 课 · LangGraph 工作流</strong><span>状态、节点、边和 ResearchFlow 的六阶段编排。</span></a>
+    <a class="course-card" href="lessons/0015-understand-web-search.html"><strong>第 15 课 · 网页搜索与来源</strong><span>查询、召回、排序、正文、去重与来源质量。</span></a>
+    <a class="course-card" href="lessons/0006-understand-rag-embeddings.html"><strong>第 6 课 · RAG 与 Embedding</strong><span>解析、分块、向量、余弦相似度和 Top-K。</span></a>
+    <a class="course-card" href="lessons/0016-understand-rag-evaluation.html"><strong>第 16 课 · RAG 优化与评测</strong><span>Recall、MRR、混合检索、Rerank 与当前边界。</span></a>
+    <a class="course-card" href="lessons/0007-understand-evidence-and-citations.html"><strong>第 7 课 · 证据与引用</strong><span>Search Result、Source、Evidence、Claim 和覆盖率。</span></a>
+  </div>
+
+  <h2>阶段四：验证、交付与面试表达</h2>
+  <p><span class="tag">测试</span><span class="tag">评测</span><span class="tag">Git</span><span class="tag">CI/CD</span><span class="tag">Docker</span><span class="tag">部署</span></p>
+  <div class="course-grid">
+    <a class="course-card" href="lessons/0008-understand-testing-and-evaluation.html"><strong>第 8 课 · 测试与评测</strong><span>Unit、Fake、Mock、集成、E2E 与真实服务验证。</span></a>
+    <a class="course-card" href="lessons/0018-understand-git-and-ci-cd.html"><strong>第 18 课 · Git 与 CI/CD</strong><span>提交、推送、PR、Runner、自动检查、发布和回滚。</span></a>
+    <a class="course-card" href="lessons/0010-understand-deployment.html"><strong>第 10 课 · 容器与部署</strong><span>Docker、Secret、持久卷、单实例边界和上线验收。</span></a>
+  </div>
+
+  <h2>速查与进一步阅读</h2>
+  <div class="course-grid">
+    <a class="course-card" href="reference/current-full-stack-map.html"><strong>当前全栈实现地图</strong><span>从页面现象快速定位到核心文件和调试入口。</span></a>
+    <a class="course-card" href="reference/web-communication-cheatsheet.html"><strong>Web 通信方式速查表</strong><span>REST、轮询、SSE 与 WebSocket 的选择。</span></a>
+    <a class="course-card" href="resources.html"><strong>课程资料来源</strong><span>规范、官方文档、论文和延伸阅读。</span></a>
+    <a class="course-card" href="../README.md"><strong>项目正式文档</strong><span>使用、架构、评测和部署说明。</span></a>
+  </div>
+</main>
+</body>
+</html>

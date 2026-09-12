@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 16 课：RAG 优化与评测 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0016 · 约 35 分钟</p>
+  <h1>怎样知道 RAG 真的检索对了</h1>
+  <p class="lead">“用了 Embedding”只说明技术链路存在。要判断效果，必须把检索质量与最终报告质量拆开测量。</p>
+  <div class="answer"><strong>简短回答：</strong>先准备查询及其相关片段标注，再用 Recall@K、MRR 等指标评估检索；随后评估报告是否忠于证据、引用是否完整、是否真正回答问题。ResearchFlow 已有小型检索基准和端到端验收，但样本量不足以代表普遍质量。</div>
+
+  <h2>1. RAG 的离线和在线阶段</h2>
+  <pre><code>离线/入库：文档 → 解析 → 分块 → 文档向量 → 保存
+在线/查询：问题 → 查询向量 → 相似度排序 → Top-K → 交给 LLM</code></pre>
+  <p>“离线”不是一定要断网，而是指与某次用户查询无关、可提前完成的索引阶段。ResearchFlow 在上传或重新处理文档时完成入库，在研究运行的阅读节点进行查询。</p>
+
+  <h2>2. 稀疏、稠密和混合检索</h2>
+  <table><thead><tr><th>方法</th><th>优势</th><th>局限</th></tr></thead><tbody>
+    <tr><td>词法/稀疏检索（如 BM25）</td><td>精确关键词、编号和专有名词表现好，可解释</td><td>不易识别换一种说法的同义语义</td></tr>
+    <tr><td>Embedding/稠密检索</td><td>能按语义相似找到不同表述</td><td>可能忽略精确词，依赖模型和向量空间</td></tr>
+    <tr><td>混合检索</td><td>融合两类优势</td><td>需要归一化、融合权重和更多评测</td></tr>
+  </tbody></table>
+  <p>当前项目直接使用稠密检索，没有保留旧的简单词法模式。对小型作品集，这让主路径清晰；如果真实数据出现大量版本号、API 名或论文编号，可通过基准证明是否需要混合检索。</p>
+
+  <h2>3. 分块如何影响结果</h2>
+  <ul>
+    <li>块太大：一个向量混合多个主题，返回上下文噪声高；</li>
+    <li>块太小：事实被截断，命中片段缺少解释所需上下文；</li>
+    <li>无重叠：跨边界句子可能丢失；重叠过多：结果容易返回重复文本。</li>
+  </ul>
+  <p>合理参数取决于文档结构和查询，不能只凭经验声称最佳。可分别尝试字符、段落、标题层级或语义分块，再在同一查询集上比较。</p>
+
+  <h2>4. Top-K、重排和上下文</h2>
+  <p>第一阶段向量检索强调快速召回；可选的 reranker 会同时阅读查询与候选片段，进行更精细但更昂贵的相关性排序。最后只把重排后的少量片段交给 LLM。</p>
+  <p>ResearchFlow 当前对 SQLite 中的候选逐个算余弦相似度并取 Top-K，没有 reranker。数据量小时实现简单、可观察；是否增加重排应由失败案例和指标驱动。</p>
+
+  <h2>5. 三个常见检索指标</h2>
+  <table><thead><tr><th>指标</th><th>直觉</th><th>适合回答</th></tr></thead><tbody>
+    <tr><td>Recall@K</td><td>所有相关片段中，有多少进入前 K</td><td>关键资料有没有被漏掉</td></tr>
+    <tr><td>Precision@K</td><td>前 K 个结果中，有多少真的相关</td><td>交给模型的噪声有多少</td></tr>
+    <tr><td>MRR</td><td>第一个相关结果排名倒数的平均值</td><td>最先看到正确结果有多快</td></tr>
+  </tbody></table>
+  <p>例如某查询第一个相关片段排第 2，倒数排名是 1/2。多个查询取平均得到 MRR。指标需要“哪个片段相关”的人工或可信标注，没有 qrels 的漂亮数字没有依据。</p>
+
+  <h2>6. 当前基准能说明什么</h2>
+  <p>项目的固定小型基准包含 3 个查询，在当前样本上 Top-1 命中率和 MRR 都为 1.0。它可以防止接口、用途指令或排序逻辑被改坏，是回归测试；只有 3 条数据，不能据此宣称对任意论文和问题都有 100% 检索准确率。</p>
+
+  <h2>7. 最终报告还要单独评估</h2>
+  <ul>
+    <li><strong>忠实性：</strong>结论是否能由给定 Evidence 支持；</li>
+    <li><strong>引用覆盖：</strong>可核验 Claim 中有多少关联了 Evidence；</li>
+    <li><strong>完整性：</strong>研究问题是否都得到回应，证据不足是否说明；</li>
+    <li><strong>有用性：</strong>结构、建议和交付物是否满足用户目标。</li>
+  </ul>
+  <p>引用覆盖为 100% 只表示 Claim 都有引用关系，不证明来源权威、原文真的蕴含结论或报告整体优秀。确定性检查、人工审阅和模型评审各自能覆盖不同风险。</p>
+
+  <h2>8. 从失败现象定位环节</h2>
+  <table><thead><tr><th>现象</th><th>优先检查</th></tr></thead><tbody>
+    <tr><td>正确片段根本没返回</td><td>解析、分块、查询表达、Embedding、K 值</td></tr>
+    <tr><td>返回很多相似但无用片段</td><td>块大小、重复内容、混合检索或 rerank</td></tr>
+    <tr><td>片段正确但答案编造</td><td>证据提取 Prompt、上下文组织、生成约束</td></tr>
+    <tr><td>答案正确但无法核验</td><td>页码/行号、Source—Evidence—Claim 关联</td></tr>
+  </tbody></table>
+  <div class="callout success"><strong>面试表达：</strong>项目把 RAG 拆成索引、检索和生成分别观察；用固定查询集做 Top-1/MRR 回归，并明确小样本不等于产品质量证明。下一步优化应由真实失败案例驱动混合检索或 reranker。</div>
+
+  <p class="footer"><a href="0006-understand-rag-embeddings.html">上一层基础：RAG 与 Embedding</a> · <a href="../index.html">返回学习区</a> · <a href="../resources.html">本课资料依据</a></p>
+</main>
+</body>
+</html>

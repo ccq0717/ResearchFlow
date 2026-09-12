@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 14 课：API 设计与安全边界 · ResearchFlow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 0014 · 约 30 分钟</p>
+  <h1>浏览器怎样安全地调用后端</h1>
+  <p class="lead">API 不只是“一个网址返回 JSON”。它还定义资源、状态码、输入边界、身份验证方式和哪些秘密不能进入浏览器。</p>
+  <div class="answer"><strong>简短回答：</strong>ResearchFlow 用 FastAPI 暴露研究运行和知识库资源，用 Pydantic 校验外部输入；在线 Demo 可用访问码换取签名 HttpOnly Cookie。CORS、Cookie、上传校验和服务端 Secret 分别解决不同问题，任何一个都不能替代完整身份系统。</div>
+
+  <h2>1. 从资源理解 HTTP API</h2>
+  <table><thead><tr><th>动作</th><th>HTTP 含义</th><th>ResearchFlow 示例</th></tr></thead><tbody>
+    <tr><td>创建</td><td><code>POST</code>，提交新资源所需数据</td><td>创建研究、上传文档</td></tr>
+    <tr><td>读取</td><td><code>GET</code>，不应修改业务状态</td><td>查看运行、材料、指标</td></tr>
+    <tr><td>局部修改</td><td><code>PATCH</code></td><td>重命名、归档</td></tr>
+    <tr><td>删除</td><td><code>DELETE</code></td><td>删除运行或文档</td></tr>
+  </tbody></table>
+  <p>路由负责把 HTTP 世界转换为应用用例。找不到资源、输入不合法、容量已满和外部模型失败是不同错误，应该用稳定错误码和可公开消息表达，而不是把 Python 堆栈返回给浏览器。</p>
+
+  <h2>2. 为什么还需要 Schema</h2>
+  <p><a href="../../../apps/api/src/researchflow/api/schemas.py"><code>schemas.py</code></a> 用 Pydantic 描述字段类型、长度和响应结构。类型注解本身不会自动保护网络边界；Pydantic 在运行时解析并拒绝不合要求的 JSON。Schema 是外部契约，领域对象则是内部业务模型。</p>
+
+  <h2>3. CORS 不是身份认证</h2>
+  <p>浏览器的同源策略会限制网页脚本读取另一个 Origin 的响应。CORS 是后端告诉浏览器“哪些前端 Origin 可以读取我”。它不能阻止脚本、命令行工具或别的服务器直接请求 API，所以不能当作登录或防火墙。</p>
+  <p>开发环境允许本地前端；生产环境要求显式公开前端 Origin 且禁止通配符。跨站 Cookie 场景还需要匹配的凭证和 Cookie 属性。</p>
+
+  <h2>4. Demo 访问码怎样工作</h2>
+  <pre><code>用户输入访问码
+  → 后端恒定时间比较
+  → 签发带时间戳和 HMAC 签名的会话值
+  → 写入 HttpOnly Cookie
+  → 后续请求由 Cookie 证明已通过访问码</code></pre>
+  <p>HttpOnly 使前端 JavaScript 不能读取会话值；生产 Cookie 使用 Secure，只经 HTTPS 发送；签名可发现篡改，会话还有有效期。这适合限制作品集 Demo 的随意访问，但没有用户账号、权限角色、密码找回和服务端会话撤销，因此不能宣传为通用认证系统。</p>
+
+  <h2>5. Secret 为什么必须留在后端</h2>
+  <p>LLM、Exa 和 Embedding API Key 只由 Python 进程读取。任何以 <code>NEXT_PUBLIC_</code> 暴露给 Next.js 客户端的变量都会进入浏览器资源，访问者可以看到，不能存放秘密。仓库只提交 <code>.env.example</code> 的变量名和示例，不提交真实 <code>.env</code>。</p>
+
+  <h2>6. 文件上传是输入边界</h2>
+  <p>项目检查允许的扩展名、文件大小、文档数量和安全文件名，再解析 PDF、Markdown 或 UTF-8 文本。PDF 必须包含可提取文字；纯扫描图片需要 OCR，而当前未实现。扩展名和大小检查能降低风险，但若面向不可信公众，还应考虑内容嗅探、恶意解析文件、隔离扫描、配额和存储清理。</p>
+
+  <h2>7. 威胁边界要说清楚</h2>
+  <ul>
+    <li>访问码用于保护低流量 Demo，不等同于多用户认证授权；</li>
+    <li>CORS 约束浏览器，不保护服务端 API；</li>
+    <li>参数校验减少异常输入，不证明上传内容可信；</li>
+    <li>来源网页可能包含提示注入文字，LLM 仍应把它当资料而不是系统指令；</li>
+    <li>HTTPS 由部署平台或反向代理提供，本地 HTTP 不代表生产配置。</li>
+  </ul>
+  <div class="callout success"><strong>面试表达：</strong>项目把 API Schema、CORS、Demo 访问会话、服务端 Secret 和上传限制当成不同安全层；当前方案满足受控作品集展示，同时主动声明它不是多租户生产认证系统。</div>
+
+  <p class="footer"><a href="0000-understand-full-stack-basics.html">相关课程：全栈基础</a> · <a href="../index.html">返回学习区</a> · <a href="../../guides/development-and-operations.md">查看运行配置</a></p>
+</main>
+</body>
+</html>
